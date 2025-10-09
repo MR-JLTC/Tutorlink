@@ -1,0 +1,5 @@
+{
+  "name": "TutorLink Admin",
+  "description": "An administrator dashboard for TutorLink, a platform for matching and booking tutors. This interface allows for management of tutors, users, universities, courses, and provides an analytics overview.",
+  "requestFramePermissions": []
+}

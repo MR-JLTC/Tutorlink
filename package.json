@@ -1,0 +1,36 @@
+{
+  "name": "tutorlink-admin",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.3",
+    "recharts": "^3.2.1",
+    "lucide-react": "^0.544.0",
+    "axios": "^1.12.2",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/typeorm": "^11.0.0",
+    "path": "^0.12.7",
+    "typeorm": "^0.3.27",
+    "bcrypt": "^6.0.0",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/jwt": "^11.0.0",
+    "passport-jwt": "^4.0.1",
+    "class-validator": "^0.14.2",
+    "@nestjs/config": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
