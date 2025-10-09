@@ -1,12 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Page } from '../../types';
+import { useNavigate } from 'react-router-dom';
 import { SUBJECTS } from '../../constants';
 import { CheckCircleIcon } from '../../components/icons/CheckCircleIcon';
 import { DocumentArrowUpIcon } from '../../components/icons/DocumentArrowUpIcon';
-
-interface TutorRegistrationPageProps {
-  onNavigate: (page: Page) => void;
-}
 
 interface DayAvailability {
   available: boolean;
@@ -16,7 +12,8 @@ interface DayAvailability {
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-const TutorRegistrationPage: React.FC<TutorRegistrationPageProps> = ({ onNavigate }) => {
+const TutorRegistrationPage: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set());
   const [subjectToAdd, setSubjectToAdd] = useState('');
   const [otherSubject, setOtherSubject] = useState('');
@@ -108,7 +105,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationPageProps> = ({ onNavigat
             Thank you for your application. Our team will review your documents and you will be notified via email once your account is approved.
           </p>
           <button
-            onClick={() => onNavigate(Page.Landing)}
+            onClick={() => navigate('/LandingPage')}
             className="mt-8 w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors"
           >
             Back to Home

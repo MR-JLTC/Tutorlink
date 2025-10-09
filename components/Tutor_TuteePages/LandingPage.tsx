@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Page } from '../../types'; // Ensure Page enum is correctly defined
-import { AcademicCapIcon } from '../../components/icons/AcademicCapIcon';
-import { UserCircleIcon } from '../../components/icons/UserCircleIcon';
+import { useNavigate } from 'react-router-dom';
 import Logo from '../../components/Logo';
 
 // New icons for "How it works" section
@@ -69,7 +67,7 @@ const HeroImageSlider = () => {
     );
 };
 
-const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNavigate: (page: Page) => void; }> = ({ isOpen, onClose, onNavigate }) => {
+const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNavigate: (path: string) => void; }> = ({ isOpen, onClose, onNavigate }) => {
     useEffect(() => {
       if (!isOpen) return;
   
@@ -93,28 +91,48 @@ const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNav
           <div 
             role="button"
             tabIndex={0}
-            className="flex-1 p-8 rounded-xl border-2 border-slate-200 hover:border-sky-500 hover:bg-sky-50 transition-all duration-300 cursor-pointer flex flex-col items-center text-center focus:outline-none focus:ring-2 focus:ring-sky-500"
-            onClick={() => onNavigate(Page.TuteeRegister)}
-            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate(Page.TuteeRegister)}}
+            className="flex-1 p-8 rounded-xl border-2 border-slate-200 hover:border-sky-500 hover:bg-sky-50 transition-all duration-300 cursor-pointer flex flex-col items-center text-center focus:outline-none focus:ring-2 focus:ring-sky-500 group"
+            onClick={() => onNavigate('/TuteeRegistrationPage')}
+            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate('/TuteeRegistrationPage')}}
           >
-            <div className="flex items-center justify-center h-16 w-16 rounded-full bg-sky-500 text-white mb-4">
-              <UserCircleIcon className="w-8 h-8" />
+            <div className="relative flex items-center justify-center h-24 w-24 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300">
+              <img 
+                src="assets/images/tutee.jpeg" 
+                alt="Student" 
+                className="w-full h-full object-cover rounded-full"
+              />
+              <div className="absolute inset-0 bg-gradient-to-br from-sky-500/20 to-transparent rounded-full"></div>
+              <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center shadow-md">
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+              </div>
             </div>
-            <h3 id="modal-title" className="text-2xl font-bold text-slate-800">I'm a Student</h3>
-            <p className="mt-2 text-slate-600">Find a tutor to help you achieve your academic goals.</p>
+            <h3 id="modal-title" className="text-2xl font-bold text-slate-800 group-hover:text-sky-700 transition-colors">I'm a Student</h3>
+            <p className="mt-2 text-slate-600 group-hover:text-slate-700 transition-colors">Find a tutor to help you achieve your academic goals.</p>
           </div>
           <div 
             role="button"
             tabIndex={0}
-            className="flex-1 p-8 rounded-xl border-2 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-300 cursor-pointer flex flex-col items-center text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            onClick={() => onNavigate(Page.TutorRegister)}
-            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate(Page.TutorRegister)}}
+            className="flex-1 p-8 rounded-xl border-2 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-300 cursor-pointer flex flex-col items-center text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 group"
+            onClick={() => onNavigate('/TutorRegistrationPage')}
+            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate('/TutorRegistrationPage')}}
           >
-            <div className="flex items-center justify-center h-16 w-16 rounded-full bg-indigo-500 text-white mb-4">
-              <AcademicCapIcon className="w-8 h-8" />
+            <div className="relative flex items-center justify-center h-24 w-24 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300">
+              <img 
+                src="assets/images/tutor.jpeg" 
+                alt="Tutor" 
+                className="w-full h-full object-cover rounded-full"
+              />
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent rounded-full"></div>
+              <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center shadow-md">
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                </svg>
+              </div>
             </div>
-            <h3 className="text-2xl font-bold text-slate-800">I'm a Tutor</h3>
-            <p className="mt-2 text-slate-600">Share your knowledge, help students, and earn money.</p>
+            <h3 className="text-2xl font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">I'm a Tutor</h3>
+            <p className="mt-2 text-slate-600 group-hover:text-slate-700 transition-colors">Share your knowledge, help students, and earn money.</p>
           </div>
         </div>
       </div>
@@ -122,106 +140,454 @@ const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNav
 };
 
 
-interface LandingPageProps {
-  onNavigate: (page: Page) => void;
-}
-
-const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
+const LandingPage: React.FC = () => {
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleNavigate = (path: string) => {
+    navigate(path);
+  };
 
   return (
     <div className="bg-white text-slate-800 antialiased"> {/* Added antialiased for smoother fonts */}
-      <header className="py-4 px-6 sm:px-8 md:px-16 border-b border-slate-200 flex justify-between items-center">
-        <Logo className="h-10 sm:h-12 md:h-14 w-auto" />
+      <header className="relative py-4 px-6 sm:px-8 md:px-16 bg-white/90 backdrop-blur-md border-b border-slate-200/50 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          {/* Logo Section with Enhanced Design */}
+          <div className="flex items-center space-x-3 group cursor-pointer" onClick={() => navigate('/LandingPage')}>
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-30 group-hover:opacity-50 transition-opacity duration-300"></div>
+              <div className="relative bg-white p-2 rounded-xl shadow-lg border border-slate-200/50 group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <Logo className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto transition-all duration-300" />
+              </div>
+            </div>
+            <div className="hidden sm:block">
+              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                TutorLink
+              </h1>
+              <p className="text-xs text-slate-500 font-medium">Connect • Learn • Succeed</p>
+            </div>
+          </div>
+          
+          {/* Navigation Menu */}
+          <nav className="hidden lg:flex items-center space-x-8">
+            <a 
+              href="#how-it-works" 
+              className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm relative group"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              How It Works
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-sky-600 transition-all duration-200 group-hover:w-full"></span>
+            </a>
+            <a 
+              href="#features" 
+              className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm relative group"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              Features
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-sky-600 transition-all duration-200 group-hover:w-full"></span>
+            </a>
+            <a 
+              href="#contact" 
+              className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm relative group"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              Contact
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-sky-600 transition-all duration-200 group-hover:w-full"></span>
+            </a>
+          </nav>
+
+          {/* Action Buttons */}
+          <div className="flex items-center space-x-3">
+            <button 
+              className="hidden sm:block text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm px-4 py-2 rounded-lg hover:bg-sky-50"
+              onClick={() => navigate('/login')}
+            >
+              Login
+            </button>
+            <button 
+              className="bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-semibold py-2.5 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 text-sm relative overflow-hidden group"
+              onClick={() => setIsModalOpen(true)}
+            >
+              <span className="relative z-10">Get Started</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-sky-700 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </button>
+            
+            {/* Mobile Menu Button */}
+            <button className="lg:hidden p-2 text-slate-600 hover:text-sky-600 transition-colors duration-200">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
+        </div>
         
-        {/* Navigation - Hidden on mobile, visible on medium screens and up */}
-        <nav className="hidden md:flex space-x-8">
-            {/* Example Nav Links - Uncomment and adjust as needed */}
-            {/* 
-            <a href="#" className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium">Features</a>
-            <a href="#" className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium">How It Works</a>
-            <a href="#" className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium">Pricing</a>
-            */}
-        </nav>
-
-        {/* Action Buttons */}
-        {/* <div className="flex items-center space-x-4">
-            <button 
-                className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-base sm:text-lg"
-                onClick={() => onNavigate(Page.Login)} // Assuming a Login page exists in your Page enum
-            >
-                Login
-            </button>
-            <button 
-                className="bg-sky-600 text-white font-bold py-2.5 px-6 rounded-lg shadow-md hover:bg-sky-700 transition-all duration-300 text-base sm:text-lg"
-                onClick={() => setIsModalOpen(true)}
-            >
-                Sign Up
-            </button>
-        </div> */}
-
-        {/* Future: Hamburger Menu for mobile nav could go here */}
+        {/* Subtle gradient overlay for modern effect */}
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
       </header>
 
       <main>
         {/* Hero Section */}
-        <section className="px-6 sm:px-8 md:px-16 py-16 md:py-24 grid md:grid-cols-2 gap-12 md:gap-16 items-center">
-          <div className="hero-text text-center md:text-left">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-slate-900 leading-tight">
-              Connecting Students with Tutors <br className="hidden sm:inline" /> for Success.
+        <section className="px-6 sm:px-8 md:px-16 py-16 md:py-24 grid md:grid-cols-2 gap-12 md:gap-16 items-center min-h-[80vh]">
+          <div className="hero-text text-center md:text-left space-y-6">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 leading-tight">
+              Connecting Students with <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-indigo-600">Tutors</span> <br className="hidden sm:inline" /> for Success.
             </h1>
             <p className="mt-6 text-lg md:text-xl text-slate-600 max-w-lg mx-auto md:mx-0 leading-relaxed">
               Find the perfect local tutor to help you excel in any subject. Personalized learning, simplified.
             </p>
-            <button 
-              className="mt-10 bg-sky-600 text-white font-bold py-3.5 px-10 rounded-lg shadow-xl hover:bg-sky-700 transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1"
-              onClick={() => setIsModalOpen(true)}
-            >
-              Get Started Today
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4 mt-10">
+              <button 
+                className="bg-sky-600 text-white font-bold py-3.5 px-10 rounded-lg shadow-xl hover:bg-sky-700 transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1 hover:shadow-2xl"
+                onClick={() => setIsModalOpen(true)}
+              >
+                Get Started Today
+              </button>
+              <button 
+                className="border-2 border-sky-600 text-sky-600 font-bold py-3.5 px-10 rounded-lg hover:bg-sky-600 hover:text-white transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1"
+                onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                Learn More
+              </button>
+            </div>
           </div>
-          <div className="hero-image h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden relative shadow-xl"> {/* Added shadow to image */}
+          <div className="hero-image h-64 sm:h-80 md:h-96 lg:h-[500px] rounded-2xl overflow-hidden relative shadow-2xl border-4 border-white"> {/* Enhanced shadow and border */}
             <HeroImageSlider />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+          </div>
+        </section>
+
+        {/* Features Section */}
+        <section id="features" className="bg-gradient-to-br from-slate-50 to-blue-50 px-6 sm:px-8 md:px-16 py-20 md:py-28">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6">Powerful Features for Everyone</h2>
+              <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">Whether you're a student seeking help or a tutor sharing knowledge, TutorLink provides all the tools you need for successful learning.</p>
+            </div>
+
+            {/* Student Features */}
+            <div className="mb-20">
+              <div className="text-center mb-12">
+                <h3 className="text-3xl font-bold text-sky-600 mb-4">For Students</h3>
+                <p className="text-lg text-slate-600">Everything you need to find the perfect tutor and excel in your studies</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
+                    <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Easy Registration</h4>
+                  <p className="text-slate-600 leading-relaxed">Quick signup with university email verification. Enter your course and year level to get started.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
+                    <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Smart Tutor Matching</h4>
+                  <p className="text-slate-600 leading-relaxed">Browse tutors filtered by your course subjects. View profiles, ratings, and availability.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
+                    <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Easy Booking</h4>
+                  <p className="text-slate-600 leading-relaxed">Book sessions with your preferred tutors. Simple scheduling and session management.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
+                    <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Secure Payments</h4>
+                  <p className="text-slate-600 leading-relaxed">Pay via GCash with secure payment proof upload. Session confirmed after tutor approval.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
+                    <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Rate & Review</h4>
+                  <p className="text-slate-600 leading-relaxed">Leave feedback after sessions. Help other students find the best tutors.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
+                    <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Become a Tutor</h4>
+                  <p className="text-slate-600 leading-relaxed">Apply to become a tutor. Share your knowledge and earn money helping others.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Tutor Features */}
+            <div className="mb-20">
+              <div className="text-center mb-12">
+                <h3 className="text-3xl font-bold text-indigo-600 mb-4">For Tutors</h3>
+                <p className="text-lg text-slate-600">Share your expertise and build a successful tutoring business</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-200 transition-colors">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Easy Application</h4>
+                  <p className="text-slate-600 leading-relaxed">Apply with your subjects of expertise and upload supporting documents for verification.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-200 transition-colors">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Profile Management</h4>
+                  <p className="text-slate-600 leading-relaxed">Create a compelling profile with bio, subjects, and GCash payment details.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-200 transition-colors">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Flexible Scheduling</h4>
+                  <p className="text-slate-600 leading-relaxed">Set your weekly availability with custom time slots for each day.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-200 transition-colors">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Session Management</h4>
+                  <p className="text-slate-600 leading-relaxed">Receive booking requests, accept/decline, and manage session confirmations.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-200 transition-colors">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Earnings Tracking</h4>
+                  <p className="text-slate-600 leading-relaxed">Track your earnings, view completed sessions, and monitor payment status.</p>
+                </div>
+
+                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-200 transition-colors">
+                    <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-xl font-bold text-slate-800 mb-3">Build Reputation</h4>
+                  <p className="text-slate-600 leading-relaxed">Earn ratings and reviews from students to build your tutoring reputation.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
         {/* How It Works Section */}
-        <section className="bg-slate-50 px-6 sm:px-8 md:px-16 py-16 md:py-24">
-          <div className="text-center max-w-4xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">How It Works</h2>
-            <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">Getting academic help is easier than ever. Follow these simple steps to connect with your ideal tutor.</p>
+        <section id="how-it-works" className="bg-white px-6 sm:px-8 md:px-16 py-20 md:py-28">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6">How It Works</h2>
+              <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">Getting academic help is easier than ever. Follow these simple steps to connect with your ideal tutor.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="text-center p-8 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl shadow-lg border border-sky-100 transform hover:scale-105 transition-all duration-300 group">
+                <div className="flex items-center justify-center h-20 w-20 rounded-full bg-gradient-to-br from-sky-500 to-sky-600 text-white mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow">
+                  <MagnifyingGlassIcon className="w-10 h-10" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-800 mb-4">1. Find a Tutor</h3>
+                <p className="text-slate-600 leading-relaxed">Search our diverse network of qualified tutors by subject, location, and availability.</p>
+              </div>
+              <div className="text-center p-8 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl shadow-lg border border-sky-100 transform hover:scale-105 transition-all duration-300 group">
+                <div className="flex items-center justify-center h-20 w-20 rounded-full bg-gradient-to-br from-sky-500 to-sky-600 text-white mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow">
+                  <LinkIcon className="w-10 h-10" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-800 mb-4">2. Connect & Book</h3>
+                <p className="text-slate-600 leading-relaxed">Message tutors directly to discuss your needs and easily schedule your first session.</p>
+              </div>
+              <div className="text-center p-8 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl shadow-lg border border-sky-100 transform hover:scale-105 transition-all duration-300 group">
+                <div className="flex items-center justify-center h-20 w-20 rounded-full bg-gradient-to-br from-sky-500 to-sky-600 text-white mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow">
+                  <LightbulbIcon className="w-10 h-10" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-800 mb-4">3. Get Expert Help</h3>
+                <p className="text-slate-600 leading-relaxed">Start learning from experienced educators and watch your grades and confidence soar!</p>
+              </div>
+            </div>
           </div>
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            <div className="step-card text-center p-8 bg-white rounded-2xl shadow-lg border border-slate-100 transform hover:scale-105 transition-transform duration-300">
-              <div className="flex items-center justify-center h-16 w-16 rounded-full bg-sky-100 text-sky-600 mx-auto mb-6 shadow-md">
-                <MagnifyingGlassIcon className="w-8 h-8" />
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-800">1. Find a Tutor</h3>
-              <p className="mt-2 text-slate-600 leading-relaxed">Search our diverse network of qualified tutors by subject, location, and availability.</p>
+        </section>
+
+        {/* Contact Section */}
+        <section id="contact" className="bg-gradient-to-br from-slate-900 to-slate-800 px-6 sm:px-8 md:px-16 py-20 md:py-28">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">Get in Touch</h2>
+              <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">Have questions? We're here to help you succeed in your academic journey.</p>
             </div>
-            <div className="step-card text-center p-8 bg-white rounded-2xl shadow-lg border border-slate-100 transform hover:scale-105 transition-transform duration-300">
-              <div className="flex items-center justify-center h-16 w-16 rounded-full bg-sky-100 text-sky-600 mx-auto mb-6 shadow-md">
-                <LinkIcon className="w-8 h-8" />
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+              {/* Contact Info */}
+              <div className="space-y-8">
+                <div className="flex items-start space-x-4">
+                  <div className="w-12 h-12 bg-sky-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">Email Support</h3>
+                    <p className="text-slate-300">support@tutorlink.com</p>
+                    <p className="text-slate-400 text-sm">We'll respond within 24 hours</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-4">
+                  <div className="w-12 h-12 bg-sky-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">Business Hours</h3>
+                    <p className="text-slate-300">Monday - Friday: 9:00 AM - 6:00 PM</p>
+                    <p className="text-slate-300">Saturday: 10:00 AM - 4:00 PM</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-4">
+                  <div className="w-12 h-12 bg-sky-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">Location</h3>
+                    <p className="text-slate-300">Philippines</p>
+                    <p className="text-slate-400 text-sm">Serving universities nationwide</p>
+                  </div>
+                </div>
               </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-800">2. Connect & Book</h3>
-              <p className="mt-2 text-slate-600 leading-relaxed">Message tutors directly to discuss your needs and easily schedule your first session.</p>
-            </div>
-            <div className="step-card text-center p-8 bg-white rounded-2xl shadow-lg border border-slate-100 transform hover:scale-105 transition-transform duration-300">
-              <div className="flex items-center justify-center h-16 w-16 rounded-full bg-sky-100 text-sky-600 mx-auto mb-6 shadow-md">
-                <LightbulbIcon className="w-8 h-8" />
+
+              {/* Contact Form */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+                <h3 className="text-2xl font-bold text-white mb-6">Send us a Message</h3>
+                <form className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      placeholder="Your Name"
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                    />
+                    <input
+                      type="email"
+                      placeholder="Your Email"
+                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Subject"
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                  />
+                  <textarea
+                    rows={4}
+                    placeholder="Your Message"
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent resize-none"
+                  ></textarea>
+                  <button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-sky-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105"
+                  >
+                    Send Message
+                  </button>
+                </form>
               </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-800">3. Get Expert Help</h3>
-              <p className="mt-2 text-slate-600 leading-relaxed">Start learning from experienced educators and watch your grades and confidence soar!</p>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="text-center text-slate-500 py-12 px-8 border-t border-slate-200">
-        <p>&copy; {new Date().getFullYear()} TutorLink. All rights reserved.</p>
+      <footer className="bg-slate-900 text-slate-300 py-12 px-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                  <Logo className="h-6 w-auto" />
+                </div>
+                <h3 className="text-xl font-bold text-white">TutorLink</h3>
+              </div>
+              <p className="text-slate-400 leading-relaxed">Connecting students with qualified tutors for academic success.</p>
+            </div>
+            
+            <div>
+              <h4 className="text-lg font-semibold text-white mb-4">For Students</h4>
+              <ul className="space-y-2">
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Find Tutors</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Book Sessions</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Payment Guide</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Help Center</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="text-lg font-semibold text-white mb-4">For Tutors</h4>
+              <ul className="space-y-2">
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Apply to Teach</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Tutor Resources</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Earnings</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Support</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="text-lg font-semibold text-white mb-4">Company</h4>
+              <ul className="space-y-2">
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">About Us</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Terms of Service</a></li>
+                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Contact</a></li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="border-t border-slate-700 pt-8 text-center">
+            <p className="text-slate-400">&copy; {new Date().getFullYear()} TutorLink. All rights reserved.</p>
+          </div>
+        </div>
       </footer>
       
-      <RoleSelectionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onNavigate={onNavigate} />
+      <RoleSelectionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onNavigate={handleNavigate} />
     </div>
   );
 };

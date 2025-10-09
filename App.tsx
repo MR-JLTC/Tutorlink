@@ -15,6 +15,7 @@ import PaymentManagement from './components/PaymentManagement';
 import LandingPage from './components/Tutor_TuteePages/LandingPage';
 import TuteeRegistrationPage from './components/Tutor_TuteePages/TuteeRegistrationPage';
 import TutorRegistrationPage from './components/Tutor_TuteePages/TutorRegistrationPage';
+import UnifiedLoginPage from './components/Tutor_TuteePages/UnifiedLoginPage';
 
 const App: React.FC = () => {
   return (
@@ -24,7 +25,8 @@ const App: React.FC = () => {
         <Route path="/LandingPage" element={<LandingPage />} />
         <Route path="/TuteeRegistrationPage" element={<TuteeRegistrationPage />} />
         <Route path="/TutorRegistrationPage" element={<TutorRegistrationPage />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<UnifiedLoginPage />} />
+        <Route path="/admin-login" element={<LoginPage />} />
         <Route path="/register" element={<RegistrationPage />} />
         <Route
           path="/*"

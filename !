@@ -1,0 +1,11 @@
+Merge branch 'main' of https://github.com/MR-JLTC/Tutorlink
+# Please enter a commit message to explain why this merge is necessary,
+# especially if it merges an updated upstream into a topic branch.
+#
+# Lines starting with '#' will be ignored, and an empty message aborts
+# the commit.
+Merge remote-tracking branch 'origin/main' into main
+
+This merge was necessary to combine local project history with
+the initial remote repository setup (which included a README.md).R
+esolved conflicts in README.md to keep both local and remote ccontent.

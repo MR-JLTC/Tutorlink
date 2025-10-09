@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Page, University } from '../../types';
+import { useNavigate } from 'react-router-dom';
+import { University } from '../../types';
 import { UNIVERSITIES } from '../../constants';
 import { CheckCircleIcon } from '../../components/icons/CheckCircleIcon';
 
-interface TuteeRegistrationPageProps {
-  onNavigate: (page: Page) => void;
-}
-
-const TuteeRegistrationPage: React.FC<TuteeRegistrationPageProps> = ({ onNavigate }) => {
+const TuteeRegistrationPage: React.FC = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     university: '',
@@ -65,7 +63,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationPageProps> = ({ onNavigat
             A verification link has been sent to <strong>{formData.email}</strong>. Please check your inbox to activate your account.
           </p>
           <button
-            onClick={() => onNavigate(Page.Landing)}
+            onClick={() => navigate('/LandingPage')}
             className="mt-8 w-full bg-sky-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-sky-700 transition-colors"
           >
             Back to Home
