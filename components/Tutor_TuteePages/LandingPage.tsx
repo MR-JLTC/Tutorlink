@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../../components/Logo';
+import Modal from '../../components/ui/Modal';
 
 // New icons for "How it works" section
 const MagnifyingGlassIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -21,6 +22,47 @@ const LightbulbIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
+
+const LiveStats: React.FC = () => {
+  const [stats, setStats] = useState<{ users: number; tutors: number; universities: number; courses: number; sessions: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch('http://localhost:3000/api/landing/stats')
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to load stats');
+        return res.json();
+      })
+      .then((data) => {
+        if (mounted) setStats(data);
+      })
+      .catch((e) => {
+        if (mounted) setError(e.message);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-16">
+      {['Users', 'Tutors', 'Universities', 'Courses', 'Sessions'].map((label, idx) => {
+        const key = label.toLowerCase() as 'users' | 'tutors' | 'universities' | 'courses' | 'sessions';
+        const value = stats ? stats[key] : undefined;
+        return (
+          <div key={label} className="bg-white rounded-xl border border-slate-100 p-5 text-center shadow-sm">
+            <p className="text-slate-500 text-sm">{label}</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1">{value !== undefined ? value : '—'}</p>
+          </div>
+        );
+      })}
+      {error && (
+        <div className="col-span-2 md:col-span-5 text-center text-slate-500 text-sm">Stats unavailable</div>
+      )}
+    </div>
+  );
+};
 
 const slides = [
     { 
@@ -95,11 +137,11 @@ const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNav
             onClick={() => onNavigate('/TuteeRegistrationPage')}
             onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate('/TuteeRegistrationPage')}}
           >
-            <div className="relative flex items-center justify-center h-24 w-24 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300">
+            <div className="relative flex items-center justify-center h-24 w-24 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300">
               <img 
                 src="assets/images/tutee.jpeg" 
                 alt="Student" 
-                className="w-full h-full object-cover rounded-full"
+                className="w-full h-full object-cover rounded-full transform scale-125 md:scale-150"
               />
               <div className="absolute inset-0 bg-gradient-to-br from-sky-500/20 to-transparent rounded-full"></div>
               <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center shadow-md">
@@ -118,11 +160,11 @@ const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNav
             onClick={() => onNavigate('/TutorRegistrationPage')}
             onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate('/TutorRegistrationPage')}}
           >
-            <div className="relative flex items-center justify-center h-24 w-24 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl group-hover:scale-110 transition-all duration-300">
+            <div className="relative flex items-center justify-center h-24 w-24 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300">
               <img 
                 src="assets/images/tutor.jpeg" 
                 alt="Tutor" 
-                className="w-full h-full object-cover rounded-full"
+                className="w-full h-full object-cover rounded-full transform scale-150"
               />
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent rounded-full"></div>
               <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center shadow-md">
@@ -143,6 +185,10 @@ const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNav
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
 
   const handleNavigate = (path: string) => {
     navigate(path);
@@ -150,26 +196,20 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className="bg-white text-slate-800 antialiased"> {/* Added antialiased for smoother fonts */}
-      <header className="relative py-4 px-6 sm:px-8 md:px-16 bg-white/90 backdrop-blur-md border-b border-slate-200/50 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
+      <header className="relative py-3 px-4 sm:px-6 md:px-10 bg-white/90 supports-[backdrop-filter]:bg-white/70 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo Section with Enhanced Design */}
           <div className="flex items-center space-x-3 group cursor-pointer" onClick={() => navigate('/LandingPage')}>
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-30 group-hover:opacity-50 transition-opacity duration-300"></div>
               <div className="relative bg-white p-2 rounded-xl shadow-lg border border-slate-200/50 group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <Logo className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto transition-all duration-300" />
+                <Logo className="h-12 sm:h-14 md:h-16 lg:h-20 w-auto transition-all duration-300" />
               </div>
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                TutorLink
-              </h1>
-              <p className="text-xs text-slate-500 font-medium">Connect • Learn • Succeed</p>
             </div>
           </div>
           
           {/* Navigation Menu */}
-          <nav className="hidden lg:flex items-center space-x-8">
+          <nav className="hidden md:flex items-center space-x-6">
             <a 
               href="#how-it-works" 
               className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm relative group"
@@ -222,14 +262,79 @@ const LandingPage: React.FC = () => {
             </button>
             
             {/* Mobile Menu Button */}
-            <button className="lg:hidden p-2 text-slate-600 hover:text-sky-600 transition-colors duration-200">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+            <button
+              aria-label="Toggle menu"
+              className="md:hidden p-2 text-slate-700 hover:text-sky-600 transition-colors duration-200"
+              onClick={() => setIsMobileMenuOpen((v) => !v)}
+            >
+              {isMobileMenuOpen ? (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
-        
+
+        {/* Mobile dropdown */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm">
+            <div className="max-w-7xl mx-auto px-4 py-3 space-y-2">
+              <button
+                className="block w-full text-left text-slate-700 hover:text-sky-600 py-2"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                How It Works
+              </button>
+              <button
+                className="block w-full text-left text-slate-700 hover:text-sky-600 py-2"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                Features
+              </button>
+              <button
+                className="block w-full text-left text-slate-700 hover:text-sky-600 py-2"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                Contact
+              </button>
+              <div className="pt-2">
+                <button 
+                  className="w-full text-slate-700 hover:text-sky-600 font-medium py-2 rounded-lg hover:bg-sky-50"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    navigate('/login');
+                  }}
+                >
+                  Login
+                </button>
+                <button 
+                  className="mt-2 w-full bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-semibold py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    setIsModalOpen(true);
+                  }}
+                >
+                  Get Started
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Subtle gradient overlay for modern effect */}
         <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
       </header>
@@ -265,13 +370,16 @@ const LandingPage: React.FC = () => {
           </div>
         </section>
 
-        {/* Features Section */}
+        {/* Features Section (with live stats) */}
         <section id="features" className="bg-gradient-to-br from-slate-50 to-blue-50 px-6 sm:px-8 md:px-16 py-20 md:py-28">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6">Powerful Features for Everyone</h2>
               <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">Whether you're a student seeking help or a tutor sharing knowledge, TutorLink provides all the tools you need for successful learning.</p>
             </div>
+
+            {/* Live Stats from DB */}
+            <LiveStats />
 
             {/* Student Features */}
             <div className="mb-20">
@@ -454,9 +562,9 @@ const LandingPage: React.FC = () => {
               <p className="text-xl text-slate-300 max-w-3xl mx-auto leading-relaxed">Have questions? We're here to help you succeed in your academic journey.</p>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-              {/* Contact Info */}
-              <div className="space-y-8">
+            <div className="max-w-3xl mx-auto">
+              {/* Contact Info Card */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20 shadow-xl space-y-8">
                 <div className="flex items-start space-x-4">
                   <div className="w-12 h-12 bg-sky-500 rounded-xl flex items-center justify-center flex-shrink-0">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -465,7 +573,7 @@ const LandingPage: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-white mb-2">Email Support</h3>
-                    <p className="text-slate-300">support@tutorlink.com</p>
+                    <p className="text-slate-300">darkages38@gmail.com</p>
                     <p className="text-slate-400 text-sm">We'll respond within 24 hours</p>
                   </div>
                 </div>
@@ -497,41 +605,6 @@ const LandingPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Contact Form */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
-                <h3 className="text-2xl font-bold text-white mb-6">Send us a Message</h3>
-                <form className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      placeholder="Your Name"
-                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-                    />
-                    <input
-                      type="email"
-                      placeholder="Your Email"
-                      className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-                    />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Subject"
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-                  />
-                  <textarea
-                    rows={4}
-                    placeholder="Your Message"
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent resize-none"
-                  ></textarea>
-                  <button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-sky-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105"
-                  >
-                    Send Message
-                  </button>
-                </form>
-              </div>
             </div>
           </div>
         </section>
@@ -539,13 +612,15 @@ const LandingPage: React.FC = () => {
 
       <footer className="bg-slate-900 text-slate-300 py-12 px-8">
         <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-lg flex items-center justify-center">
-                  <Logo className="h-6 w-auto" />
+              <div className="flex items-center mb-4">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-30"></div>
+                  <div className="relative bg-white p-2 rounded-xl shadow-lg border border-slate-200/50">
+                    <Logo className="h-10 w-auto" />
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-white">TutorLink</h3>
               </div>
               <p className="text-slate-400 leading-relaxed">Connecting students with qualified tutors for academic success.</p>
             </div>
@@ -553,33 +628,127 @@ const LandingPage: React.FC = () => {
             <div>
               <h4 className="text-lg font-semibold text-white mb-4">For Students</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Find Tutors</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Book Sessions</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Payment Guide</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Help Center</a></li>
+                <li><span className="text-slate-400 hover:text-sky-400 transition-colors cursor-default">Find Tutors</span></li>
+                <li><span className="text-slate-400 hover:text-sky-400 transition-colors cursor-default">Book Sessions</span></li>
+                <li><span className="text-slate-400 hover:text-sky-400 transition-colors cursor-default">Payment Guide</span></li>
+                <li><span className="text-slate-400 hover:text-sky-400 transition-colors cursor-default">Help Center</span></li>
               </ul>
             </div>
             
             <div>
               <h4 className="text-lg font-semibold text-white mb-4">For Tutors</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Apply to Teach</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Tutor Resources</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Earnings</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Support</a></li>
+                <li><span className="text-slate-400 hover:text-sky-400 transition-colors cursor-default">Apply to Teach</span></li>
+                <li><span className="text-slate-400 hover:text-sky-400 transition-colors cursor-default">Tutor Resources</span></li>
+                <li><span className="text-slate-400 hover:text-sky-400 transition-colors cursor-default">Earnings</span></li>
+                <li><span className="text-slate-400 hover:text-sky-400 transition-colors cursor-default">Support</span></li>
               </ul>
             </div>
             
             <div>
               <h4 className="text-lg font-semibold text-white mb-4">Company</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">About Us</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Terms of Service</a></li>
-                <li><a href="#" className="text-slate-400 hover:text-sky-400 transition-colors">Contact</a></li>
+                <li className="w-max">
+                  <button type="button" onClick={() => setAboutOpen(true)} className="text-left text-slate-400 hover:text-sky-400 transition-colors">About Us</button>
+                </li>
+                <li className="w-max">
+                  <button type="button" onClick={() => setPrivacyOpen(true)} className="text-left text-slate-400 hover:text-sky-400 transition-colors">Privacy Policy</button>
+                </li>
+                <li className="w-max">
+                  <button type="button" onClick={() => setTermsOpen(true)} className="text-left text-slate-400 hover:text-sky-400 transition-colors">Terms of Service</button>
+                </li>
+                <li className="relative group w-max">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="text-left text-slate-400 hover:text-sky-400 transition-colors"
+                  >
+                    Contact
+                  </button>
+                </li>
               </ul>
             </div>
           </div>
+
+          {/* About Us Modal */}
+          <Modal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title="About TutorLink">
+            <div className="space-y-4 text-slate-700">
+              <p>
+                TutorLink connects university students with verified local tutors for one‑on‑one learning.
+                We focus on transparent profiles, simple booking, and secure confirmations so students
+                can learn confidently and tutors can grow sustainable careers.
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Student‑first experience: relevant subjects, clear rates, and reviews</li>
+                <li>Verified tutors from Philippine universities and communities</li>
+                <li>Fast communication and reliable scheduling tools</li>
+              </ul>
+            </div>
+          </Modal>
+
+          {/* Privacy Policy Modal */}
+          <Modal isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} title="Privacy Policy">
+            <div className="space-y-4 text-slate-700">
+              <p>
+                We comply with the Data Privacy Act of 2012 (Republic Act No. 10173) and process
+                personal data lawfully and transparently. This summary explains how we collect,
+                use, and protect information for tutor/tutee services.
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>
+                  Data we collect: account details (name, email), university/course info, tutor profiles,
+                  booking and payment confirmations, and support communications.
+                </li>
+                <li>
+                  Purpose: enable registration, matching, booking, messaging, payment validation,
+                  and safety monitoring.
+                </li>
+                <li>
+                  Rights: you may access, correct, or request deletion of your data; you may also
+                  withdraw consent subject to legal/operational requirements.
+                </li>
+                <li>
+                  Security: we apply appropriate organizational and technical safeguards and limit access
+                  to authorized personnel only.
+                </li>
+                <li>
+                  Retention: we retain data only as long as needed for services and legal obligations.
+                </li>
+                <li>
+                  Third parties: we share data only with processors essential to our services (e.g., hosting,
+                  email) under confidentiality and DPA‑compliant agreements.
+                </li>
+                <li>
+                  Contact: for privacy requests or concerns, email <span className="font-medium">darkages38@gmail.com</span>.
+                </li>
+              </ul>
+            </div>
+          </Modal>
+
+          {/* Terms of Service Modal */}
+          <Modal isOpen={termsOpen} onClose={() => setTermsOpen(false)} title="Terms of Service">
+            <div className="space-y-4 text-slate-700">
+              <p>
+                By using TutorLink, you agree to these terms. If you do not agree, please do not use the service.
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Accounts: provide accurate information and keep your credentials secure.</li>
+                <li>Bookings and Payments: follow the posted process; submit valid proofs when required.</li>
+                <li>Conduct: be respectful; no harassment, fraud, or academic dishonesty.</li>
+                <li>
+                  Content: reviews and profiles must be truthful and may be moderated to ensure platform safety.
+                </li>
+                <li>
+                  Liability: TutorLink facilitates connections; session outcomes remain between tutors and students
+                  subject to applicable law.
+                </li>
+                <li>
+                  Changes: we may update these terms and will indicate the effective date; continued use means acceptance.
+                </li>
+                <li>Contact: questions about these terms? Email us at <span className="font-medium">darkages38@gmail.com</span>.</li>
+              </ul>
+            </div>
+          </Modal>
           
           <div className="border-t border-slate-700 pt-8 text-center">
             <p className="text-slate-400">&copy; {new Date().getFullYear()} TutorLink. All rights reserved.</p>

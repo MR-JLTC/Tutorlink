@@ -10,9 +10,6 @@ export class Subject {
   @Column()
   subject_name: string;
 
-  @Column({ nullable: true })
-  semester?: string;
-
   @ManyToOne(() => Course, (course) => course.subjects)
   @JoinColumn({ name: 'course_id' })
   course: Course;

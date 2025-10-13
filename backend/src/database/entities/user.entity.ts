@@ -39,6 +39,9 @@ export class User {
   course_id: number;
 
   @Column({ nullable: true })
+  profile_image_url: string;
+
+  @Column({ nullable: true })
   year_level: number;
 
   @ManyToOne(() => University, (university) => university.users)

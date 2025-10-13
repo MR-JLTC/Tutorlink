@@ -18,6 +18,9 @@ export class Tutor {
   @Column('text')
   bio: string;
 
+  @Column({ nullable: true })
+  profile_image_url: string;
+
   @Column({
     type: 'enum',
     enum: ['pending', 'approved', 'rejected'],

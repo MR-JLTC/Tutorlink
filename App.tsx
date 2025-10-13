@@ -15,7 +15,9 @@ import PaymentManagement from './components/PaymentManagement';
 import LandingPage from './components/Tutor_TuteePages/LandingPage';
 import TuteeRegistrationPage from './components/Tutor_TuteePages/TuteeRegistrationPage';
 import TutorRegistrationPage from './components/Tutor_TuteePages/TutorRegistrationPage';
-import UnifiedLoginPage from './components/Tutor_TuteePages/UnifiedLoginPage';
+import TutorDashboard from './components/Tutor_TuteePages/TutorDashboard';
+const TuteeDashboard = () => <div className="p-6"><h1 className="text-2xl font-bold">TuteeDashboard</h1><p className="text-slate-600 mt-2">Coming soon.</p></div>;
+import UnifiedLoginPage from './components/auth/UnifiedLoginPage';
 
 const App: React.FC = () => {
   return (
@@ -38,6 +40,8 @@ const App: React.FC = () => {
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/users" element={<UserManagement />} />
                   <Route path="/tutors" element={<TutorManagement />} />
+                  <Route path="/tutor-dashboard" element={<TutorDashboard />} />
+                  <Route path="/tutee-dashboard" element={<TuteeDashboard />} />
                   <Route path="/universities" element={<UniversityManagement />} />
                   <Route path="/courses" element={<CourseManagement />} />
                   <Route path="/payments" element={<PaymentManagement />} />

@@ -2,6 +2,7 @@ import axios from 'axios';
 
 // The base URL for your NestJS backend
 const API_BASE_URL = 'http://localhost:3000/api';
+const API_ORIGIN = API_BASE_URL.replace(/\/?api$/, '');
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -26,21 +27,29 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error?.response?.status;
-    const message: string | undefined = error?.response?.data?.message;
+    const rawMessage: any = error?.response?.data?.message;
     const notify = (window as any).__notify as ((msg: string, type?: 'success' | 'error' | 'info') => void) | undefined;
 
-    if (message && notify) {
-      // Prefer backend-provided friendly messages
-      notify(Array.isArray(message) ? message.join(', ') : message, 'error');
-    } else if (notify) {
-      // Fallback generic
-      notify(status === 401 ? 'You are not authorized.' : 'Something went wrong. Please try again.', 'error');
+    if (notify) {
+      let display = Array.isArray(rawMessage) ? rawMessage.join(', ') : (rawMessage as string | undefined);
+      if (typeof display === 'string' && display.toLowerCase().includes('email already registered')) {
+        display = 'Email already registered';
+      }
+      if (!display) {
+        display = status === 401 ? 'You are not authorized.' : 'Something went wrong. Please try again.';
+      }
+      notify(display, 'error');
     }
 
     if (status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/#/login';
+      const reqUrl: string | undefined = error?.config?.url;
+      const isAuthEndpoint = reqUrl?.includes('/auth/login') || reqUrl?.includes('/auth/register');
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/#/login';
+      }
+      // For auth endpoints, do not redirect; allow the page (e.g., admin-login) to remain
     }
     // Forward the error so it can be handled by the calling component
     return Promise.reject(error);
@@ -49,3 +58,10 @@ apiClient.interceptors.response.use(
 
 
 export default apiClient;
+
+export const getFileUrl = (path: string | undefined | null): string => {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${API_ORIGIN}${normalized}`;
+};

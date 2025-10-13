@@ -44,18 +44,17 @@ export class CoursesService {
     return this.coursesRepository.save(course);
   }
 
-  async addSubjectToCourse(courseId: number, subjectName: string, semester?: string): Promise<Subject> {
+  async addSubjectToCourse(courseId: number, subjectName: string): Promise<Subject> {
     const course = await this.coursesRepository.findOne({ where: { course_id: courseId } });
     if (!course) throw new Error('Course not found');
-    const subject = this.subjectsRepository.create({ subject_name: subjectName, semester, course });
+    const subject = this.subjectsRepository.create({ subject_name: subjectName, course });
     return this.subjectsRepository.save(subject);
   }
 
-  async updateSubject(courseId: number, subjectId: number, body: { subject_name?: string; semester?: string }): Promise<Subject> {
+  async updateSubject(courseId: number, subjectId: number, body: { subject_name?: string }): Promise<Subject> {
     const subject = await this.subjectsRepository.findOne({ where: { subject_id: subjectId }, relations: ['course'] });
     if (!subject || subject.course.course_id !== courseId) throw new Error('Subject not found for course');
     if (body.subject_name !== undefined) subject.subject_name = body.subject_name;
-    if (body.semester !== undefined) (subject as any).semester = body.semester;
     return this.subjectsRepository.save(subject);
   }
 

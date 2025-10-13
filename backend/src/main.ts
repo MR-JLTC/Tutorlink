@@ -1,6 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { join } from 'path';
+import * as fs from 'fs';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -19,6 +21,16 @@ async function bootstrap() {
 
   // Use global pipes for validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
+  // Ensure uploads folder exists and serve static files for tutor documents
+  const docsDir = join(process.cwd(), 'tutor_documents');
+  if (!fs.existsSync(docsDir)) {
+    fs.mkdirSync(docsDir, { recursive: true });
+  }
+  // Serve at /tutor_documents/*
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const express = require('express');
+  app.use('/tutor_documents', express.static(docsDir));
 
   await app.listen(3000);
 }

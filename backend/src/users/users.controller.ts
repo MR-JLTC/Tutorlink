@@ -15,6 +15,7 @@ export class UsersController {
       user_id: u.user_id,
       name: u.name,
       email: u.email,
+      university_id: (u as any).university_id,
       university_name: u.university?.name || 'N/A',
       is_verified: u.is_verified,
       status: (u as any).status,
@@ -37,7 +38,7 @@ export class UsersController {
   @Patch(':id')
   async updateUser(
     @Param('id') id: string,
-    @Body() body: { name?: string; email?: string; status?: 'active' | 'inactive'; year_level?: number },
+    @Body() body: { name?: string; email?: string; status?: 'active' | 'inactive'; year_level?: number; university_id?: number },
   ) {
     return this.usersService.updateUser(+id, body);
   }

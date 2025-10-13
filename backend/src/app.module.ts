@@ -8,7 +8,10 @@ import { CoursesModule } from './courses/courses.module';
 import { TutorsModule } from './tutors/tutors.module';
 import { PaymentsModule } from './payments/payments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+// import { EmailModule } from './email/email.module';
 import * as entities from './database/entities';
+import { LandingModule } from './landing/landing.module';
+import { SubjectsModule } from './subjects/subjects.module';
 
 @Controller()
 export class AppController {
@@ -23,7 +26,8 @@ export class AppController {
         universities: '/api/universities',
         tutors: '/api/tutors',
         payments: '/api/payments',
-        dashboard: '/api/dashboard'
+        dashboard: '/api/dashboard',
+        email: '/api/email'
       }
     };
   }
@@ -37,7 +41,7 @@ export class AppController {
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: 'localhost',
-      port: 3307,
+      port: 3306,
       username: 'root', // Default XAMPP username
       password: '',     // Default XAMPP password is empty
       database: 'tutorlink',
@@ -51,6 +55,9 @@ export class AppController {
     TutorsModule,
     PaymentsModule,
     DashboardModule,
+    LandingModule,
+    SubjectsModule
+    // EmailModule,
   ],
   controllers: [AppController],
   providers: [],

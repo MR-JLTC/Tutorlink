@@ -69,7 +69,7 @@ export class UsersService {
     return { success: true };
   }
 
-  async updateUser(userId: number, body: { name?: string; email?: string; status?: 'active' | 'inactive'; year_level?: number }): Promise<User> {
+  async updateUser(userId: number, body: { name?: string; email?: string; status?: 'active' | 'inactive'; year_level?: number; university_id?: number }): Promise<User> {
     const user = await this.findOneById(userId);
     if (!user) {
       throw new Error('User not found');
@@ -78,6 +78,7 @@ export class UsersService {
     if (body.email !== undefined) user.email = body.email as any;
     if (body.status !== undefined) (user as any).status = body.status;
     if (body.year_level !== undefined) (user as any).year_level = body.year_level as any;
+    if (body.university_id !== undefined) (user as any).university_id = body.university_id as any;
     return this.usersRepository.save(user);
   }
 
