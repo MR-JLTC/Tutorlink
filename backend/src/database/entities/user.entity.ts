@@ -1,9 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToOne, OneToMany } from 'typeorm';
 import { University } from './university.entity';
 import { Course } from './course.entity';
 import { Admin } from './admin.entity';
 import { Student } from './student.entity';
 import { Tutor } from './tutor.entity';
+import { BookingRequest } from './booking-request.entity';
 
 @Entity('users')
 export class User {
@@ -60,4 +61,7 @@ export class User {
 
   @OneToOne(() => Tutor, (tutor) => tutor.user)
   tutor_profile: Tutor;
+
+  @OneToMany(() => BookingRequest, (request) => request.student)
+  bookingRequests: BookingRequest[];
 }

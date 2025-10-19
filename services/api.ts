@@ -30,7 +30,11 @@ apiClient.interceptors.response.use(
     const rawMessage: any = error?.response?.data?.message;
     const notify = (window as any).__notify as ((msg: string, type?: 'success' | 'error' | 'info') => void) | undefined;
 
-    if (notify) {
+    // Skip Toast messages for authentication endpoints - let the pages handle their own error display
+    const reqUrl: string | undefined = error?.config?.url;
+    const isAuthEndpoint = reqUrl?.includes('/auth/login') || reqUrl?.includes('/auth/register') || reqUrl?.includes('/auth/login-tutor-tutee');
+
+    if (notify && !isAuthEndpoint) {
       let display = Array.isArray(rawMessage) ? rawMessage.join(', ') : (rawMessage as string | undefined);
       if (typeof display === 'string' && display.toLowerCase().includes('email already registered')) {
         display = 'Email already registered';
@@ -42,12 +46,13 @@ apiClient.interceptors.response.use(
     }
 
     if (status === 401) {
-      const reqUrl: string | undefined = error?.config?.url;
-      const isAuthEndpoint = reqUrl?.includes('/auth/login') || reqUrl?.includes('/auth/register');
       if (!isAuthEndpoint) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        window.location.href = '/#/login';
+        const hash = window.location.hash || '';
+        const path = hash.replace(/^#/, '');
+        const isTutorOrTutee = path.startsWith('/tutor') || path.startsWith('/tutee');
+        window.location.href = isTutorOrTutee ? '/#/login' : '/#/admin-login';
       }
       // For auth endpoints, do not redirect; allow the page (e.g., admin-login) to remain
     }

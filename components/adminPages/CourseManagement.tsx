@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import apiClient from '../services/api';
-import { Course, Subject, University } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
-import Modal from './ui/Modal';
+import apiClient from '../../services/api';
+import { Course, Subject, University } from '../../types';
+import Card from '../ui/Card';
+import Button from '../ui/Button';
+import Modal from '../ui/Modal';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 interface CourseWithDetails extends Course {

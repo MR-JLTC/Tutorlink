@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { University } from '../../types';
 import { UNIVERSITIES } from '../../constants';
 import { CheckCircleIcon } from '../../components/icons/CheckCircleIcon';
+import { useToast } from '../../components/ui/Toast';
 
 const TuteeRegistrationPage: React.FC = () => {
   const navigate = useNavigate();
+  const { notify } = useToast();
   const [formData, setFormData] = useState({
     name: '',
     university: '',
@@ -49,7 +51,7 @@ const TuteeRegistrationPage: React.FC = () => {
       console.log('Tutee Registration Data:', formData);
       setIsSubmitted(true);
     } else {
-      alert('Please fill all fields correctly.');
+      notify('Please fill all fields correctly.', 'error');
     }
   };
 

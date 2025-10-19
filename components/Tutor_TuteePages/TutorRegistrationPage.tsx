@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 // Subjects now fetched from backend
 import { CheckCircleIcon } from '../../components/icons/CheckCircleIcon';
 import { DocumentArrowUpIcon } from '../../components/icons/DocumentArrowUpIcon';
+import { useToast } from '../../components/ui/Toast';
 
 interface DayAvailability {
   available: boolean;
@@ -15,6 +16,7 @@ const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Sat
 
 const TutorRegistrationPage: React.FC = () => {
   const navigate = useNavigate();
+  const { notify } = useToast();
   const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set<string>());
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,8 +31,11 @@ const TutorRegistrationPage: React.FC = () => {
   const [otherSubject, setOtherSubject] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [gcashQRImage, setGcashQRImage] = useState<File | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [bio, setBio] = useState('');
+  const [yearLevel, setYearLevel] = useState('');
+  const [gcashNumber, setGcashNumber] = useState('');
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
     daysOfWeek.reduce((acc, day) => {
       acc[day] = { available: false, startTime: '09:00', endTime: '17:00' };
@@ -144,9 +149,47 @@ const TutorRegistrationPage: React.FC = () => {
     }
   };
 
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const files = Array.from(e.dataTransfer.files);
+    const validFiles = files.filter((file: File) => {
+      const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+      const validExtensions = ['.pdf', '.png', '.jpg', '.jpeg'];
+      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+      
+      return validTypes.includes(file.type) || validExtensions.includes(fileExtension);
+    });
+    
+    if (validFiles.length > 0) {
+      setUploadedFiles(prev => [...prev, ...validFiles]);
+    }
+  };
+
   const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files && e.target.files[0];
     if (file) setProfileImage(file);
+  };
+
+  const handleGcashQRImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) setGcashQRImage(file);
   };
 
   const handleAvailabilityToggle = (day: string) => {
@@ -166,19 +209,19 @@ const TutorRegistrationPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !universityId) {
-      alert('Please enter email, password, and select your university.');
+      notify('Please enter email, password, and select your university.', 'error');
       return;
     }
     if (emailDomainError) {
-      alert(emailDomainError);
+      notify(emailDomainError, 'error');
       return;
     }
     if (password.length < 7 || password.length > 13) {
-      alert('Password must be between 7 and 13 characters.');
+      notify('Password must be between 7 and 13 characters.', 'error');
       return;
     }
     if (selectedSubjects.size === 0 || uploadedFiles.length === 0) {
-      alert('Please select at least one subject and upload at least one document.');
+      notify('Please select at least one subject and upload at least one document.', 'error');
       return;
     }
 
@@ -191,29 +234,44 @@ const TutorRegistrationPage: React.FC = () => {
         course_id: courseId ? Number(courseId) : undefined,
         course_name: !courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined,
         bio,
+        year_level: yearLevel,
+        gcash_number: gcashNumber,
       });
       const tutorId = applyRes.data?.tutor_id;
       if (!tutorId) throw new Error('Missing tutor_id');
 
-      // 2) Upload profile image (optional)
+      // 2) Upload profile image (optional) or set placeholder
       if (profileImage) {
         const pf = new FormData();
         pf.append('file', profileImage);
         await apiClient.post(`/tutors/${tutorId}/profile-image`, pf, { headers: { 'Content-Type': 'multipart/form-data' } });
+      } else {
+        // Set placeholder profile image
+        await apiClient.post(`/tutors/${tutorId}/profile-image-placeholder`);
       }
 
-      // 3) Upload documents
+      // 3) Upload GCash QR image (optional) or set placeholder
+      if (gcashQRImage) {
+        const gcashForm = new FormData();
+        gcashForm.append('file', gcashQRImage);
+        await apiClient.post(`/tutors/${tutorId}/gcash-qr`, gcashForm, { headers: { 'Content-Type': 'multipart/form-data' } });
+      } else {
+        // Set placeholder GCash QR
+        await apiClient.post(`/tutors/${tutorId}/gcash-qr-placeholder`);
+      }
+
+      // 4) Upload documents
       const form = new FormData();
       uploadedFiles.forEach(f => form.append('files', f));
       await apiClient.post(`/tutors/${tutorId}/documents`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
 
-      // 4) Save availability
+      // 5) Save availability
       const slots = Object.entries(availability)
         .filter(([, d]) => (d as any).available)
         .map(([day, d]) => ({ day_of_week: day, start_time: (d as any).startTime, end_time: (d as any).endTime }));
       await apiClient.post(`/tutors/${tutorId}/availability`, { slots });
 
-      // 5) Save subjects
+      // 6) Save subjects
       await apiClient.post(`/tutors/${tutorId}/subjects`, { subjects: Array.from(selectedSubjects) });
 
       setIsSubmitted(true);
@@ -229,7 +287,7 @@ const TutorRegistrationPage: React.FC = () => {
           // In most cases, the interceptor already showed a toast; do nothing here
         }
       } else {
-        alert(typeof message === 'string' && message.toLowerCase().includes('email already registered') ? 'Email already registered' : message);
+        notify(typeof message === 'string' && message.toLowerCase().includes('email already registered') ? 'Email already registered' : message, 'error');
       }
     }
   };
@@ -241,7 +299,7 @@ const TutorRegistrationPage: React.FC = () => {
           <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto" />
           <h2 className="text-3xl font-bold text-slate-800 mt-4">Application Submitted!</h2>
           <p className="text-slate-600 mt-2">
-            Thank you for your application. Our team will review your documents and you will be notified via email once your account is approved.
+          Thank you for your application. Our team will review your submitted documents. Once approved, your account status will be marked as "Approved" in the Application and Verification section of your dashboard.
           </p>
           <button
             onClick={() => navigate('/LandingPage')}
@@ -319,9 +377,52 @@ const TutorRegistrationPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Additional Info */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">Year Level</label>
+              <select 
+                value={yearLevel} 
+                onChange={(e) => setYearLevel(e.target.value)} 
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                required
+              >
+                <option value="">Select Year Level</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+                <option value="5th Year">5th Year</option>
+                <option value="Graduate">Graduate</option>
+                <option value="Post-Graduate">Post-Graduate</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1">GCash Number</label>
+              <input 
+                type="tel" 
+                value={gcashNumber} 
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Only allow numbers and limit to 11 digits
+                  const numbersOnly = value.replace(/[^0-9]/g, '');
+                  if (numbersOnly.length <= 11) {
+                    setGcashNumber(numbersOnly);
+                  }
+                }} 
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg" 
+                placeholder="09XXXXXXXXX"
+                pattern="09[0-9]{9}"
+                maxLength={11}
+                required
+              />
+              <p className="text-xs text-slate-500 mt-1">Format: 09XXXXXXXXX (11 digits, numbers only)</p>
+            </div>
+          </div>
+
           {/* Bio */}
           <div className="mb-6">
-            <label className="block text-slate-700 font-semibold mb-1">Your Bio (why you’d be a great tutor)</label>
+            <label className="block text-slate-700 font-semibold mb-1">Your Bio (why you'd be a great tutor)</label>
             <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="w-full px-4 py-2 border border-slate-300 rounded-lg" placeholder="Briefly describe your teaching experience, specialties, and approach." />
           </div>
           {/* Subjects of Expertise */}
@@ -441,22 +542,50 @@ const TutorRegistrationPage: React.FC = () => {
             <h2 className="block text-slate-700 font-semibold mb-2 text-lg">3. Proof Documents</h2>
             <div className="mb-6">
               <label className="block text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
-              <input type="file" accept="image/*" onChange={handleProfileImageChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg" />
+              <input type="file" 
+               accept="image/*" 
+               onChange={handleProfileImageChange} 
+               className="w-full px-4 py-2 border border-slate-300 rounded-lg" 
+               />
               {profileImage && <p className="text-xs text-slate-500 mt-1">Selected: {profileImage.name}</p>}
             </div>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-md">
+            <div className="mb-6">
+              <label className="block text-slate-700 font-semibold mb-1">GCash QR Code (optional)</label>
+              <input type="file" 
+               accept="image/*" 
+               onChange={handleGcashQRImageChange} 
+               className="w-full px-4 py-2 border border-slate-300 rounded-lg" 
+               />
+              {gcashQRImage && <p className="text-xs text-slate-500 mt-1">Selected: {gcashQRImage.name}</p>}
+              <p className="text-xs text-slate-500 mt-1">Upload your GCash QR code for payment processing</p>
+            </div>
+            {/* Drag and Drop Area */}
+            <div 
+              className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-md hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors cursor-pointer"
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => document.getElementById('file-upload-drag')?.click()}
+            >
               <div className="space-y-1 text-center">
                 <DocumentArrowUpIcon className="mx-auto h-12 w-12 text-slate-400" />
-                <div className="flex text-sm text-slate-600">
-                  <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                    <span>Upload your files</span>
-                    <input id="file-upload" name="file-upload" type="file" className="sr-only" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileChange} />
-                  </label>
-                  <p className="pl-1">or drag and drop</p>
+                <div className="text-sm text-slate-600">
+                  <p>Drag and drop your files here</p>
+                  <p className="text-xs text-slate-500 mt-1">or click to browse</p>
                 </div>
                 <p className="text-xs text-slate-500">PDF, PNG, JPG, JPEG up to 10MB</p>
+                <input 
+                  id="file-upload-drag"
+                  type="file" 
+                  className="sr-only" 
+                  multiple 
+                  accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,image/jpg" 
+                  onChange={handleFileChange} 
+                />
               </div>
             </div>
+
             {uploadedFiles.length > 0 && (
               <div className="mt-4">
                 <h4 className="font-semibold text-slate-700">Selected files:</h4>

@@ -5,6 +5,9 @@ import { TutorSubject } from './tutor-subject.entity';
 import { TutorAvailability } from './tutor-availability.entity';
 import { Session } from './session.entity';
 import { Payment } from './payment.entity';
+import { SubjectApplication } from './subject-application.entity';
+import { AvailabilityChangeRequest } from './availability-change-request.entity';
+import { BookingRequest } from './booking-request.entity';
 
 @Entity('tutors')
 export class Tutor {
@@ -20,6 +23,15 @@ export class Tutor {
 
   @Column({ nullable: true })
   profile_image_url: string;
+
+  @Column({ nullable: true })
+  gcash_qr_url: string;
+
+  @Column({ nullable: true })
+  gcash_number: string;
+
+  @Column({ nullable: true })
+  year_level: string;
 
   @Column({
     type: 'enum',
@@ -42,4 +54,13 @@ export class Tutor {
 
   @OneToMany(() => Payment, (payment) => payment.tutor)
   payments: Payment[];
+
+  @OneToMany(() => SubjectApplication, (application) => application.tutor)
+  subjectApplications: SubjectApplication[];
+
+  @OneToMany(() => AvailabilityChangeRequest, (request) => request.tutor)
+  availabilityChangeRequests: AvailabilityChangeRequest[];
+
+  @OneToMany(() => BookingRequest, (request) => request.tutor)
+  bookingRequests: BookingRequest[];
 }

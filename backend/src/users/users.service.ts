@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, Admin } from '../database/entities';
+import { User, Admin, Tutor } from '../database/entities';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from '../auth/auth.dto';
 
@@ -12,6 +12,8 @@ export class UsersService {
     private usersRepository: Repository<User>,
     @InjectRepository(Admin)
     private adminRepository: Repository<Admin>,
+    @InjectRepository(Tutor)
+    private tutorRepository: Repository<Tutor>,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -46,6 +48,10 @@ export class UsersService {
   async isAdmin(userId: number): Promise<boolean> {
       const admin = await this.adminRepository.findOne({ where: { user: { user_id: userId } } });
       return !!admin;
+  }
+
+  async findTutorProfile(userId: number): Promise<Tutor | null> {
+    return this.tutorRepository.findOne({ where: { user: { user_id: userId } } });
   }
 
   async updateStatus(userId: number, status: 'active' | 'inactive'): Promise<User> {

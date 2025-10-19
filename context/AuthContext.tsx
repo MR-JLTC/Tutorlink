@@ -8,6 +8,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password?: string) => Promise<void>;
+  loginTutorTutee: (email: string, password: string) => Promise<void>;
   register: (details: { name: string; email: string; password?: string }) => Promise<void>;
   logout: () => void;
 }
@@ -56,6 +57,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw err;
     }
   };
+
+  const loginTutorTutee = async (email: string, password: string) => {
+    try {
+      const response = await apiClient.post('/auth/login-tutor-tutee', { email, password });
+      const { user, accessToken } = response.data;
+      
+      // Update AuthContext state
+      setUser(user);
+      setToken(accessToken);
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('token', accessToken);
+      
+      // Navigate based on user role
+      if (user.role === 'student') {
+        navigate('/tutee-dashboard');
+      } else if (user.role === 'tutor') {
+        navigate('/tutor-dashboard');
+      } else {
+        throw new Error('Invalid user role');
+      }
+    } catch (err: any) {
+      // Toast is shown globally by axios interceptor; avoid duplicate here
+      throw err;
+    }
+  };
   
   const register = async (details: { name: string; email: string; password?: string }) => {
     try {
@@ -68,11 +94,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    const wasAdmin = user?.role === 'admin';
     setUser(null);
     setToken(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
-    navigate('/login');
+    navigate(wasAdmin ? '/admin-login' : '/login');
   };
 
   const value = {
@@ -80,6 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     token,
     isLoading,
     login,
+    loginTutorTutee,
     register,
     logout,
   };

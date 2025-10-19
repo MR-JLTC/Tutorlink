@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import Card from './ui/Card';
-import apiClient from '../services/api';
+import Card from '../ui/Card';
+import apiClient from '../../services/api';
 import { Users, UserCheck, FileText, CheckCircle2, TrendingUp, CreditCard } from 'lucide-react';
-import PesoSignIcon from '../components/icons/PesoSignIcon';
+import PesoSignIcon from '../icons/PesoSignIcon';
 
 interface Stats {
   totalUsers: number;

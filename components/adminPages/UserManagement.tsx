@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import apiClient from '../services/api';
-import { User, Payment, University } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
-import Modal from './ui/Modal';
+import apiClient from '../../services/api';
+import { User, Payment, University } from '../../types';
+import Card from '../ui/Card';
+import Button from '../ui/Button';
+import Modal from '../ui/Modal';
 import { RefreshCw, Ban, FileText, Edit, Trash2 } from 'lucide-react';
 
 const UserManagement: React.FC = () => {

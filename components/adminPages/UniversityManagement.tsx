@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { University } from '../types';
-import apiClient from '../services/api';
-import Card from './ui/Card';
-import Button from './ui/Button';
-import Modal from './ui/Modal';
+import { University } from '../../types';
+import apiClient from '../../services/api';
+import Card from '../ui/Card';
+import Button from '../ui/Button';
+import Modal from '../ui/Modal';
 import { Edit, Plus } from 'lucide-react';
 
 const UniversityManagement: React.FC = () => {

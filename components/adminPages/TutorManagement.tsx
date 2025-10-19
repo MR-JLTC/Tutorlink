@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import apiClient from '../services/api';
-import { Tutor } from '../types';
-import Card from './ui/Card';
-import Button from './ui/Button';
-import Modal from './ui/Modal';
+import apiClient from '../../services/api';
+import { Tutor } from '../../types';
+import Card from '../ui/Card';
+import Button from '../ui/Button';
+import Modal from '../ui/Modal';
 import { Check, X, FileText, User, Mail, School, Book } from 'lucide-react';
-import { getFileUrl } from '../services/api';
+import { getFileUrl } from '../../services/api';
 
 const TutorManagement: React.FC = () => {
   const [tutors, setTutors] = useState<Tutor[]>([]);

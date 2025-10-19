@@ -12,19 +12,24 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
     try {
       if (password.length < 7 || password.length > 13) {
+        setError('Password must be between 7 and 13 characters.');
         setIsLoading(false);
         return;
       }
       await login(email, password);
       // The login function in AuthContext handles navigation on success
     } catch (err: any) {
+      const errorMessage = err.response?.data?.message || 'Invalid credentials. Please try again.';
+      setError(errorMessage);
       setIsLoading(false);
     }
   };
@@ -67,6 +72,18 @@ const LoginPage: React.FC = () => {
                 </div>
               </div>
           <form className="space-y-6" onSubmit={handleSubmit}>
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50/90 backdrop-blur-sm border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-medium shadow-lg">
+                <div className="flex items-center">
+                  <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  {error}
+                </div>
+              </div>
+            )}
+            
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email address
@@ -112,8 +129,6 @@ const LoginPage: React.FC = () => {
                 </button>
               </div>
             </div>
-            
-            {/* Error toasts are shown globally via interceptor; no inline error here */}
 
             <div>
               <Button type="submit" className="w-full justify-center shadow-lg hover:shadow-xl" disabled={isLoading}>

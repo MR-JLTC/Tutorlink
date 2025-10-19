@@ -44,6 +44,42 @@ export class AuthService {
     };
   }
 
+  async loginTutorTutee(loginDto: LoginDto) {
+    const user = await this.validateUser(loginDto.email, loginDto.password);
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    // Block login if account is inactive
+    if ((user as any).status === 'inactive') {
+      throw new UnauthorizedException('Your account is inactive. Please contact an administrator.');
+    }
+    
+    // Check if the user is an admin (block admin login here)
+    const isAdmin = await this.usersService.isAdmin(user.user_id);
+    if (isAdmin) {
+      throw new UnauthorizedException('Admin accounts are not allowed here. Please use the Admin Portal.');
+    }
+
+    // Determine user type based on their profile
+    const userType = await this.determineUserType(user.user_id);
+    
+    const payload = { email: user.email, sub: user.user_id, name: user.name, role: userType };
+    return {
+      user: { ...user, role: userType },
+      accessToken: this.jwtService.sign(payload),
+    };
+  }
+
+  private async determineUserType(userId: number): Promise<'student' | 'tutor'> {
+    // Check if user has tutor profile
+    const tutorProfile = await this.usersService.findTutorProfile(userId);
+    if (tutorProfile) {
+      return 'tutor';
+    }
+    // Default to student if not a tutor
+    return 'student';
+  }
+
   async register(registerDto: RegisterDto) {
     const existingUser = await this.usersService.findOneByEmail(registerDto.email);
     if (existingUser) {

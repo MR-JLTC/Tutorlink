@@ -14,6 +14,22 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Ensure uploads folder exists and serve static files for tutor documents
+  const docsDir = join(process.cwd(), 'tutor_documents');
+  if (!fs.existsSync(docsDir)) {
+    fs.mkdirSync(docsDir, { recursive: true });
+  }
+  // Serve at /tutor_documents/* - configure before global prefix
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const express = require('express');
+  app.use('/tutor_documents', express.static(docsDir, {
+    setHeaders: (res, path) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+  }));
+
   // Set a global prefix for all routes except the root path
   app.setGlobalPrefix('api', {
     exclude: ['/']
@@ -21,16 +37,6 @@ async function bootstrap() {
 
   // Use global pipes for validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-
-  // Ensure uploads folder exists and serve static files for tutor documents
-  const docsDir = join(process.cwd(), 'tutor_documents');
-  if (!fs.existsSync(docsDir)) {
-    fs.mkdirSync(docsDir, { recursive: true });
-  }
-  // Serve at /tutor_documents/*
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const express = require('express');
-  app.use('/tutor_documents', express.static(docsDir));
 
   await app.listen(3000);
 }

@@ -4,12 +4,12 @@ import { LayoutDashboard, Users, UserCheck, School, BookOpen, CreditCard } from 
 import { logoBase64 } from '../../assets/logo';
 
 const navLinks = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/users', icon: Users, label: 'User Management' },
-  { to: '/tutors', icon: UserCheck, label: 'Tutor Applications' },
-  { to: '/universities', icon: School, label: 'Universities' },
-  { to: '/courses', icon: BookOpen, label: 'Courses & Subjects' },
-  { to: '/payments', icon: CreditCard, label: 'Payments' },
+  { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/admin/users', icon: Users, label: 'User Management' },
+  { to: '/admin/tutors', icon: UserCheck, label: 'Tutor Applications' },
+  { to: '/admin/universities', icon: School, label: 'Universities' },
+  { to: '/admin/courses', icon: BookOpen, label: 'Courses & Subjects' },
+  { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
 ];
 
 const Sidebar: React.FC = () => {

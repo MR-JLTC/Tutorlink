@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import apiClient from '../services/api';
-import { Payment } from '../types';
-import Button from './ui/Button';
-import Modal from './ui/Modal';
-import Card from './ui/Card';
+import apiClient from '../../services/api';
+import { Payment } from '../../types';
+import Button from '../ui/Button';
+import Modal from '../ui/Modal';
+import Card from '../ui/Card';
 
 const PaymentManagement: React.FC = () => {
     const [payments, setPayments] = useState<Payment[]>([]);

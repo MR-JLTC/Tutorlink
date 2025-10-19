@@ -16,4 +16,10 @@ export class AuthController {
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
+
+  @Post('login-tutor-tutee')
+  @HttpCode(HttpStatus.OK)
+  async loginTutorTutee(@Body() loginDto: LoginDto) {
+    return this.authService.loginTutorTutee(loginDto);
+  }
 }
