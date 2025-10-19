@@ -49,6 +49,7 @@ const EarningsHistory: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending'>('all');
+  const [paymentsFilter, setPaymentsFilter] = useState<'all' | 'pending' | 'approved'>('all');
 
   useEffect(() => {
     if (user?.user_id) {
@@ -102,6 +103,13 @@ const EarningsHistory: React.FC = () => {
   const filteredSessions = sessions.filter(session => {
     if (filter === 'all') return true;
     return session.status === filter;
+  });
+
+  const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
+  const approvedPaymentsCount = payments.filter(p => p.status === 'approved').length;
+  const filteredPayments = payments.filter(p => {
+    if (paymentsFilter === 'all') return true;
+    return p.status === paymentsFilter;
   });
 
   const renderStars = (rating: number) => {
@@ -228,10 +236,35 @@ const EarningsHistory: React.FC = () => {
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4 flex items-center">
             <Calendar className="h-5 w-5 mr-2 text-green-600" />
-            Recent Payments
+            Payments
           </h2>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center space-x-2">
+              <span className="text-sm px-2 py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">Pending: {pendingPaymentsCount}</span>
+              <span className="text-sm px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approved: {approvedPaymentsCount}</span>
+            </div>
+            <div className="flex space-x-1">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'pending', label: 'Pending' },
+                { key: 'approved', label: 'Approved' }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setPaymentsFilter(tab.key as any)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    paymentsFilter === tab.key
+                      ? 'bg-green-100 text-green-700'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-3">
-            {payments.slice(0, 5).map(payment => (
+            {filteredPayments.slice(0, 10).map(payment => (
               <div key={payment.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                 <div className="flex items-center space-x-3">
                   <span className="font-medium text-slate-800">
@@ -249,8 +282,8 @@ const EarningsHistory: React.FC = () => {
                 </span>
               </div>
             ))}
-            {payments.length === 0 && (
-              <p className="text-slate-500 text-center py-4">No payments yet</p>
+            {filteredPayments.length === 0 && (
+              <p className="text-slate-500 text-center py-4">No payments found</p>
             )}
           </div>
         </Card>

@@ -86,16 +86,10 @@ export class TutorsController {
         console.log('Multer Filename Called for Profile Image.', 'Original Name:', file.originalname);
         const tutorId = req.params.tutorId;
         const ext = path.extname(file.originalname) || '';
-        const generatedFilename = `tutorProfile_${tutorId}${ext}`;
-        console.log('Generated Profile Image Filename:', generatedFilename, 'for tutorId:', tutorId);
-        cb(null, generatedFilename);
-        const finalPath = path.join((req as any).uploadDestination, generatedFilename); // Use stored destination
-        console.log(`Diagnostic: Checking for file existence at ${finalPath} immediately after Multer filename callback.`);
-        if (fs.existsSync(finalPath)) {
-          console.log(`Diagnostic: File ${finalPath} EXISTS after Multer callback!`);
-        } else {
-          console.log(`Diagnostic: File ${finalPath} DOES NOT EXIST after Multer callback.`);
-        }
+        // Generate a temporary filename - the service will rename it
+        const tempFilename = `temp_profile_${tutorId}_${Date.now()}${ext}`;
+        console.log('Generated temporary Profile Image Filename:', tempFilename);
+        cb(null, tempFilename);
       }
     })
   }))
@@ -166,22 +160,7 @@ export class TutorsController {
     return this.tutorsService.submitSubjectApplication(+tutorId, body.subject_name, files);
   }
 
-  @Get(':tutorId/availability-change-requests')
-  @UseGuards(JwtAuthGuard)
-  async getAvailabilityChangeRequests(@Param('tutorId') tutorId: string) {
-    return this.tutorsService.getAvailabilityChangeRequests(+tutorId);
-  }
-
-  @Post(':tutorId/availability-change-request')
-  @UseGuards(JwtAuthGuard)
-  async submitAvailabilityChangeRequest(@Param('tutorId') tutorId: string, @Body() body: {
-    day_of_week: string;
-    start_time: string;
-    end_time: string;
-    reason: string;
-  }) {
-    return this.tutorsService.submitAvailabilityChangeRequest(+tutorId, body);
-  }
+  // Availability change request endpoints removed as redundant
 
   @Get(':tutorId/booking-requests')
   @UseGuards(JwtAuthGuard)
@@ -254,16 +233,10 @@ export class TutorsController {
         console.log('Multer Filename Called for GCash QR.', 'Original Name:', file.originalname);
         const tutorId = req.params.tutorId;
         const ext = path.extname(file.originalname) || '';
-        const generatedFilename = `gcashQR_${tutorId}${ext}`;
-        console.log('Generated GCash QR Filename:', generatedFilename, 'for tutorId:', tutorId);
-        cb(null, generatedFilename);
-        const finalPath = path.join((req as any).uploadDestination, generatedFilename); // Use stored destination
-        console.log(`Diagnostic: Checking for file existence at ${finalPath} immediately after Multer filename callback.`);
-        if (fs.existsSync(finalPath)) {
-          console.log(`Diagnostic: File ${finalPath} EXISTS after Multer callback!`);
-        } else {
-          console.log(`Diagnostic: File ${finalPath} DOES NOT EXIST after Multer callback.`);
-        }
+        // Generate a temporary filename - the service will rename it
+        const tempFilename = `temp_gcash_${tutorId}_${Date.now()}${ext}`;
+        console.log('Generated temporary GCash QR Filename:', tempFilename);
+        cb(null, tempFilename);
       }
     })
   }))

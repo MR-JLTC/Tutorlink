@@ -43,14 +43,23 @@ const TutorRegistrationPage: React.FC = () => {
     }, {} as Record<string, DayAvailability>)
   );
 
+  // Fetch subjects based on selected university and course; lock when none selected
   useEffect(() => {
     (async () => {
       try {
-        const res = await apiClient.get('/subjects');
-        setAvailableSubjects(res.data);
-      } catch (e) {}
+        if (!universityId) {
+          setAvailableSubjects([]);
+          return;
+        }
+        const params: any = { university_id: universityId };
+        if (courseId) params.course_id = courseId;
+        const res = await apiClient.get(`/subjects`, { params });
+        setAvailableSubjects(res.data || []);
+      } catch (e) {
+        setAvailableSubjects([]);
+      }
     })();
-  }, []);
+  }, [universityId, courseId]);
 
   const normalizedSelected = useMemo(() => new Set(Array.from(selectedSubjects).map((s: string) => s.toLowerCase())), [selectedSubjects]);
   const otherSubjectExistsInDropdown = useMemo(() => {
@@ -120,6 +129,14 @@ const TutorRegistrationPage: React.FC = () => {
     }
   }, [filteredCourses, courseId]);
 
+  // If no university selected, lock course selection and clear any existing selection/input
+  useEffect(() => {
+    if (!universityId) {
+      setCourseId('');
+      setCourseInput('');
+    }
+  }, [universityId]);
+
   const handleAddSubject = () => {
     if (subjectToAdd && !selectedSubjects.has(subjectToAdd)) {
         setSelectedSubjects(prev => new Set(prev).add(subjectToAdd));
@@ -142,6 +159,23 @@ const TutorRegistrationPage: React.FC = () => {
         return newSubjects;
     });
   };
+
+  // When available subjects change (due to university change), prune selections not in list
+  useEffect(() => {
+    if (!availableSubjects || availableSubjects.length === 0) {
+      // If no university selected, clear selections
+      if (!universityId && selectedSubjects.size > 0) {
+        setSelectedSubjects(new Set());
+      }
+      return;
+    }
+    const names = new Set(availableSubjects.map(s => s.subject_name));
+    setSelectedSubjects(prev => {
+      const next = new Set<string>();
+      prev.forEach(s => { if (names.has(s)) next.add(s); });
+      return next;
+    });
+  }, [availableSubjects, universityId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -343,7 +377,7 @@ const TutorRegistrationPage: React.FC = () => {
             <div>
               <label className="block text-slate-700 font-semibold mb-1">Course (optional)</label>
               <select
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                className={`w-full px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
                 value={courseId}
                 onChange={(e) => {
                   const value = e.target.value ? Number(e.target.value) : '';
@@ -353,6 +387,8 @@ const TutorRegistrationPage: React.FC = () => {
                     setCourseInput('');
                   }
                 }}
+                disabled={!universityId}
+                title={!universityId ? 'Select a university first' : undefined}
               >
                 <option value="">Select Course</option>
                 {filteredCourses.map(c => (
@@ -367,11 +403,14 @@ const TutorRegistrationPage: React.FC = () => {
                   value={courseInput}
                   onChange={(e) => setCourseInput(e.target.value)}
                   placeholder="e.g., BS Astrophysics"
-                  disabled={!!courseId}
-                  className={`w-full px-4 py-2 border rounded-lg ${courseId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
+                  disabled={!universityId || !!courseId}
+                  className={`w-full px-4 py-2 border rounded-lg ${(!universityId || courseId) ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
                 />
                 {courseId && (
                   <p className="text-xs text-slate-500 mt-1">Select "Select Course" above to enable manual input.</p>
+                )}
+                {!courseId && !universityId && (
+                  <p className="text-xs text-slate-500 mt-1">Select a university to enable course selection or manual input.</p>
                 )}
               </div>
             </div>
@@ -451,8 +490,10 @@ const TutorRegistrationPage: React.FC = () => {
               <select
                 value={subjectToAdd}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSubjectToAdd(e.target.value)}
-                className="flex-grow w-full px-4 py-2 border border-slate-600 bg-slate-700 text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${!universityId ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
                 aria-label="Select a subject to add"
+                disabled={!universityId}
+                title={!universityId ? 'Select a university first' : undefined}
               >
                 <option value="">Select a subject...</option>
                 {availableSubjects
@@ -462,12 +503,15 @@ const TutorRegistrationPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAddSubject}
-                disabled={!subjectToAdd || normalizedSelected.has(subjectToAdd.toLowerCase())}
+                disabled={!universityId || !subjectToAdd || normalizedSelected.has(subjectToAdd.toLowerCase())}
                 className="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
               >
                 Add
               </button>
             </div>
+            {!universityId && (
+              <p className="text-xs text-slate-500 mb-4">Select a university to view and add subjects.</p>
+            )}
 
             <div>
               <label htmlFor="other-subject" className="block text-slate-600 text-sm mb-1">Not in the list? Add another subject (optional):</label>
@@ -478,12 +522,14 @@ const TutorRegistrationPage: React.FC = () => {
                   value={otherSubject}
                   onChange={(e) => setOtherSubject(e.target.value)}
                   placeholder="e.g., Astrophysics"
-                  className="flex-grow w-full px-4 py-2 border border-slate-600 bg-slate-700 text-white rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400"
+                  className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400 ${!universityId ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
+                  disabled={!universityId}
+                  title={!universityId ? 'Select a university first' : undefined}
                 />
                 <button
                   type="button"
                   onClick={handleAddOtherSubject}
-                  disabled={!otherSubject.trim() || otherSubjectExistsInDropdown}
+                  disabled={!universityId || !otherSubject.trim() || otherSubjectExistsInDropdown}
                   className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
                 >
                   Add

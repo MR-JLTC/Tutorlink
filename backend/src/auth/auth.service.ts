@@ -94,4 +94,19 @@ export class AuthService {
         accessToken: this.jwtService.sign(payload),
     };
   }
+
+  async registerStudent(body: { name: string; email: string; password: string; university_id: number; course_id?: number; course_name?: string; year_level: number }) {
+    const existingUser = await this.usersService.findOneByEmail(body.email);
+    if (existingUser) {
+      throw new BadRequestException('Email already exists');
+    }
+
+    const user = await this.usersService.createStudent(body);
+
+    const payload = { email: user.email, sub: user.user_id, name: user.name, role: 'student' };
+    return {
+      user: { ...user, role: 'student' },
+      accessToken: this.jwtService.sign(payload),
+    };
+  }
 }

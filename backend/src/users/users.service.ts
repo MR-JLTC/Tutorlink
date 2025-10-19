@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, Admin, Tutor } from '../database/entities';
+import { User, Admin, Tutor, Course, University, Student } from '../database/entities';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from '../auth/auth.dto';
 
@@ -14,6 +14,12 @@ export class UsersService {
     private adminRepository: Repository<Admin>,
     @InjectRepository(Tutor)
     private tutorRepository: Repository<Tutor>,
+    @InjectRepository(Course)
+    private coursesRepository: Repository<Course>,
+    @InjectRepository(University)
+    private universitiesRepository: Repository<University>,
+    @InjectRepository(Student)
+    private studentRepository: Repository<Student>,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -98,5 +104,43 @@ export class UsersService {
       );
     }
     return { success: true };
+  }
+
+  async createStudent(body: { name: string; email: string; password: string; university_id: number; course_id?: number; course_name?: string; year_level: number }): Promise<User> {
+    const hashed = await bcrypt.hash(body.password, 10);
+
+    // Resolve course: either provided course_id or create/find by name under university
+    let resolvedCourseId: number | null = body.course_id ?? null;
+    if (!resolvedCourseId && body.course_name && body.course_name.trim().length > 0) {
+      const uni = await this.universitiesRepository.findOne({ where: { university_id: body.university_id as any } });
+      if (uni) {
+        const existingCourse = await this.coursesRepository.findOne({ where: { course_name: body.course_name.trim(), university: { university_id: uni.university_id } as any }, relations: ['university'] });
+        if (existingCourse) {
+          resolvedCourseId = existingCourse.course_id;
+        } else {
+          const newCourse = this.coursesRepository.create({ course_name: body.course_name.trim(), university: uni } as any);
+          const savedCourse: Course = await this.coursesRepository.save(newCourse as any);
+          resolvedCourseId = savedCourse.course_id;
+        }
+      }
+    }
+
+    const user = this.usersRepository.create({
+      name: body.name,
+      email: body.email,
+      password: hashed,
+      is_verified: false,
+      status: 'active' as any,
+      university_id: body.university_id as any,
+      course_id: (resolvedCourseId ?? null) as any,
+      year_level: body.year_level as any,
+    } as any);
+    const savedUser: User = await this.usersRepository.save(user as any as User);
+
+    // Create student profile
+    const student = this.studentRepository.create({ user: savedUser } as any);
+    await this.studentRepository.save(student as any);
+
+    return (await this.findOneById(savedUser.user_id)) as User;
   }
 }

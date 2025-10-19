@@ -6,7 +6,7 @@ import { TutorAvailability } from './tutor-availability.entity';
 import { Session } from './session.entity';
 import { Payment } from './payment.entity';
 import { SubjectApplication } from './subject-application.entity';
-import { AvailabilityChangeRequest } from './availability-change-request.entity';
+// AvailabilityChangeRequest entity removed
 import { BookingRequest } from './booking-request.entity';
 
 @Entity('tutors')
@@ -58,8 +58,7 @@ export class Tutor {
   @OneToMany(() => SubjectApplication, (application) => application.tutor)
   subjectApplications: SubjectApplication[];
 
-  @OneToMany(() => AvailabilityChangeRequest, (request) => request.tutor)
-  availabilityChangeRequests: AvailabilityChangeRequest[];
+  // availabilityChangeRequests removed
 
   @OneToMany(() => BookingRequest, (request) => request.tutor)
   bookingRequests: BookingRequest[];
