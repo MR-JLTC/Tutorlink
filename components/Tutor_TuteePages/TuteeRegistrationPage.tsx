@@ -174,7 +174,17 @@ const TuteeRegistrationPage: React.FC = () => {
             </div>
             <div className="md:col-span-2">
               <label className="block text-slate-700 font-semibold mb-1" htmlFor="password">Password</label>
-              <input type="password" id="password" name="password" value={formData.password} onChange={handleInputChange} minLength={7} maxLength={13} className="w-full px-4 py-2 border border-slate-300 rounded-lg" required />
+              <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                value={formData.password} 
+                onChange={handleInputChange} 
+                minLength={7} 
+                maxLength={13} 
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg" 
+                required 
+              />
             </div>
             <div>
               <label className="block text-slate-700 font-semibold mb-1">Course</label>

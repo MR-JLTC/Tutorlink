@@ -24,6 +24,7 @@ const App: React.FC = () => {
     <AuthProvider>
       <ToastProvider>
         <Routes>
+        {/* <Route path="/" element={<Navigate to="/LandingPage" replace />} /> */}
         <Route path="/LandingPage" element={<LandingPage />} />
         <Route path="/TuteeRegistrationPage" element={<TuteeRegistrationPage />} />
         <Route path="/TutorRegistrationPage" element={<TutorRegistrationPage />} />

@@ -363,7 +363,15 @@ const TutorRegistrationPage: React.FC = () => {
             </div>
             <div>
               <label className="block text-slate-700 font-semibold mb-1">Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={7} maxLength={13} className="w-full px-4 py-2 border border-slate-300 rounded-lg" required />
+              <input 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                minLength={7} 
+                maxLength={13} 
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg" 
+                required 
+              />
             </div>
             <div>
               <label className="block text-slate-700 font-semibold mb-1">University</label>

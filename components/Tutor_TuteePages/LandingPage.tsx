@@ -189,6 +189,7 @@ const LandingPage: React.FC = () => {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>('');
 
   const handleNavigate = (path: string) => {
     navigate(path);
@@ -196,69 +197,66 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className="bg-white text-slate-800 antialiased"> {/* Added antialiased for smoother fonts */}
-      <header className="relative py-3 px-4 sm:px-6 md:px-10 bg-white/90 supports-[backdrop-filter]:bg-white/70 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-50 shadow-sm">
+      <header className="relative py-2 px-4 sm:px-6 md:px-10 bg-white/90 supports-[backdrop-filter]:bg-white/70 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo Section with Enhanced Design */}
-          <div className="flex items-center space-x-3 group cursor-pointer" onClick={() => navigate('/LandingPage')}>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-30 group-hover:opacity-50 transition-opacity duration-300"></div>
-              <div className="relative bg-white p-2 rounded-xl shadow-lg border border-slate-200/50 group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-                <Logo className="h-12 sm:h-14 md:h-16 lg:h-20 w-auto transition-all duration-300" />
-              </div>
-            </div>
+          {/* Logo Section */}
+          <div className="flex items-center group cursor-pointer" onClick={() => navigate('/LandingPage')}>
+            <Logo className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto transition-all duration-300 group-hover:scale-105" />
           </div>
           
           {/* Navigation Menu */}
           <nav className="hidden md:flex items-center space-x-6">
             <a 
               href="#how-it-works" 
-              className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm relative group"
+              className={`${activeSection === 'how-it-works' ? 'text-sky-600' : 'text-slate-600'} hover:text-sky-600 transition-all duration-200 font-medium text-sm relative group focus:outline-none focus:ring-0`}
               onClick={(e) => {
                 e.preventDefault();
+                setActiveSection('how-it-works');
                 document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
               }}
             >
               How It Works
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-sky-600 transition-all duration-200 group-hover:w-full"></span>
+              <span className={`absolute bottom-0 left-0 h-0.5 bg-sky-600 transition-all duration-200 ${activeSection === 'how-it-works' ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
             </a>
             <a 
               href="#features" 
-              className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm relative group"
+              className={`${activeSection === 'features' ? 'text-sky-600' : 'text-slate-600'} hover:text-sky-600 transition-all duration-200 font-medium text-sm relative group focus:outline-none focus:ring-0`}
               onClick={(e) => {
                 e.preventDefault();
+                setActiveSection('features');
                 document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
               }}
             >
               Features
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-sky-600 transition-all duration-200 group-hover:w-full"></span>
+              <span className={`absolute bottom-0 left-0 h-0.5 bg-sky-600 transition-all duration-200 ${activeSection === 'features' ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
             </a>
             <a 
               href="#contact" 
-              className="text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm relative group"
+              className={`${activeSection === 'contact' ? 'text-sky-600' : 'text-slate-600'} hover:text-sky-600 transition-all duration-200 font-medium text-sm relative group focus:outline-none focus:ring-0`}
               onClick={(e) => {
                 e.preventDefault();
+                setActiveSection('contact');
                 document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
               }}
             >
               Contact
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-sky-600 transition-all duration-200 group-hover:w-full"></span>
+              <span className={`absolute bottom-0 left-0 h-0.5 bg-sky-600 transition-all duration-200 ${activeSection === 'contact' ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
             </a>
           </nav>
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-3">
             <button 
-              className="hidden sm:block text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm px-4 py-2 rounded-lg hover:bg-sky-50"
+              className="hidden sm:block text-slate-600 hover:text-sky-600 transition-colors duration-200 font-medium text-sm"
               onClick={() => navigate('/login')}
             >
               Login
             </button>
             <button 
-              className="bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-semibold py-2.5 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 text-sm relative overflow-hidden group"
+              className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
               onClick={() => setIsModalOpen(true)}
             >
-              <span className="relative z-10">Get Started</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-sky-700 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              Get Started
             </button>
             
             {/* Mobile Menu Button */}
@@ -285,35 +283,41 @@ const LandingPage: React.FC = () => {
           <div className="md:hidden border-t border-slate-200 bg-white/95 backdrop-blur-sm">
             <div className="max-w-7xl mx-auto px-4 py-3 space-y-2">
               <button
-                className="block w-full text-left text-slate-700 hover:text-sky-600 py-2"
+                className={`block w-full text-left ${activeSection === 'how-it-works' ? 'text-sky-600' : 'text-slate-700'} hover:text-sky-600 py-2 relative group focus:outline-none focus:ring-0`}
                 onClick={() => {
                   setIsMobileMenuOpen(false);
+                  setActiveSection('how-it-works');
                   document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
                 How It Works
+                <span className={`absolute bottom-1 left-0 h-0.5 bg-sky-600 transition-all duration-200 ${activeSection === 'how-it-works' ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
               </button>
               <button
-                className="block w-full text-left text-slate-700 hover:text-sky-600 py-2"
+                className={`block w-full text-left ${activeSection === 'features' ? 'text-sky-600' : 'text-slate-700'} hover:text-sky-600 py-2 relative group focus:outline-none focus:ring-0`}
                 onClick={() => {
                   setIsMobileMenuOpen(false);
+                  setActiveSection('features');
                   document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
                 Features
+                <span className={`absolute bottom-1 left-0 h-0.5 bg-sky-600 transition-all duration-200 ${activeSection === 'features' ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
               </button>
               <button
-                className="block w-full text-left text-slate-700 hover:text-sky-600 py-2"
+                className={`block w-full text-left ${activeSection === 'contact' ? 'text-sky-600' : 'text-slate-700'} hover:text-sky-600 py-2 relative group focus:outline-none focus:ring-0`}
                 onClick={() => {
                   setIsMobileMenuOpen(false);
+                  setActiveSection('contact');
                   document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >
                 Contact
+                <span className={`absolute bottom-1 left-0 h-0.5 bg-sky-600 transition-all duration-200 ${activeSection === 'contact' ? 'w-full' : 'w-0 group-hover:w-full'}`}></span>
               </button>
               <div className="pt-2">
                 <button 
-                  className="w-full text-slate-700 hover:text-sky-600 font-medium py-2 rounded-lg hover:bg-sky-50"
+                  className="w-full text-slate-700 hover:text-sky-600 font-medium py-2 transition-colors duration-200"
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                     navigate('/login');
@@ -322,7 +326,7 @@ const LandingPage: React.FC = () => {
                   Login
                 </button>
                 <button 
-                  className="mt-2 w-full bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-semibold py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all"
+                  className="mt-2 w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
                   onClick={() => {
                     setIsMobileMenuOpen(false);
                     setIsModalOpen(true);
