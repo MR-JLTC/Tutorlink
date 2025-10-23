@@ -13,7 +13,7 @@ const Header: React.FC = () => {
           <p className="text-sm font-semibold text-slate-800">{user?.name}</p>
           <p className="text-xs text-slate-500">{user?.email}</p>
         </div>
-        <div className="h-10 w-10 bg-slate-200 rounded-full flex items-center justify-center">
+        <div className="h-10 w-10 rounded-full overflow-hidden bg-slate-200 flex items-center justify-center border-2 border-slate-300">
             <UserIcon className="h-6 w-6 text-slate-500" />
         </div>
         <Button onClick={logout} variant="secondary" className="!px-2 !py-2">

@@ -20,10 +20,25 @@ export class TutorsController {
     return this.tutorsService.findPendingApplications();
   }
 
+  @Get('subject-applications')
+  @UseGuards(JwtAuthGuard)
+  getAllSubjectApplications() {
+    return this.tutorsService.getAllSubjectApplications();
+  }
+
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard)
   updateStatus(@Param('id') id: string, @Body() updateTutorStatusDto: UpdateTutorStatusDto) {
     return this.tutorsService.updateStatus(+id, updateTutorStatusDto.status);
+  }
+
+  @Patch('subject-applications/:applicationId/status')
+  @UseGuards(JwtAuthGuard)
+  updateSubjectApplicationStatus(
+    @Param('applicationId') applicationId: string, 
+    @Body() body: { status: 'approved' | 'rejected'; adminNotes?: string }
+  ) {
+    return this.tutorsService.updateSubjectApplicationStatus(+applicationId, body.status, body.adminNotes);
   }
 
   // Public apply endpoint to create a user+tutor (pending)

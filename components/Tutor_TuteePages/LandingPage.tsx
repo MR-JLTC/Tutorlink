@@ -137,12 +137,12 @@ const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNav
             onClick={() => onNavigate('/TuteeRegistrationPage')}
             onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate('/TuteeRegistrationPage')}}
           >
-            <div className="relative flex items-center justify-center h-24 w-24 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300">
+            <div className="relative flex items-center justify-center h-32 w-32 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300">
               <img 
-                src="assets/images/tutee.jpeg" 
+                src="assets/images/tutee.png" 
                 alt="Student" 
-                className="w-full h-full object-cover rounded-full transform scale-125 md:scale-150"
-              />
+                className="w-full h-full object-cover rounded-full transform transition-transform duration-500 group-hover:scale-125"
+              />  
               <div className="absolute inset-0 bg-gradient-to-br from-sky-500/20 to-transparent rounded-full"></div>
               <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-sky-500 rounded-full flex items-center justify-center shadow-md">
                 <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -160,17 +160,17 @@ const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNav
             onClick={() => onNavigate('/TutorRegistrationPage')}
             onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate('/TutorRegistrationPage')}}
           >
-            <div className="relative flex items-center justify-center h-24 w-24 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300">
+            <div className="relative flex items-center justify-center h-32 w-32 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300">
               <img 
-                src="assets/images/tutor.jpeg" 
+                src="assets/images/tutor.png" 
                 alt="Tutor" 
-                className="w-full h-full object-cover rounded-full transform scale-150"
+                className="w-full h-full object-cover rounded-full transform transition-transform duration-500 group-hover:scale-125"
               />
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent rounded-full"></div>
               <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center shadow-md">
                 <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
-                </svg>
+                </svg> 
               </div>
             </div>
             <h3 className="text-2xl font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">I'm a Tutor</h3>
@@ -190,18 +190,51 @@ const LandingPage: React.FC = () => {
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('');
+  const [isScrolled, setIsScrolled] = useState(false);
 
   const handleNavigate = (path: string) => {
     navigate(path);
   };
 
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      setIsScrolled(scrollTop > 50);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
     <div className="bg-white text-slate-800 antialiased"> {/* Added antialiased for smoother fonts */}
-      <header className="relative py-2 px-4 sm:px-6 md:px-10 bg-white/90 supports-[backdrop-filter]:bg-white/70 backdrop-blur-md border-b border-slate-200/60 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Logo Section */}
-          <div className="flex items-center group cursor-pointer" onClick={() => navigate('/LandingPage')}>
-            <Logo className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto transition-all duration-300 group-hover:scale-105" />
+      <header className={`relative py-3 px-4 sm:px-6 md:px-10 sticky top-0 z-50 transition-all duration-300 ${
+        isScrolled 
+          ? 'bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-lg' 
+          : 'bg-white/95 backdrop-blur-lg border-b border-slate-200/60 shadow-md'
+      }`}>
+        {/* Subtle gradient overlay */}
+        <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
+          isScrolled ? 'bg-gradient-to-r from-sky-50/20 via-transparent to-indigo-50/20 opacity-50' : 'bg-gradient-to-r from-sky-50/30 via-transparent to-indigo-50/30'
+        }`}></div>
+        
+        <div className="max-w-7xl mx-auto flex items-center justify-between relative">
+          {/* Logo and Brand Section */}
+          <div className="flex items-center group cursor-pointer space-x-3" onClick={() => navigate('/LandingPage')}>
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-20 group-hover:opacity-30 transition-all duration-300"></div>
+              <div className="relative bg-white p-2 rounded-xl shadow-md border border-slate-200/50 group-hover:shadow-lg group-hover:border-sky-200/60 transition-all duration-300 group-hover:scale-105">
+                <Logo className="h-8 sm:h-9 md:h-10 w-auto transition-all duration-300" />
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">
+                TutorLink
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 font-medium hidden sm:block">
+                Connecting Minds, Building Futures
+              </p>
+            </div>
           </div>
           
           {/* Navigation Menu */}
@@ -614,19 +647,26 @@ const LandingPage: React.FC = () => {
         </section>
       </main>
 
-      <footer className="bg-slate-900 text-slate-300 py-12 px-8">
-        <div className="max-w-6xl mx-auto">
+      <footer className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-300 py-12 px-8 overflow-hidden">
+        {/* Background pattern overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-sky-900/10 via-transparent to-indigo-900/10 pointer-events-none"></div>
+        <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-sky-500/30 to-transparent"></div>
+        <div className="max-w-6xl mx-auto relative">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center mb-4">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-30"></div>
-                  <div className="relative bg-white p-2 rounded-xl shadow-lg border border-slate-200/50">
-                    <Logo className="h-10 w-auto" />
+              <div className="flex items-center mb-4 space-x-3">
+                <div className="relative group">
+                  <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-30 group-hover:opacity-40 transition-all duration-300"></div>
+                  <div className="relative bg-white p-2 rounded-xl shadow-lg border border-slate-200/50 group-hover:shadow-xl group-hover:border-sky-200/60 transition-all duration-300 group-hover:scale-105">
+                    <Logo className="h-10 w-10 object-contain" style={{aspectRatio: '1/1'}} />
                   </div>
                 </div>
+                <div className="flex flex-col">
+                  <h3 className="text-xl font-bold text-white mb-1">TutorLink</h3>
+                  <p className="text-sm text-sky-300 font-medium">Connecting Minds, Building Futures</p>
+                </div>
               </div>
-              <p className="text-slate-400 leading-relaxed">Connecting students with qualified tutors for academic success.</p>
+              <p className="text-slate-400 leading-relaxed text-base">Connecting students with qualified tutors for academic success. Empowering learners and educators to achieve their goals together through personalized learning experiences.</p>
             </div>
             
             <div>
@@ -754,8 +794,10 @@ const LandingPage: React.FC = () => {
             </div>
           </Modal>
           
-          <div className="border-t border-slate-700 pt-8 text-center">
-            <p className="text-slate-400">&copy; {new Date().getFullYear()} TutorLink. All rights reserved.</p>
+          <div className="border-t border-gradient-to-r from-transparent via-slate-600 to-transparent pt-10 text-center relative">
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-24 h-px bg-gradient-to-r from-transparent via-sky-500 to-transparent"></div>
+            <p className="text-slate-400 text-base font-medium">&copy; {new Date().getFullYear()} TutorLink. All rights reserved.</p>
+            <p className="text-slate-500 text-sm mt-2">Empowering education through technology</p>
           </div>
         </div>
       </footer>

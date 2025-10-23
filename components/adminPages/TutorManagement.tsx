@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '../../services/api';
-import { Tutor } from '../../types';
+import { Tutor, SubjectApplication } from '../../types';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
-import { Check, X, FileText, User, Mail, School, Book } from 'lucide-react';
+import { Check, X, FileText, User, Mail, School, Book, Clock } from 'lucide-react';
 import { getFileUrl } from '../../services/api';
 
 const TutorManagement: React.FC = () => {
@@ -17,6 +17,14 @@ const TutorManagement: React.FC = () => {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [previewType, setPreviewType] = useState<string>('');
+  
+  // Subject application states
+  const [subjectApplications, setSubjectApplications] = useState<SubjectApplication[]>([]);
+  const [subjectLoading, setSubjectLoading] = useState(true);
+  const [selectedSubjectApp, setSelectedSubjectApp] = useState<SubjectApplication | null>(null);
+  const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
+  const [isSubjectUpdating, setIsSubjectUpdating] = useState(false);
+  const [adminNotes, setAdminNotes] = useState<string>('');
 
   const fetchTutors = async () => {
     try {
@@ -33,8 +41,23 @@ const TutorManagement: React.FC = () => {
     }
   };
 
+  const fetchSubjectApplications = async () => {
+    try {
+      setSubjectLoading(true);
+      const response = await apiClient.get('/tutors/subject-applications');
+      setSubjectApplications(response.data);
+    } catch (e) {
+      console.error('Failed to fetch subject applications:', e);
+      const notify = (window as any).__notify as ((msg: string, type?: 'success' | 'error' | 'info') => void) | undefined;
+      if (notify) notify('Unable to load subject applications. Please try again.', 'error');
+    } finally {
+      setSubjectLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchTutors();
+    fetchSubjectApplications();
   }, []);
   
   const handleViewDetails = (tutor: Tutor) => {
@@ -58,6 +81,36 @@ const TutorManagement: React.FC = () => {
       if (notify) notify('Failed to update application status. Please try again.', 'error');
     } finally {
         setIsUpdating(false);
+    }
+  };
+
+  // Subject application handlers
+  const handleViewSubjectDetails = (subjectApp: SubjectApplication) => {
+    setSelectedSubjectApp(subjectApp);
+    setAdminNotes(subjectApp.admin_notes || '');
+    setIsSubjectModalOpen(true);
+  };
+
+  const handleSubjectStatusUpdate = async (status: 'approved' | 'rejected') => {
+    if (!selectedSubjectApp) return;
+    setIsSubjectUpdating(true);
+    try {
+      await apiClient.patch(`/tutors/subject-applications/${selectedSubjectApp.id}/status`, { 
+        status, 
+        adminNotes: adminNotes.trim() || undefined 
+      });
+      setIsSubjectModalOpen(false);
+      setAdminNotes('');
+      // Refetch subject applications to update the list
+      await fetchSubjectApplications();
+      const notify = (window as any).__notify as ((msg: string, type?: 'success' | 'error' | 'info') => void) | undefined;
+      if (notify) notify(`Subject application ${status === 'approved' ? 'approved' : 'rejected'} successfully.`, 'success');
+    } catch (err) {
+      console.error("Failed to update subject application status", err);
+      const notify = (window as any).__notify as ((msg: string, type?: 'success' | 'error' | 'info') => void) | undefined;
+      if (notify) notify('Failed to update subject application status. Please try again.', 'error');
+    } finally {
+      setIsSubjectUpdating(false);
     }
   };
 
@@ -138,6 +191,60 @@ const TutorManagement: React.FC = () => {
         </div>
       </Card>
 
+      {/* Subject Applications Section */}
+      <Card className="mt-8">
+        <h2 className="text-xl font-semibold mb-4">Pending Subject Applications ({subjectApplications.length})</h2>
+        {subjectLoading ? (
+          <div className="text-center py-4">Loading subject applications...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutor</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied Date</th>
+                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {subjectApplications.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-4 text-center text-gray-500">No pending subject applications found.</td>
+                  </tr>
+                ) : (
+                  subjectApplications.map((subjectApp) => (
+                    <tr key={subjectApp.id}>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <div className="flex items-center gap-3">
+                          {(subjectApp.tutor as any)?.profile_image_url ? (
+                            <img src={getFileUrl((subjectApp.tutor as any).profile_image_url)} alt="Tutor" className="h-8 w-8 rounded-full object-cover border" />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-slate-200 border" />
+                          )}
+                          <span className="truncate max-w-[200px]">{(subjectApp.tutor as any)?.user?.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {subjectApp.subject_name}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(subjectApp.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <Button onClick={() => handleViewSubjectDetails(subjectApp)}>View Details</Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
       {selectedTutor && (
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Application Details`}
           footer={
@@ -171,7 +278,9 @@ const TutorManagement: React.FC = () => {
                   <div>
                     <h4 className="font-semibold">Profile Image</h4>
                     <div className="mt-2">
-                      <img src={getFileUrl((selectedTutor as any).profile_image_url)} alt="Tutor Profile" className="h-32 w-32 rounded-full object-cover border" />
+                      <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
+                        <img src={getFileUrl((selectedTutor as any).profile_image_url)} alt="Tutor Profile" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -231,6 +340,103 @@ const TutorManagement: React.FC = () => {
                     )) : <li className="text-gray-500">No availability submitted.</li>}
                   </ul>
                 </div>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Subject Application Modal */}
+      {selectedSubjectApp && (
+        <Modal 
+          isOpen={isSubjectModalOpen} 
+          onClose={() => {
+            setIsSubjectModalOpen(false);
+            setAdminNotes('');
+          }} 
+          title={`Subject Application Details`}
+          footer={
+            <>
+              <Button onClick={() => handleSubjectStatusUpdate('rejected')} variant="danger" disabled={isSubjectUpdating}>
+                <X className="mr-2 h-4 w-4" /> {isSubjectUpdating ? 'Rejecting...' : 'Reject'}
+              </Button>
+              <Button onClick={() => handleSubjectStatusUpdate('approved')} variant="primary" disabled={isSubjectUpdating}>
+                <Check className="mr-2 h-4 w-4" /> {isSubjectUpdating ? 'Approving...' : 'Approve'}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-800">{(selectedSubjectApp.tutor as any)?.user?.name}</h3>
+                <p className="text-sm text-slate-500">{(selectedSubjectApp.tutor as any)?.user?.email}</p>
+              </div>
+              <div className="text-right text-sm text-slate-600">
+                <div className="font-medium">{(selectedSubjectApp.tutor as any)?.user?.university?.name || 'No university'}</div>
+                <div className="mt-0.5">Course: {(selectedSubjectApp.tutor as any)?.user?.course?.course_name || 'No course'}</div>
+              </div>
+            </div>
+
+            {/* Subject Application Details */}
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold">Subject Expertise Application</h4>
+                <div className="mt-2">
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                    {selectedSubjectApp.subject_name}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-semibold">Application Date</h4>
+                <p className="text-gray-700 bg-gray-50 p-3 rounded-md mt-1">
+                  {new Date(selectedSubjectApp.created_at).toLocaleString()}
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-semibold">Admin Notes</h4>
+                <textarea
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder="Add notes for this subject application..."
+                  className="w-full p-3 border border-gray-300 rounded-md mt-1 min-h-[100px] resize-none"
+                />
+              </div>
+
+              {/* Documents */}
+              <div>
+                <h4 className="font-semibold">Supporting Documents</h4>
+                <ul className="mt-2 space-y-2">
+                  {selectedSubjectApp.documents?.length ? selectedSubjectApp.documents.map(doc => (
+                    <li key={doc.document_id} className="flex items-center justify-between bg-gray-50 rounded p-2">
+                      <div className="flex items-center min-w-0">
+                        <FileText className="h-5 w-5 mr-2 text-primary-600 flex-shrink-0"/>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
+                          className="text-primary-600 hover:underline truncate text-left"
+                          title="Open file"
+                        >
+                          {doc.file_name}
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
+                          className="text-sm text-slate-600 hover:text-slate-900"
+                        >
+                          Open
+                        </button>
+                        <a href={getFileUrl(doc.file_url)} download className="text-sm text-slate-600 hover:text-slate-900">Download</a>
+                      </div>
+                    </li>
+                  )) : <li className="text-sm text-gray-500">No documents uploaded.</li>}
+                </ul>
               </div>
             </div>
           </div>

@@ -427,9 +427,9 @@ const ApplicationVerification: React.FC = () => {
               <div className="flex items-center space-x-4">
                 <div className="relative w-24 h-24 rounded-full overflow-hidden bg-slate-200 flex items-center justify-center border-4 border-white shadow-lg">
                   {profilePhoto ? (
-                    <img src={URL.createObjectURL(profilePhoto)} alt="Profile Preview" className="w-full h-full object-cover" />
+                    <img src={URL.createObjectURL(profilePhoto)} alt="Profile Preview" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
                   ) : existingProfilePhotoUrl ? (
-                    <img src={getFileUrl(existingProfilePhotoUrl)} alt="Profile" className="w-full h-full object-cover" />
+                    <img src={getFileUrl(existingProfilePhotoUrl)} alt="Profile" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
                   ) : (
                     <User className="h-12 w-12 text-slate-400" />
                   )}

@@ -356,6 +356,78 @@ export class TutorsService {
     return applications;
   }
 
+  // Admin methods for subject application management
+  async getAllSubjectApplications() {
+    const applications = await this.subjectApplicationRepository.find({
+      where: { status: 'pending' },
+      relations: ['tutor', 'tutor.user', 'documents'],
+      order: { created_at: 'DESC' }
+    });
+    return applications;
+  }
+
+  async updateSubjectApplicationStatus(applicationId: number, status: 'approved' | 'rejected', adminNotes?: string) {
+    const application = await this.subjectApplicationRepository.findOne({
+      where: { id: applicationId },
+      relations: ['tutor', 'tutor.user']
+    });
+    
+    if (!application) {
+      throw new NotFoundException('Subject application not found');
+    }
+
+    application.status = status;
+    if (adminNotes) {
+      application.admin_notes = adminNotes;
+    }
+    
+    const updatedApplication = await this.subjectApplicationRepository.save(application);
+
+    // If approved, add the subject to tutor's approved subjects
+    if (status === 'approved') {
+      await this.addApprovedSubjectToTutor(application.tutor.tutor_id, application.subject_name);
+    }
+
+    return updatedApplication;
+  }
+
+  private async addApprovedSubjectToTutor(tutorId: number, subjectName: string) {
+    const tutor = await this.tutorsRepository.findOne({
+      where: { tutor_id: tutorId },
+      relations: ['user', 'subjects', 'subjects.subject']
+    });
+    
+    if (!tutor) return;
+
+    // Check if subject already exists for this tutor
+    const existingSubject = tutor.subjects?.find(ts => 
+      (ts as any).subject?.subject_name === subjectName
+    );
+    
+    if (existingSubject) return; // Already exists
+
+    // Find or create the subject
+    let subject = await this.subjectRepository.findOne({
+      where: { subject_name: subjectName }
+    });
+
+    if (!subject) {
+      // Create new subject if it doesn't exist
+      subject = this.subjectRepository.create({
+        subject_name: subjectName
+      });
+      subject = await this.subjectRepository.save(subject);
+    }
+
+    // Create tutor-subject relationship
+    const tutorSubject = this.tutorSubjectRepository.create({
+      tutor: { tutor_id: tutorId } as any,
+      subject: subject
+    });
+    
+    await this.tutorSubjectRepository.save(tutorSubject);
+  }
+
   async submitSubjectApplication(userId: number, subjectName: string, files: any[]) {
     const tutor = await this.tutorsRepository.findOne({ 
       where: { user: { user_id: userId } },

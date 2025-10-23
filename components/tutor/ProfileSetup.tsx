@@ -178,11 +178,14 @@ const ProfileSetup: React.FC = () => {
         <div className="flex items-start space-x-6">
           {profileImage ? (
             <div className="relative">
-              <img
-                src={URL.createObjectURL(profileImage)}
-                alt="Profile Preview"
-                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-              />
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
+                <img
+                  src={URL.createObjectURL(profileImage)}
+                  alt="Profile Preview"
+                  className="w-full h-full object-cover"
+                  style={{aspectRatio: '1/1'}}
+                />
+              </div>
               {applicationStatus === 'approved' && (
                 <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
                   ✓
@@ -213,11 +216,14 @@ const ProfileSetup: React.FC = () => {
             </div>
           ) : profile.profile_photo ? (
             <div className="relative">
-              <img
-                src={getFileUrl(profile.profile_photo)}
-                alt="Profile"
-                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-              />
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
+                <img
+                  src={getFileUrl(profile.profile_photo)}
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                  style={{aspectRatio: '1/1'}}
+                />
+              </div>
               {applicationStatus === 'approved' ? (
                 <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
                   ✓

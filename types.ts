@@ -64,6 +64,20 @@ export interface Tutor {
   documents: Document[];
 }
 
+export interface SubjectApplication {
+  id: number;
+  tutor_id: number;
+  subject_name: string;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_notes?: string;
+  created_at: string;
+  updated_at: string;
+  
+  // Joined data from backend
+  tutor?: Tutor;
+  documents?: Document[];
+}
+
 export interface Payment {
   payment_id: number;
   student_id: number;
