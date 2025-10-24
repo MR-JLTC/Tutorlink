@@ -18,6 +18,7 @@ import TutorRegistrationPage from './components/Tutor_TuteePages/TutorRegistrati
 import TutorDashboard from './components/Tutor_TuteePages/TutorDashboard';
 const TuteeDashboard = () => <div className="p-6"><h1 className="text-2xl font-bold">TuteeDashboard</h1><p className="text-slate-600 mt-2">Coming soon.</p></div>;
 import UnifiedLoginPage from './components/auth/UnifiedLoginPage';
+import PasswordResetPage from './components/auth/PasswordResetPage';
 
 const App: React.FC = () => {
   return (
@@ -29,6 +30,7 @@ const App: React.FC = () => {
         <Route path="/TuteeRegistrationPage" element={<TuteeRegistrationPage />} />
         <Route path="/TutorRegistrationPage" element={<TutorRegistrationPage />} />
         <Route path="/login" element={<UnifiedLoginPage />} />
+        <Route path="/password-reset" element={<PasswordResetPage />} />
         <Route path="/admin-login" element={<LoginPage />} />
         <Route path="/register" element={<RegistrationPage />} />
         <Route

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 
 interface ForgotPasswordModalProps {
@@ -8,10 +9,12 @@ interface ForgotPasswordModalProps {
 }
 
 const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClose, onSuccess }) => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [showProceedButton, setShowProceedButton] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,10 +25,8 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
       const response = await api.post('/auth/password-reset/request', { email });
       if (response.data) {
         setSuccess(true);
-        setTimeout(() => {
-          onSuccess(email);
-          onClose();
-        }, 2000);
+        setShowProceedButton(true);
+        // Remove automatic redirect - let user choose when to proceed
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to send verification code. Please try again.';
@@ -39,6 +40,12 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
     setEmail('');
     setError('');
     setSuccess(false);
+    setShowProceedButton(false);
+    onClose();
+  };
+
+  const handleProceedToReset = () => {
+    navigate(`/password-reset?email=${encodeURIComponent(email)}`);
     onClose();
   };
 
@@ -79,10 +86,33 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
               <p className="text-green-700 text-sm mb-4">
                 We've sent a verification code to <strong>{email}</strong>. Please check your email and spam folder.
               </p>
-              <div className="flex items-center justify-center space-x-1">
+              <div className="flex items-center justify-center space-x-1 mb-6">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              </div>
+              
+              {/* Proceed to Reset Password Button */}
+              <div className="space-y-3">
+                <button
+                  onClick={handleProceedToReset}
+                  className="w-full flex justify-center items-center py-3 px-6 border border-transparent rounded-lg shadow-xl text-sm font-bold text-white bg-gradient-to-r from-green-600 via-green-500 to-emerald-600 hover:from-green-700 hover:via-green-600 hover:to-emerald-700 focus:outline-none focus:ring-4 focus:ring-green-500/30 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl relative overflow-hidden group"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <span className="relative z-10 flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Proceed to Reset Password
+                  </span>
+                </button>
+                
+                <button
+                  onClick={handleClose}
+                  className="w-full py-2 px-4 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  Close
+                </button>
               </div>
             </div>
           ) : (

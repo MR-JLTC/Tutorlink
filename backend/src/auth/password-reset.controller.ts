@@ -18,11 +18,19 @@ export class PasswordResetController {
   @Post('request')
   async requestPasswordReset(@Body() requestPasswordResetDto: RequestPasswordResetDto) {
     try {
+      console.log('=== CONTROLLER DEBUG ===');
+      console.log('Received request body:', requestPasswordResetDto);
+      console.log('Email from DTO:', requestPasswordResetDto.email);
+      console.log('Email type:', typeof requestPasswordResetDto.email);
+      console.log('Email length:', requestPasswordResetDto.email?.length);
+      console.log('=== END CONTROLLER DEBUG ===');
+      
       const result = await this.passwordResetService.requestPasswordReset(
         requestPasswordResetDto.email
       );
       return result;
     } catch (error) {
+      console.log('Controller error:', error.message);
       throw new HttpException(
         {
           message: error.message || 'Failed to process password reset request',
@@ -36,6 +44,12 @@ export class PasswordResetController {
   @Post('verify-and-reset')
   async verifyCodeAndResetPassword(@Body() verifyCodeAndResetPasswordDto: VerifyCodeAndResetPasswordDto) {
     try {
+      console.log('=== VERIFY CONTROLLER DEBUG ===');
+      console.log('Received verify request body:', verifyCodeAndResetPasswordDto);
+      console.log('Email from DTO:', verifyCodeAndResetPasswordDto.email);
+      console.log('Code from DTO:', verifyCodeAndResetPasswordDto.code);
+      console.log('=== END VERIFY CONTROLLER DEBUG ===');
+      
       const result = await this.passwordResetService.verifyCodeAndResetPassword(
         verifyCodeAndResetPasswordDto.email,
         verifyCodeAndResetPasswordDto.code,
@@ -43,6 +57,7 @@ export class PasswordResetController {
       );
       return result;
     } catch (error) {
+      console.log('Verify controller error:', error.message);
       throw new HttpException(
         {
           message: error.message || 'Failed to reset password',

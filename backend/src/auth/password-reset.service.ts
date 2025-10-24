@@ -18,22 +18,43 @@ export class PasswordResetService {
   ) {}
 
   async requestPasswordReset(email: string): Promise<{ message: string }> {
+    // Debug: Log the email being searched
+    console.log('=== PASSWORD RESET REQUEST DEBUG ===');
+    console.log('Searching for email:', email);
+    console.log('Email type:', typeof email);
+    console.log('Email length:', email.length);
+
     // Find user by email with explicit field selection
     const user = await this.userRepository.findOne({ 
       where: { email },
       select: ['user_id', 'name', 'email', 'status', 'is_verified']
     });
+
+    // Debug: Check if user was found
     if (!user) {
+      console.log('❌ No user found with email:', email);
+      
+      // Let's check if there are any users with similar emails
+      const allUsers = await this.userRepository.find({
+        select: ['user_id', 'name', 'email', 'status']
+      });
+      console.log('All users in database:');
+      allUsers.forEach((u, index) => {
+        console.log(`${index + 1}. ID: ${u.user_id}, Name: "${u.name}", Email: "${u.email}", Status: ${u.status}`);
+      });
+      
       throw new NotFoundException('User not found with this email address');
     }
 
     // Debug logging
-    console.log('User found for password reset:', {
+    console.log('✅ User found for password reset:', {
       user_id: user.user_id,
       name: user.name,
       email: user.email,
-      status: user.status
+      status: user.status,
+      is_verified: user.is_verified
     });
+    console.log('=== END DEBUG ===');
 
     // Generate 6-digit verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -80,16 +101,34 @@ export class PasswordResetService {
     code: string,
     newPassword: string
   ): Promise<{ message: string }> {
+    // Debug: Log the verification attempt
+    console.log('=== PASSWORD RESET VERIFICATION DEBUG ===');
+    console.log('Verifying for email:', email);
+    console.log('Code:', code);
+    console.log('Email type:', typeof email);
+
     // Find user by email with explicit field selection
     const user = await this.userRepository.findOne({ 
       where: { email },
       select: ['user_id', 'name', 'email', 'status', 'is_verified']
     });
+
+    // Debug: Check if user was found
     if (!user) {
+      console.log('❌ No user found for verification with email:', email);
       throw new NotFoundException('User not found with this email address');
     }
 
+    console.log('✅ User found for verification:', {
+      user_id: user.user_id,
+      name: user.name,
+      email: user.email,
+      status: user.status
+    });
+
     // Find valid token
+    console.log('Searching for token with user_id:', user.user_id, 'and code:', code);
+    
     const token = await this.passwordResetTokenRepository.findOne({
       where: {
         user_id: user.user_id,
@@ -98,29 +137,47 @@ export class PasswordResetService {
       },
     });
 
+    console.log('Token found:', token ? {
+      id: token.id,
+      user_id: token.user_id,
+      code: token.changepasscode,
+      expiry_date: token.expiry_date,
+      is_used: token.is_used,
+      is_expired: token.expiry_date < new Date()
+    } : 'No token found');
+
     if (!token) {
+      console.log('❌ Token validation failed - No token found');
       throw new BadRequestException('Invalid or expired verification code');
     }
 
     // Check if token is expired
     if (new Date() > token.expiry_date) {
+      console.log('❌ Token validation failed - Token expired');
       throw new BadRequestException('Verification code has expired. Please request a new one.');
     }
+
+    console.log('✅ Token validation successful');
 
     // Hash the new password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
     // Update user password
-    await this.userRepository.update(user.user_id, {
+    console.log('Updating password for user_id:', user.user_id);
+    const updateResult = await this.userRepository.update(user.user_id, {
       password: hashedPassword,
     });
+    console.log('Password update result:', updateResult);
 
     // Mark token as used
-    await this.passwordResetTokenRepository.update(token.id, {
+    console.log('Marking token as used, token_id:', token.id);
+    const tokenUpdateResult = await this.passwordResetTokenRepository.update(token.id, {
       is_used: true,
     });
+    console.log('Token update result:', tokenUpdateResult);
 
+    console.log('=== PASSWORD RESET COMPLETED SUCCESSFULLY ===');
     return {
       message: 'Password has been successfully reset. You can now log in with your new password.'
     };
@@ -155,6 +212,14 @@ export class PasswordResetService {
           user: gmailUser,
           pass: gmailAppPassword,
         },
+      });
+
+      // Debug email addresses
+      console.log('Email configuration:', {
+        from: gmailUser,
+        to: email,
+        sendingFrom: `"TutorLink" <${gmailUser}>`,
+        sendingTo: email
       });
 
       const mailOptions = {
@@ -207,6 +272,13 @@ export class PasswordResetService {
           </div>
         `,
       };
+
+      // Debug final mail options
+      console.log('Final mail options:', {
+        from: mailOptions.from,
+        to: mailOptions.to,
+        subject: mailOptions.subject
+      });
 
       const result = await transporter.sendMail(mailOptions);
       console.log(`Password reset email sent successfully to ${email}`);
