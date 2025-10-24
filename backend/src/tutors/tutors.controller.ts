@@ -20,10 +20,10 @@ export class TutorsController {
     return this.tutorsService.findPendingApplications();
   }
 
-  @Get('subject-applications')
+  @Get('pending-subjects')
   @UseGuards(JwtAuthGuard)
-  getAllSubjectApplications() {
-    return this.tutorsService.getAllSubjectApplications();
+  getAllPendingTutorSubjects() {
+    return this.tutorsService.getAllPendingTutorSubjects();
   }
 
   @Patch(':id/status')
@@ -32,13 +32,13 @@ export class TutorsController {
     return this.tutorsService.updateStatus(+id, updateTutorStatusDto.status);
   }
 
-  @Patch('subject-applications/:applicationId/status')
+  @Patch('tutor-subjects/:tutorSubjectId/status')
   @UseGuards(JwtAuthGuard)
-  updateSubjectApplicationStatus(
-    @Param('applicationId') applicationId: string, 
+  updateTutorSubjectStatus(
+    @Param('tutorSubjectId') tutorSubjectId: string, 
     @Body() body: { status: 'approved' | 'rejected'; adminNotes?: string }
   ) {
-    return this.tutorsService.updateSubjectApplicationStatus(+applicationId, body.status, body.adminNotes);
+    return this.tutorsService.updateTutorSubjectStatus(+tutorSubjectId, body.status, body.adminNotes);
   }
 
   // Public apply endpoint to create a user+tutor (pending)
@@ -124,6 +124,13 @@ export class TutorsController {
 
   // New endpoints for tutor dashboard functionality
 
+  @Get('by-user/:userId/tutor-id')
+  @UseGuards(JwtAuthGuard)
+  async getTutorIdByUserId(@Param('userId') userId: string) {
+    const tutorId = await this.tutorsService.getTutorId(+userId);
+    return { tutor_id: tutorId };
+  }
+
   @Get(':tutorId/status')
   @UseGuards(JwtAuthGuard)
   async getTutorStatus(@Param('tutorId') tutorId: string) {
@@ -151,7 +158,7 @@ export class TutorsController {
   @Get(':tutorId/subject-applications')
   @UseGuards(JwtAuthGuard)
   async getSubjectApplications(@Param('tutorId') tutorId: string) {
-    return this.tutorsService.getSubjectApplications(+tutorId);
+    return this.tutorsService.getTutorSubjectApplications(+tutorId);
   }
 
   @Post(':tutorId/subject-application')

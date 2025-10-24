@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Tutor, User, TutorDocument, TutorAvailability, TutorSubject, Subject, Course, University, SubjectApplication, SubjectApplicationDocument, BookingRequest } from '../database/entities';
+import { Tutor, User, TutorDocument, TutorAvailability, TutorSubject, TutorSubjectDocument, Subject, Course, University, SubjectApplication, SubjectApplicationDocument, BookingRequest } from '../database/entities';
+import { EmailService } from '../email/email.service';
 import type { Express } from 'express';
 import * as bcrypt from 'bcrypt';
 import * as fs from 'fs';
@@ -24,6 +25,8 @@ export class TutorsService {
     private availabilityRepository: Repository<TutorAvailability>,
     @InjectRepository(TutorSubject)
     private tutorSubjectRepository: Repository<TutorSubject>,
+    @InjectRepository(TutorSubjectDocument)
+    private tutorSubjectDocumentRepository: Repository<TutorSubjectDocument>,
     @InjectRepository(Subject)
     private subjectRepository: Repository<Subject>,
     @InjectRepository(SubjectApplication)
@@ -32,6 +35,7 @@ export class TutorsService {
     private subjectApplicationDocumentRepository: Repository<SubjectApplicationDocument>,
     @InjectRepository(BookingRequest)
     private bookingRequestRepository: Repository<BookingRequest>,
+    private emailService: EmailService,
   ) {}
 
   findPendingApplications(): Promise<Tutor[]> {
@@ -65,6 +69,28 @@ export class TutorsService {
       if (user) {
         user.is_verified = true;
         await this.usersRepository.save(user);
+      }
+      
+      // Send approval email to tutor
+      try {
+        await this.emailService.sendTutorApplicationApprovalEmail({
+          name: user?.name || 'Tutor',
+          email: user?.email || '',
+        });
+      } catch (error) {
+        console.error('Failed to send tutor application approval email:', error);
+        // Don't throw error to avoid breaking the approval process
+      }
+    } else if (status === 'rejected') {
+      // Send rejection email to tutor
+      try {
+        await this.emailService.sendTutorApplicationRejectionEmail({
+          name: (tutor.user as any)?.name || 'Tutor',
+          email: (tutor.user as any)?.email || '',
+        });
+      } catch (error) {
+        console.error('Failed to send tutor application rejection email:', error);
+        // Don't throw error to avoid breaking the rejection process
       }
     }
 
@@ -271,7 +297,11 @@ export class TutorsService {
         }
       }
 
-      const link = this.tutorSubjectRepository.create({ tutor, subject } as any);
+      const link = this.tutorSubjectRepository.create({ 
+        tutor, 
+        subject, 
+        status: 'pending' 
+      } as any);
       toCreate.push(link as Partial<TutorSubject>);
     }
 
@@ -295,6 +325,17 @@ export class TutorsService {
     };
   }
 
+  async getTutorId(userId: number): Promise<number> {
+    console.log('Looking for tutor with user_id:', userId);
+    const tutor = await this.tutorsRepository.findOne({ 
+      where: { user: { user_id: userId } }
+    });
+    console.log('Found tutor:', tutor ? `tutor_id: ${tutor.tutor_id}` : 'null');
+    if (!tutor) throw new NotFoundException('Tutor not found');
+    
+    return tutor.tutor_id;
+  }
+
   async getTutorProfile(userId: number) {
     const tutor = await this.tutorsRepository.findOne({ 
       where: { user: { user_id: userId } },
@@ -302,13 +343,15 @@ export class TutorsService {
     });
     if (!tutor) throw new NotFoundException('Tutor not found');
     
+    // Filter only approved subjects
+    const approvedSubjects = tutor.subjects?.filter(ts => ts.status === 'approved') || [];
     
     return {
       bio: tutor.bio,
       profile_photo: tutor.profile_image_url,
       gcash_number: tutor.gcash_number || '',
       gcash_qr: tutor.gcash_qr_url || '',
-      subjects: tutor.subjects?.map(ts => ts.subject?.subject_name || '') || [],
+      subjects: approvedSubjects.map(ts => ts.subject?.subject_name || ''),
       rating: 0, // Calculate from ratings table
       total_reviews: 0 // Calculate from ratings table
     };
@@ -348,111 +391,184 @@ export class TutorsService {
     });
     if (!tutor) throw new NotFoundException('Tutor not found');
     
-    const applications = await this.subjectApplicationRepository.find({
-      where: { tutor: { tutor_id: tutor.tutor_id } as any },
-      relations: ['documents'],
+    return this.getTutorSubjectApplications(tutor.tutor_id);
+  }
+
+  async getTutorSubjectApplications(tutorId: number) {
+    const applications = await this.tutorSubjectRepository.find({
+      where: { tutor: { tutor_id: tutorId } },
+      relations: ['subject', 'documents'],
       order: { created_at: 'DESC' }
     });
-    return applications;
-  }
-
-  // Admin methods for subject application management
-  async getAllSubjectApplications() {
-    const applications = await this.subjectApplicationRepository.find({
-      where: { status: 'pending' },
-      relations: ['tutor', 'tutor.user', 'documents'],
-      order: { created_at: 'DESC' }
-    });
-    return applications;
-  }
-
-  async updateSubjectApplicationStatus(applicationId: number, status: 'approved' | 'rejected', adminNotes?: string) {
-    const application = await this.subjectApplicationRepository.findOne({
-      where: { id: applicationId },
-      relations: ['tutor', 'tutor.user']
+    
+    console.log(`Found ${applications.length} subject applications for tutor ${tutorId}`);
+    applications.forEach(app => {
+      console.log(`Application ${app.tutor_subject_id}: ${app.subject.subject_name} - ${app.status} - Notes: ${app.admin_notes || 'None'}`);
     });
     
-    if (!application) {
-      throw new NotFoundException('Subject application not found');
-    }
-
-    application.status = status;
-    if (adminNotes) {
-      application.admin_notes = adminNotes;
-    }
-    
-    const updatedApplication = await this.subjectApplicationRepository.save(application);
-
-    // If approved, add the subject to tutor's approved subjects
-    if (status === 'approved') {
-      await this.addApprovedSubjectToTutor(application.tutor.tutor_id, application.subject_name);
-    }
-
-    return updatedApplication;
-  }
-
-  private async addApprovedSubjectToTutor(tutorId: number, subjectName: string) {
-    const tutor = await this.tutorsRepository.findOne({
-      where: { tutor_id: tutorId },
-      relations: ['user', 'subjects', 'subjects.subject']
-    });
-    
-    if (!tutor) return;
-
-    // Check if subject already exists for this tutor
-    const existingSubject = tutor.subjects?.find(ts => 
-      (ts as any).subject?.subject_name === subjectName
-    );
-    
-    if (existingSubject) return; // Already exists
-
-    // Find or create the subject
-    let subject = await this.subjectRepository.findOne({
-      where: { subject_name: subjectName }
-    });
-
-    if (!subject) {
-      // Create new subject if it doesn't exist
-      subject = this.subjectRepository.create({
-        subject_name: subjectName
-      });
-      subject = await this.subjectRepository.save(subject);
-    }
-
-    // Create tutor-subject relationship
-    const tutorSubject = this.tutorSubjectRepository.create({
-      tutor: { tutor_id: tutorId } as any,
-      subject: subject
-    });
-    
-    await this.tutorSubjectRepository.save(tutorSubject);
-  }
-
-  async submitSubjectApplication(userId: number, subjectName: string, files: any[]) {
-    const tutor = await this.tutorsRepository.findOne({ 
-      where: { user: { user_id: userId } },
-      relations: ['user']
-    });
-    if (!tutor) throw new NotFoundException('Tutor not found');
-
-    const application = this.subjectApplicationRepository.create({
-      tutor,
-      subject_name: subjectName,
-      status: 'pending'
-    });
-    const savedApplication = await this.subjectApplicationRepository.save(application);
-
-    // Save documents
-    const documents = files.map(file => this.subjectApplicationDocumentRepository.create({
-      subjectApplication: savedApplication,
-      file_url: `/tutor_documents/${file.filename}`,
-      file_name: file.filename,
-      file_type: file.mimetype
+    // Transform to match the expected format
+    return applications.map(app => ({
+      id: app.tutor_subject_id,
+      subject_name: app.subject.subject_name,
+      status: app.status,
+      admin_notes: app.admin_notes,
+      created_at: app.created_at,
+      updated_at: app.updated_at,
+      documents: app.documents || []
     }));
-    await this.subjectApplicationDocumentRepository.save(documents);
-
-    return { success: true };
   }
+
+  // Admin methods for tutor subject management
+  async getAllPendingTutorSubjects() {
+    const tutorSubjects = await this.tutorSubjectRepository.find({
+      where: { status: 'pending' },
+      relations: ['tutor', 'tutor.user', 'subject', 'documents'],
+      order: { created_at: 'DESC' }
+    });
+    return tutorSubjects;
+  }
+
+  async updateTutorSubjectStatus(tutorSubjectId: number, status: 'approved' | 'rejected', adminNotes?: string) {
+    console.log('Updating tutor subject status:', { tutorSubjectId, status, adminNotes });
+    
+    const tutorSubject = await this.tutorSubjectRepository.findOne({
+      where: { tutor_subject_id: tutorSubjectId },
+      relations: ['tutor', 'tutor.user', 'subject']
+    });
+    
+    if (!tutorSubject) {
+      throw new NotFoundException('Tutor subject not found');
+    }
+
+    tutorSubject.status = status;
+    if (adminNotes) {
+      tutorSubject.admin_notes = adminNotes;
+      console.log('Admin notes saved:', adminNotes);
+    } else {
+      console.log('No admin notes provided');
+    }
+    
+    const updatedTutorSubject = await this.tutorSubjectRepository.save(tutorSubject);
+    
+    // Send email to tutor based on status
+    if (status === 'approved') {
+      try {
+        await this.emailService.sendSubjectApprovalEmail({
+          name: (tutorSubject.tutor as any)?.user?.name || 'Tutor',
+          email: (tutorSubject.tutor as any)?.user?.email || '',
+          subjectName: (tutorSubject.subject as any)?.subject_name || 'Subject',
+        });
+      } catch (error) {
+        console.error('Failed to send subject approval email:', error);
+        // Don't throw error to avoid breaking the approval process
+      }
+    } else if (status === 'rejected') {
+      try {
+        await this.emailService.sendSubjectRejectionEmail({
+          name: (tutorSubject.tutor as any)?.user?.name || 'Tutor',
+          email: (tutorSubject.tutor as any)?.user?.email || '',
+          subjectName: (tutorSubject.subject as any)?.subject_name || 'Subject',
+          adminNotes: adminNotes,
+        });
+      } catch (error) {
+        console.error('Failed to send subject rejection email:', error);
+        // Don't throw error to avoid breaking the rejection process
+      }
+    }
+    
+    return updatedTutorSubject;
+  }
+
+  async submitSubjectApplication(tutorId: number, subjectName: string, files: any[]) {
+    try {
+      console.log('Starting subject application submission:', { tutorId, subjectName, filesCount: files?.length || 0 });
+      
+      const tutor = await this.tutorsRepository.findOne({ 
+        where: { tutor_id: tutorId },
+        relations: ['user']
+      });
+      if (!tutor) throw new NotFoundException('Tutor not found');
+      console.log('Tutor found:', tutor.tutor_id);
+
+      // Find or create the subject
+      let subject = await this.subjectRepository.findOne({ 
+        where: { subject_name: subjectName } 
+      });
+      
+      if (!subject) {
+        console.log('Creating new subject:', subjectName);
+        subject = this.subjectRepository.create({
+          subject_name: subjectName
+        });
+        subject = await this.subjectRepository.save(subject);
+        console.log('Subject created:', subject.subject_id);
+      } else {
+        console.log('Subject found:', subject.subject_id);
+      }
+
+    // Check if tutor already has this subject (approved or pending)
+    const existingTutorSubject = await this.tutorSubjectRepository.findOne({
+      where: { 
+        tutor: { tutor_id: tutor.tutor_id },
+        subject: { subject_id: subject.subject_id }
+      }
+    });
+
+    if (existingTutorSubject) {
+      if (existingTutorSubject.status === 'approved') {
+        throw new Error('You have already been approved for this subject expertise');
+      } else if (existingTutorSubject.status === 'pending') {
+        throw new Error('You have already applied for this subject expertise and it is pending review');
+      }
+      // If status is 'rejected', we allow reapplication
+    }
+
+    // If there's a rejected application, update it to pending instead of creating new one
+    let savedTutorSubject;
+    if (existingTutorSubject && existingTutorSubject.status === 'rejected') {
+      existingTutorSubject.status = 'pending';
+      existingTutorSubject.admin_notes = null; // Clear previous admin notes
+      savedTutorSubject = await this.tutorSubjectRepository.save(existingTutorSubject);
+    } else {
+      // Create new tutor subject with pending status
+      const tutorSubject = this.tutorSubjectRepository.create({
+        tutor,
+        subject,
+        status: 'pending'
+      });
+      savedTutorSubject = await this.tutorSubjectRepository.save(tutorSubject);
+    }
+
+    // Save documents linked to the tutor subject
+    if (files && files.length > 0) {
+      try {
+        console.log('Creating documents for tutor subject:', savedTutorSubject.tutor_subject_id);
+        const documents = files.map(file => {
+          console.log('Processing file:', file.filename, file.mimetype);
+          return this.tutorSubjectDocumentRepository.create({
+            tutorSubject: savedTutorSubject,
+            file_url: `/tutor_documents/${file.filename}`,
+            file_name: file.filename,
+            file_type: file.mimetype
+          });
+        });
+        console.log('Saving documents:', documents.length);
+        await this.tutorSubjectDocumentRepository.save(documents);
+        console.log('Documents saved successfully');
+      } catch (error) {
+        console.error('Error saving documents:', error);
+        // Don't throw error - just log it and continue
+        // The tutor subject application should still be created even if documents fail
+        console.log('Continuing without documents due to error');
+      }
+    }
+
+    return { success: true, tutorSubjectId: savedTutorSubject.tutor_subject_id };
+  } catch (error) {
+    console.error('Error in submitSubjectApplication:', error);
+    throw error;
+  }
+}
 
   // Availability change request feature removed
 

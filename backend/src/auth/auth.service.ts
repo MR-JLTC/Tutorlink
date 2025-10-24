@@ -73,6 +73,7 @@ export class AuthService {
   private async determineUserType(userId: number): Promise<'student' | 'tutor'> {
     // Check if user has tutor profile
     const tutorProfile = await this.usersService.findTutorProfile(userId);
+    console.log(`Determining user type for user_id ${userId}:`, tutorProfile ? 'tutor' : 'student');
     if (tutorProfile) {
       return 'tutor';
     }

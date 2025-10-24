@@ -292,9 +292,9 @@ const ProfileSetup: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-blue-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-blue-800">Subjects</p>
-              <p className="text-lg font-bold text-blue-600">{profile.subjects.length}</p>
+            <div className="bg-green-50 p-3 rounded-lg">
+              <p className="text-sm font-medium text-green-800">Approved Subjects</p>
+              <p className="text-lg font-bold text-green-600">{profile.subjects.length}</p>
             </div>
             <div className="bg-green-50 p-3 rounded-lg">
               <p className="text-sm font-medium text-green-800">Rating</p>
@@ -338,23 +338,38 @@ const ProfileSetup: React.FC = () => {
 
       {/* Subjects Section */}
       <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Subjects of Expertise</h2>
+        <h2 className="text-xl font-semibold mb-4 flex items-center">
+          <Star className="h-5 w-5 mr-2 text-blue-600" />
+          Approved Subjects of Expertise
+        </h2>
         <div className="flex flex-wrap gap-2">
           {profile.subjects.map((subject, index) => (
             <span
               key={index}
-              className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
+              className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center space-x-1"
             >
-              {subject}
+              <CheckCircle className="h-3 w-3" />
+              <span>{subject}</span>
             </span>
           ))}
           {profile.subjects.length === 0 && (
-            <span className="text-slate-500 italic">No subjects added yet.</span>
+            <div className="w-full text-center py-4">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <Clock className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
+                <p className="text-yellow-800 font-medium">No approved subjects yet</p>
+                <p className="text-sm text-yellow-700 mt-1">
+                  Your subject expertise applications are being reviewed by our admin team.
+                </p>
+              </div>
+            </div>
           )}
         </div>
-        <p className="text-sm text-slate-600 mt-2">
-          To add or modify subjects, go to the Application & Verification section.
-        </p>
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Note:</strong> Only subjects approved by our admin team will appear here. 
+            To add new subjects or check the status of your applications, go to the Application & Verification section.
+          </p>
+        </div>
       </Card>
 
       {/* Payment Information */}

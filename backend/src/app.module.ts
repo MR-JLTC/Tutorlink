@@ -8,7 +8,7 @@ import { CoursesModule } from './courses/courses.module';
 import { TutorsModule } from './tutors/tutors.module';
 import { PaymentsModule } from './payments/payments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
-// import { EmailModule } from './email/email.module';
+import { EmailModule } from './email/email.module';
 import * as entities from './database/entities';
 import { LandingModule } from './landing/landing.module';
 import { SubjectsModule } from './subjects/subjects.module';
@@ -56,8 +56,8 @@ export class AppController {
     PaymentsModule,
     DashboardModule,
     LandingModule,
-    SubjectsModule
-    // EmailModule,
+    SubjectsModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [],

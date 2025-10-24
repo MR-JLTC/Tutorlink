@@ -30,11 +30,12 @@ apiClient.interceptors.response.use(
     const rawMessage: any = error?.response?.data?.message;
     const notify = (window as any).__notify as ((msg: string, type?: 'success' | 'error' | 'info') => void) | undefined;
 
-    // Skip Toast messages for authentication endpoints - let the pages handle their own error display
+    // Skip Toast messages for authentication endpoints and tutor ID lookup - let the pages handle their own error display
     const reqUrl: string | undefined = error?.config?.url;
     const isAuthEndpoint = reqUrl?.includes('/auth/login') || reqUrl?.includes('/auth/register') || reqUrl?.includes('/auth/login-tutor-tutee');
+    const isTutorIdEndpoint = reqUrl?.includes('/tutors/by-user/') && reqUrl?.includes('/tutor-id');
 
-    if (notify && !isAuthEndpoint) {
+    if (notify && !isAuthEndpoint && !isTutorIdEndpoint) {
       let display = Array.isArray(rawMessage) ? rawMessage.join(', ') : (rawMessage as string | undefined);
       if (typeof display === 'string' && display.toLowerCase().includes('email already registered')) {
         display = 'Email already registered';

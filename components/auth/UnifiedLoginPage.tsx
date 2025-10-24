@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../Logo';
 import { useAuth } from '../../hooks/useAuth';
+import ForgotPasswordModal from './ForgotPasswordModal';
+import PasswordResetVerification from './PasswordResetVerification';
 
 const UnifiedLoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -14,6 +16,9 @@ const UnifiedLoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
 
   // Online images related to tutoring/learning concepts
   const slideshowImages = [
@@ -73,7 +78,18 @@ const UnifiedLoginPage: React.FC = () => {
     }
   };
 
+  const handleForgotPasswordSuccess = (email: string) => {
+    setResetEmail(email);
+    setShowPasswordReset(true);
+  };
 
+  const handleBackToLogin = () => {
+    setShowPasswordReset(false);
+    setShowForgotPasswordModal(false);
+    setResetEmail('');
+  };
+
+  const inputStyles = "mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-600 focus:border-primary-600 bg-white text-slate-900 focus:bg-slate-50 transition-colors duration-200";
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-100 relative overflow-hidden">
       {/* Background Elements */}
@@ -269,7 +285,13 @@ const UnifiedLoginPage: React.FC = () => {
                             onChange={handleInputChange}
                             minLength={7}
                             maxLength={13}
-                            className="w-full px-4 py-3 pr-10 bg-white/95 backdrop-blur-sm border-2 border-slate-200 rounded-lg focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all duration-300 placeholder-slate-400 font-medium shadow-lg hover:shadow-xl text-sm [&::-webkit-credentials-auto-fill-button]:!hidden [&::-webkit-strong-password-auto-fill-button]:!hidden [&::-webkit-credentials-auto-fill-button]:!hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
+                            className={`${inputStyles} pr-10 
+                              [&::-ms-reveal]:hidden 
+                              [&::-webkit-credentials-auto-fill-button]:!hidden 
+                              [&::-webkit-strong-password-auto-fill-button]:!hidden 
+                              [&::-webkit-credentials-auto-fill-button]:!hidden 
+                              [&::-webkit-strong-password-auto-fill-button]:!hidden`
+                            }
                             placeholder="Enter your password"
                           />
                           <button
@@ -278,13 +300,41 @@ const UnifiedLoginPage: React.FC = () => {
                             className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
                           >
                             {showPassword ? (
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                              // Swapped to a cleaner, known-good "Eye" SVG
+                              <svg 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                fill="none" 
+                                viewBox="0 0 24 24" 
+                                strokeWidth={1.5} 
+                                stroke="currentColor" 
+                                className="h-5 w-5"
+                              >
+                                <path 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round" 
+                                  d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" 
+                                />
+                                <path 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round" 
+                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" 
+                                />
                               </svg>
                             ) : (
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              // Swapped to a cleaner, known-good "EyeOff" SVG
+                              <svg 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                fill="none" 
+                                viewBox="0 0 24 24" 
+                                strokeWidth={1.5} 
+                                stroke="currentColor" 
+                                className="h-5 w-5"
+                              >
+                                <path 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round" 
+                                  d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L6.228 6.228" 
+                                />
                               </svg>
                             )}
                           </button>
@@ -305,9 +355,13 @@ const UnifiedLoginPage: React.FC = () => {
                           </label>
                         </div>
                         <div className="text-sm">
-                          <span className="font-medium text-slate-500 cursor-not-allowed">
-                            Forgot password? <span className="text-xs text-slate-400">(Coming soon)</span>
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowForgotPasswordModal(true)}
+                            className="font-medium text-sky-600 hover:text-sky-700 transition-colors"
+                          >
+                            Forgot password?
+                          </button>
                         </div>
                       </div>
 
@@ -370,6 +424,21 @@ const UnifiedLoginPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotPasswordModal}
+        onClose={() => setShowForgotPasswordModal(false)}
+        onSuccess={handleForgotPasswordSuccess}
+      />
+
+      {/* Password Reset Verification */}
+      {showPasswordReset && (
+        <PasswordResetVerification
+          email={resetEmail}
+          onBack={handleBackToLogin}
+        />
+      )}
     </div>
   );
 };

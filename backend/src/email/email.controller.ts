@@ -55,4 +55,31 @@ export class EmailController {
       throw new HttpException('Internal server error', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
+  @Post('test')
+  async sendTestEmail(@Body() body: { email: string }) {
+    try {
+      if (!body.email) {
+        throw new HttpException('Email is required', HttpStatus.BAD_REQUEST);
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(body.email)) {
+        throw new HttpException('Invalid email format', HttpStatus.BAD_REQUEST);
+      }
+
+      const success = await this.emailService.sendTestEmail(body.email);
+      
+      if (success) {
+        return { message: 'Test email sent successfully' };
+      } else {
+        throw new HttpException('Failed to send test email', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException('Internal server error', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
 }

@@ -5,6 +5,7 @@ import { Admin } from './admin.entity';
 import { Student } from './student.entity';
 import { Tutor } from './tutor.entity';
 import { BookingRequest } from './booking-request.entity';
+import { PasswordResetToken } from './password-reset-token.entity';
 
 @Entity('users')
 export class User {
@@ -64,4 +65,7 @@ export class User {
 
   @OneToMany(() => BookingRequest, (request) => request.student)
   bookingRequests: BookingRequest[];
+
+  @OneToMany(() => PasswordResetToken, (token) => token.user)
+  passwordResetTokens: PasswordResetToken[];
 }
