@@ -131,6 +131,21 @@ export class TutorsController {
     return { tutor_id: tutorId };
   }
 
+  @Get('by-email/:email')
+  async getTutorByEmail(@Param('email') email: string) {
+    return this.tutorsService.getTutorByEmail(email);
+  }
+
+  @Put(':tutorId')
+  async updateTutor(@Param('tutorId') tutorId: string, @Body() body: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }) {
+    return this.tutorsService.updateTutor(+tutorId, body);
+  }
+
+  @Put('update-existing-user/:userId')
+  async updateExistingUserToTutor(@Param('userId') userId: string, @Body() body: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }) {
+    return this.tutorsService.updateExistingUserToTutor(+userId, body);
+  }
+
   @Get(':tutorId/status')
   @UseGuards(JwtAuthGuard)
   async getTutorStatus(@Param('tutorId') tutorId: string) {

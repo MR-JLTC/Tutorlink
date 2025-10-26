@@ -22,17 +22,32 @@ export class PasswordResetService {
     console.log('=== PASSWORD RESET REQUEST DEBUG ===');
     console.log('Searching for email:', email);
     console.log('Email type:', typeof email);
-    console.log('Email length:', email.length);
+    
+    // Validate email parameter
+    if (!email || typeof email !== 'string') {
+      console.log('❌ Invalid email parameter:', email);
+      throw new BadRequestException('Email is required and must be a valid string');
+    }
+    
+    // Trim and validate email
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      console.log('❌ Empty email after trimming');
+      throw new BadRequestException('Email cannot be empty');
+    }
+    
+    console.log('Email length:', trimmedEmail.length);
+    console.log('Trimmed email:', trimmedEmail);
 
     // Find user by email with explicit field selection
     const user = await this.userRepository.findOne({ 
-      where: { email },
+      where: { email: trimmedEmail },
       select: ['user_id', 'name', 'email', 'status', 'is_verified']
     });
 
     // Debug: Check if user was found
     if (!user) {
-      console.log('❌ No user found with email:', email);
+      console.log('❌ No user found with email:', trimmedEmail);
       
       // Let's check if there are any users with similar emails
       const allUsers = await this.userRepository.find({
@@ -106,16 +121,31 @@ export class PasswordResetService {
     console.log('Verifying for email:', email);
     console.log('Code:', code);
     console.log('Email type:', typeof email);
+    
+    // Validate email parameter
+    if (!email || typeof email !== 'string') {
+      console.log('❌ Invalid email parameter:', email);
+      throw new BadRequestException('Email is required and must be a valid string');
+    }
+    
+    // Trim and validate email
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      console.log('❌ Empty email after trimming');
+      throw new BadRequestException('Email cannot be empty');
+    }
+    
+    console.log('Trimmed email:', trimmedEmail);
 
     // Find user by email with explicit field selection
     const user = await this.userRepository.findOne({ 
-      where: { email },
+      where: { email: trimmedEmail },
       select: ['user_id', 'name', 'email', 'status', 'is_verified']
     });
 
     // Debug: Check if user was found
     if (!user) {
-      console.log('❌ No user found for verification with email:', email);
+      console.log('❌ No user found for verification with email:', trimmedEmail);
       throw new NotFoundException('User not found with this email address');
     }
 

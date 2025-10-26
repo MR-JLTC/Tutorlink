@@ -22,13 +22,24 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
     setError('');
 
     try {
-      const response = await api.post('/auth/password-reset/request', { email });
+      console.log('Frontend: Sending email:', email);
+      console.log('Frontend: Email type:', typeof email);
+      console.log('Frontend: Email length:', email.length);
+      
+      const requestBody = { email };
+      console.log('Frontend: Request body:', requestBody);
+      
+      const response = await api.post('/auth/password-reset/request', requestBody);
+      console.log('Frontend: Response received:', response.data);
+      
       if (response.data) {
         setSuccess(true);
         setShowProceedButton(true);
         // Remove automatic redirect - let user choose when to proceed
       }
     } catch (err: any) {
+      console.log('Frontend: Error occurred:', err);
+      console.log('Frontend: Error response:', err.response?.data);
       const errorMessage = err.response?.data?.message || 'Failed to send verification code. Please try again.';
       setError(errorMessage);
     } finally {

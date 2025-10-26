@@ -221,12 +221,7 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto flex items-center justify-between relative">
           {/* Logo and Brand Section */}
           <div className="flex items-center group cursor-pointer space-x-3" onClick={() => navigate('/LandingPage')}>
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-20 group-hover:opacity-30 transition-all duration-300"></div>
-              <div className="relative bg-white p-2 rounded-xl shadow-md border border-slate-200/50 group-hover:shadow-lg group-hover:border-sky-200/60 transition-all duration-300 group-hover:scale-105">
-                <Logo className="h-8 sm:h-9 md:h-10 w-auto transition-all duration-300" />
-              </div>
-            </div>
+            <Logo className="h-10 sm:h-12 md:h-14 lg:h-16 w-auto transition-all duration-300" />
             <div className="flex flex-col">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">
                 TutorLink
@@ -655,12 +650,7 @@ const LandingPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center mb-4 space-x-3">
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-30 group-hover:opacity-40 transition-all duration-300"></div>
-                  <div className="relative bg-white p-2 rounded-xl shadow-lg border border-slate-200/50 group-hover:shadow-xl group-hover:border-sky-200/60 transition-all duration-300 group-hover:scale-105">
-                    <Logo className="h-10 w-10 object-contain" style={{aspectRatio: '1/1'}} />
-                  </div>
-                </div>
+                <Logo className="h-14 w-14 object-contain" style={{aspectRatio: '1/1'}} />
                 <div className="flex flex-col">
                   <h3 className="text-xl font-bold text-white mb-1">TutorLink</h3>
                   <p className="text-sm text-sky-300 font-medium">Connecting Minds, Building Futures</p>

@@ -97,6 +97,171 @@ export class TutorsService {
     return this.tutorsRepository.save(tutor);
   }
 
+  async getTutorByEmail(email: string): Promise<{ tutor_id: number; user_id: number; user_type: string }> {
+    const user = await this.usersRepository.findOne({ 
+      where: { email },
+      relations: ['tutor_profile', 'student_profile', 'admin_profile']
+    });
+    
+    if (!user) {
+      throw new Error('User not found with this email');
+    }
+    
+    // Determine user type
+    let userType = 'unknown';
+    let tutorId = null;
+    
+    if (user.tutor_profile) {
+      userType = 'tutor';
+      tutorId = (user.tutor_profile as any).tutor_id;
+    } else if (user.student_profile) {
+      userType = 'student';
+    } else if (user.admin_profile) {
+      userType = 'admin';
+    }
+    
+    return { 
+      tutor_id: tutorId, 
+      user_id: user.user_id,
+      user_type: userType
+    };
+  }
+
+  async updateExistingUserToTutor(userId: number, data: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }): Promise<{ success: true; tutor_id: number }> {
+    const user = await this.usersRepository.findOne({ 
+      where: { user_id: userId },
+      relations: ['tutor_profile']
+    });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Update user information
+    if (data.full_name) {
+      user.name = data.full_name;
+    }
+    if (data.university_id) {
+      user.university_id = data.university_id;
+    }
+    if (data.course_id) {
+      user.course_id = data.course_id;
+    }
+    if (data.course_name && !data.course_id) {
+      // Handle course name if no course_id provided
+      const uni = await this.universitiesRepository.findOne({ where: { university_id: data.university_id } });
+      if (uni) {
+        const existingCourse = await this.coursesRepository.findOne({ 
+          where: { course_name: data.course_name.trim(), university: { university_id: uni.university_id } as any }, 
+          relations: ['university'] 
+        });
+        if (existingCourse) {
+          user.course_id = existingCourse.course_id;
+        } else {
+          const newCourse = this.coursesRepository.create({ 
+            course_name: data.course_name.trim(), 
+            university: uni 
+          } as any);
+          const savedCourse = await this.coursesRepository.save(newCourse as any);
+          user.course_id = savedCourse.course_id;
+        }
+      }
+    }
+
+    // Save updated user
+    await this.usersRepository.save(user);
+
+    // Create or update tutor profile
+    let tutor;
+    if (user.tutor_profile) {
+      // Update existing tutor
+      tutor = user.tutor_profile;
+      if (data.bio !== undefined) {
+        tutor.bio = data.bio;
+      }
+      if (data.year_level !== undefined) {
+        tutor.year_level = data.year_level;
+      }
+      if (data.gcash_number !== undefined) {
+        tutor.gcash_number = data.gcash_number;
+      }
+      tutor.status = 'pending'; // Reset status to pending for re-application
+    } else {
+      // Create new tutor profile
+      tutor = this.tutorsRepository.create({
+        user: user,
+        bio: (data.bio || '').trim(),
+        status: 'pending',
+        profile_image_url: `/tutor_documents/tutorProfile_${user.user_id}`,
+        gcash_qr_url: `/tutor_documents/gcashQR_${user.user_id}`,
+        year_level: data.year_level || '',
+        gcash_number: data.gcash_number || '',
+      } as any);
+    }
+
+    const savedTutor = await this.tutorsRepository.save(tutor);
+
+    return { success: true, tutor_id: (savedTutor as any).tutor_id };
+  }
+
+  async updateTutor(tutorId: number, data: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }): Promise<{ success: true }> {
+    const tutor = await this.tutorsRepository.findOne({ 
+      where: { tutor_id: tutorId },
+      relations: ['user']
+    });
+    
+    if (!tutor) {
+      throw new Error('Tutor not found');
+    }
+
+    // Update user information
+    if (data.full_name) {
+      tutor.user.name = data.full_name;
+    }
+    if (data.university_id) {
+      tutor.user.university_id = data.university_id;
+    }
+    if (data.course_id) {
+      tutor.user.course_id = data.course_id;
+    }
+    if (data.course_name && !data.course_id) {
+      // Handle course name if no course_id provided
+      const uni = await this.universitiesRepository.findOne({ where: { university_id: data.university_id } });
+      if (uni) {
+        const existingCourse = await this.coursesRepository.findOne({ 
+          where: { course_name: data.course_name.trim(), university: { university_id: uni.university_id } as any }, 
+          relations: ['university'] 
+        });
+        if (existingCourse) {
+          tutor.user.course_id = existingCourse.course_id;
+        } else {
+          const newCourse = this.coursesRepository.create({ 
+            course_name: data.course_name.trim(), 
+            university: uni 
+          } as any);
+          const savedCourse = await this.coursesRepository.save(newCourse as any);
+          tutor.user.course_id = savedCourse.course_id;
+        }
+      }
+    }
+
+    // Update tutor information
+    if (data.bio !== undefined) {
+      tutor.bio = data.bio;
+    }
+    if (data.year_level !== undefined) {
+      tutor.year_level = data.year_level;
+    }
+    if (data.gcash_number !== undefined) {
+      tutor.gcash_number = data.gcash_number;
+    }
+
+    await this.usersRepository.save(tutor.user);
+    await this.tutorsRepository.save(tutor);
+
+    return { success: true };
+  }
+
   async applyTutor(data: { email: string; password: string; university_id: number; course_id?: number; course_name?: string; name?: string; bio?: string; year_level?: string; gcash_number?: string }): Promise<{ success: true; user_id: number; tutor_id: number }> {
     const existing = await this.usersRepository.findOne({ where: { email: data.email } });
     if (existing) {
@@ -124,6 +289,7 @@ export class TutorsService {
       name: data.name && data.name.trim().length > 0 ? data.name : data.email.split('@')[0],
       email: data.email,
       password: hashed,
+      user_type: 'tutor',
       is_verified: false,
       status: 'active' as any,
       university_id: data.university_id as any,
@@ -327,9 +493,13 @@ export class TutorsService {
 
   async getTutorId(userId: number): Promise<number> {
     console.log('Looking for tutor with user_id:', userId);
-    const tutor = await this.tutorsRepository.findOne({ 
-      where: { user: { user_id: userId } }
-    });
+    
+    // Try to find tutor using the user_id directly in the tutors table
+    const tutor = await this.tutorsRepository
+      .createQueryBuilder('tutor')
+      .where('tutor.user_id = :userId', { userId })
+      .getOne();
+    
     console.log('Found tutor:', tutor ? `tutor_id: ${tutor.tutor_id}` : 'null');
     if (!tutor) throw new NotFoundException('Tutor not found');
     

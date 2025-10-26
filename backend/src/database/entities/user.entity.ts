@@ -21,15 +21,28 @@ export class User {
   @Column()
   password?: string;
 
+  @Column({
+    type: 'enum',
+    enum: ['tutor', 'tutee', 'admin'],
+    nullable: true,
+  })
+  user_type: 'tutor' | 'tutee' | 'admin';
+
   @Column({ default: false })
   is_verified: boolean;
 
+  @Column({ nullable: true })
+  verification_code: string;
+
+  @Column({ type: 'datetime', nullable: true })
+  verification_expires: Date;
+
   @Column({
     type: 'enum',
-    enum: ['active', 'inactive'],
-    default: 'active',
+    enum: ['active', 'inactive', 'pending_verification'],
+    default: 'pending_verification',
   })
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending_verification';
 
   @CreateDateColumn()
   created_at: Date;

@@ -7,6 +7,8 @@ import { PasswordResetController } from './password-reset.controller';
 import { ChangePasswordService } from './change-password.service';
 import { ChangePasswordController } from './change-password.controller';
 import { TestPasswordResetController } from './test-password-reset.controller';
+import { EmailVerificationService } from './email-verification.service';
+import { EmailVerificationController } from './email-verification.controller';
 import { UsersModule } from '../users/users.module';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
@@ -26,7 +28,7 @@ import { EmailModule } from '../email/email.module';
       signOptions: { expiresIn: '1d' },
     }),
   ],
-  controllers: [AuthController, PasswordResetController, ChangePasswordController, TestPasswordResetController],
-  providers: [AuthService, PasswordResetService, ChangePasswordService, JwtStrategy],
+  controllers: [AuthController, PasswordResetController, ChangePasswordController, TestPasswordResetController, EmailVerificationController],
+  providers: [AuthService, PasswordResetService, ChangePasswordService, EmailVerificationService, JwtStrategy],
 })
 export class AuthModule {}

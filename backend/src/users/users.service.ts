@@ -39,6 +39,7 @@ export class UsersService {
     const newUser = this.usersRepository.create({
       ...registerDto,
       password: hashedPassword,
+      user_type: 'admin',
       is_verified: true,
     });
     const savedUser = await this.usersRepository.save(newUser);
@@ -129,6 +130,7 @@ export class UsersService {
       name: body.name,
       email: body.email,
       password: hashed,
+      user_type: 'tutee',
       is_verified: false,
       status: 'active' as any,
       university_id: body.university_id as any,
