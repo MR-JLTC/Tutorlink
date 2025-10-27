@@ -151,6 +151,9 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
+    console.log('=== REGISTRATION DEBUG ===');
+    console.log('Register DTO:', registerDto);
+    
     // Removed existing user check as email verification handles pre-registration status
     // const existingUser = await this.usersService.findOneByEmail(registerDto.email);
     // if (existingUser) {
@@ -159,6 +162,8 @@ export class AuthService {
 
     // Check if email has been verified for the given user type
     const emailVerificationStatus = await this.emailVerificationService.getEmailVerificationStatus(registerDto.email, registerDto.user_type);
+    console.log('Email verification status:', emailVerificationStatus);
+    
     if (!emailVerificationStatus.is_verified) {
       throw new BadRequestException('Email address not verified. Please complete email verification first.');
     }
@@ -175,10 +180,19 @@ export class AuthService {
       throw new BadRequestException('Invalid user type provided.');
     }
 
+    console.log('User created:', user);
+    console.log('User ID:', user.user_id);
+
     const payload = { email: user.email, sub: user.user_id, name: user.name, user_type: user.user_type };
+    const accessToken = this.jwtService.sign(payload);
+    
+    console.log('JWT Payload:', payload);
+    console.log('Access Token generated:', !!accessToken);
+    console.log('=== END REGISTRATION DEBUG ===');
+    
     return {
         user,
-        accessToken: this.jwtService.sign(payload),
+        accessToken,
     };
   }
 

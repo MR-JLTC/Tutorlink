@@ -16,7 +16,7 @@ import LandingPage from './components/Tutor_TuteePages/LandingPage';
 import TuteeRegistrationPage from './components/Tutor_TuteePages/TuteeRegistrationPage';
 import TutorRegistrationPage from './components/Tutor_TuteePages/TutorRegistrationPage';
 import TutorDashboard from './components/Tutor_TuteePages/TutorDashboard';
-const TuteeDashboard = () => <div className="p-6"><h1 className="text-2xl font-bold">TuteeDashboard</h1><p className="text-slate-600 mt-2">Coming soon.</p></div>;
+import TuteeDashboard from './components/Tutor_TuteePages/TuteeDashboard';
 import UnifiedLoginPage from './components/auth/UnifiedLoginPage';
 import PasswordResetPage from './components/auth/PasswordResetPage';
 
@@ -58,7 +58,7 @@ const App: React.FC = () => {
                 <Route path="/tutor-dashboard/*" element={<TutorDashboard />} />
                 
                 {/* Tutee routes */}
-                <Route path="/tutee-dashboard" element={<TuteeDashboard />} />
+                <Route path="/tutee-dashboard/*" element={<TuteeDashboard />} />
                 
                 {/* Default redirect */}
                 <Route path="*" element={<Navigate to="/admin/" replace />} />

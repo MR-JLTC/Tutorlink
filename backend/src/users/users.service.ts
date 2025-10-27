@@ -49,6 +49,7 @@ export class UsersService {
       password: registerDto.password,
       user_type: 'admin',
       status: 'active',
+      profile_image_url: 'user_profile_images/userProfile_admin.png',
     });
     const savedUser: User = await this.usersRepository.save(newUser);
 
@@ -97,7 +98,7 @@ export class UsersService {
     return { success: true };
   }
 
-  async updateUser(userId: number, body: { name?: string; email?: string; status?: 'active' | 'inactive'; year_level?: number; university_id?: number }): Promise<User> {
+  async updateUser(userId: number, body: { name?: string; email?: string; status?: 'active' | 'inactive'; year_level?: number; university_id?: number; profile_image_url?: string }): Promise<User> {
     const user = await this.findOneById(userId);
     if (!user) {
       throw new Error('User not found');
@@ -107,6 +108,7 @@ export class UsersService {
     if (body.status !== undefined) (user as any).status = body.status;
     if (body.year_level !== undefined) (user as any).year_level = body.year_level as any;
     if (body.university_id !== undefined) (user as any).university_id = body.university_id as any;
+    if (body.profile_image_url !== undefined) user.profile_image_url = body.profile_image_url;
     return this.usersRepository.save(user);
   }
 

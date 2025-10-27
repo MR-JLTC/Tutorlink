@@ -43,7 +43,7 @@ const RegistrationPage: React.FC = () => {
     loadUniversities();
   }, []);
 
-  // Email domain validation effect
+  // Email validation effect (without domain constraint)
   useEffect(() => {
     if (!email) {
       setEmailDomainError(null);
@@ -51,30 +51,11 @@ const RegistrationPage: React.FC = () => {
       return;
     }
     
-    // If no university is selected, allow any email domain
-    if (!universityId) {
-      setEmailDomainError(null);
-      // Check if email is already verified
-      checkEmailVerificationStatus(email);
-      return;
-    }
-    
-    const uni = universities.find(u => u.university_id === universityId);
-    if (!uni) {
-      setEmailDomainError(null);
-      setIsEmailVerified(false);
-      return;
-    }
-    const domain = email.split('@')[1] || '';
-    if (!domain || domain.toLowerCase() !== uni.email_domain.toLowerCase()) {
-      setEmailDomainError(`Email domain must be ${uni.email_domain}`);
-      setIsEmailVerified(false);
-    } else {
-      setEmailDomainError(null);
-      // Check if email is already verified
-      checkEmailVerificationStatus(email);
-    }
-  }, [email, universityId, universities]);
+    // No domain validation - allow any email format
+    setEmailDomainError(null);
+    // Check if email is already verified
+    checkEmailVerificationStatus(email);
+  }, [email]);
 
   const checkEmailVerificationStatus = async (emailToCheck: string) => {
     if (!emailToCheck) {
@@ -262,7 +243,7 @@ const RegistrationPage: React.FC = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-2">University</label>
+                  <label className="block text-slate-700 font-semibold mb-2">University(Optional)</label>
                   <select 
                     className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
                     value={universityId} 
@@ -287,14 +268,6 @@ const RegistrationPage: React.FC = () => {
                     placeholder="Enter your email address"
                     required 
                   />
-                  {universityId && (
-                    <p className="text-sm text-slate-500 mt-2 flex items-center">
-                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Email domain must match the selected university
-                    </p>
-                  )}
                   {emailDomainError && <p className="text-sm text-red-600 mt-2 flex items-center">
                     <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -492,7 +465,7 @@ const RegistrationPage: React.FC = () => {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
                 >
-                  {showPassword ? (
+                  {showConfirmPassword ? (
                     // Swapped to a cleaner, known-good "Eye" SVG
                     <svg 
                       xmlns="http://www.w3.org/2000/svg" 

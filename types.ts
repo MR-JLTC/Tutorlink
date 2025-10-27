@@ -40,10 +40,12 @@ export interface User {
   course_id?: number;
   year_level?: number;
   status?: 'active' | 'inactive';
+  profile_image_url?: string;
   
   // Joined data from backend
   university?: University;
   course?: Course;
+  tutor_profile?: Tutor;
 }
 
 export interface Document {

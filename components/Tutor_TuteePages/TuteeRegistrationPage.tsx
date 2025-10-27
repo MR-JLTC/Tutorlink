@@ -29,6 +29,9 @@ const TuteeRegistrationPage: React.FC = () => {
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [verificationError, setVerificationError] = useState('');
+  
+  // Profile image state
+  const [profileImage, setProfileImage] = useState<File | null>(null);
 
   const selectedUniversity = useMemo(() => 
     universities.find(u => u.university_id === universityId), 
@@ -158,6 +161,20 @@ const TuteeRegistrationPage: React.FC = () => {
     setShowVerificationModal(false);
     setVerificationCode('');
     setVerificationError('');
+  };
+
+  const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) {
+      // Check if it's an image file
+      if (file.type.startsWith('image/')) {
+        setProfileImage(file);
+        notify('Profile image selected successfully!', 'success');
+    } else {
+        notify('Please select a valid image file.', 'error');
+        e.target.value = '';
+      }
+    }
   };
 
   useEffect(() => {
@@ -294,6 +311,72 @@ const TuteeRegistrationPage: React.FC = () => {
       const registrationResponse = await apiClient.post('/auth/register', registerPayload);
       console.log('Tutee registration successful:', registrationResponse.data);
       
+      // Store the token for authenticated requests
+      const { user, accessToken } = registrationResponse.data;
+      localStorage.setItem('token', accessToken);
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      console.log('Token stored:', accessToken);
+      console.log('User stored:', user);
+      
+      // Test authentication endpoint
+      try {
+        const testResponse = await apiClient.get('/users/test-auth', {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+        console.log('Auth test successful:', testResponse.data);
+      } catch (testErr) {
+        console.error('Auth test failed:', testErr);
+      }
+      
+      // Small delay to ensure token is properly set
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Upload profile image if provided
+      if (profileImage) {
+        try {
+          console.log('Uploading profile image for tutee:', user.user_id);
+          console.log('Using token:', accessToken);
+          
+          const pf = new FormData();
+          pf.append('file', profileImage);
+          
+          const profileResponse = await apiClient.post(`/users/${user.user_id}/profile-image`, pf, { 
+            headers: { 
+              'Content-Type': 'multipart/form-data',
+              'Authorization': `Bearer ${accessToken}`
+            } 
+          });
+          console.log('Profile image uploaded successfully:', profileResponse.data);
+          
+          // Update user with new profile image URL
+          const updatedUser = { ...user, profile_image_url: profileResponse.data.profile_image_url };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          notify('Profile image uploaded successfully!', 'success');
+        } catch (imageErr) {
+          console.error('Failed to upload profile image:', imageErr);
+          console.error('Error details:', imageErr.response?.data);
+          console.error('Error status:', imageErr.response?.status);
+          // Don't block registration if image upload fails
+          notify('Registration successful, but profile image upload failed. You can update it later.', 'info');
+        }
+      } else {
+        // Set placeholder profile image
+        try {
+          console.log('Setting placeholder profile image for tutee');
+          await apiClient.post(`/users/${user.user_id}/profile-image-placeholder`, {}, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`
+            }
+          });
+          console.log('Placeholder profile image set');
+        } catch (placeholderErr) {
+          console.error('Failed to set placeholder profile image:', placeholderErr);
+        }
+      }
+      
       setIsSubmitted(true);
     } catch (err: any) {
       console.error('Registration error:', err);
@@ -304,7 +387,7 @@ const TuteeRegistrationPage: React.FC = () => {
       
       if (typeof message === 'string' && message.toLowerCase().includes('email already registered')) {
         notify('Email already registered', 'error');
-      } else {
+    } else {
         notify(message, 'error');
       }
     }
@@ -317,8 +400,14 @@ const TuteeRegistrationPage: React.FC = () => {
           <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto" />
           <h2 className="text-3xl font-bold text-slate-800 mt-4">Registration Successful!</h2>
           <p className="text-slate-600 mt-2">
-            A verification link has been sent to <strong>{formData.email}</strong>. Please check your inbox to activate your account.
+          Your account is now active! You can log in with your credentials anytime.
           </p>
+          <button
+            onClick={() => navigate('/login')}
+            className="mt-8 w-full bg-sky-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-sky-700 transition-colors"
+          >
+            Proceed to Login
+          </button>
           <button
             onClick={() => navigate('/LandingPage')}
             className="mt-8 w-full bg-sky-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-sky-700 transition-colors"
@@ -347,23 +436,23 @@ const TuteeRegistrationPage: React.FC = () => {
               Email Verification
             </h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
                 <label className="block text-slate-700 font-semibold mb-2">University</label>
-                <select
+              <select
                   className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
-                  value={universityId} 
-                  onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')} 
-                  required
-                >
-                  <option value="">Select University</option>
-                  {universities.map(u => (
-                    <option key={u.university_id} value={u.university_id}>{u.name}</option>
-                  ))}
-                </select>
-              </div>
+                value={universityId}
+                onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')}
+                required
+              >
+                <option value="">Select University</option>
+                {universities.map(u => (
+                  <option key={u.university_id} value={u.university_id}>{u.name}</option>
+                ))}
+              </select>
+            </div>
               
-              <div>
+             <div>
                 <label className="block text-slate-700 font-semibold mb-2">Email Address</label>
                 <input 
                   type="email" 
@@ -606,7 +695,21 @@ const TuteeRegistrationPage: React.FC = () => {
               </select>
             </div>
           </div>
-          <button 
+          
+          {/* Profile Image Upload */}
+          <div className="mb-6">
+            <label className="block text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={handleProfileImageChange} 
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+            />
+            {profileImage && <p className="text-xs text-slate-500 mt-1">Selected: {profileImage.name}</p>}
+            <p className="text-xs text-slate-500 mt-1">Upload a photo of yourself (JPG, PNG, or other image formats)</p>
+          </div>
+          
+          <button  
             type="submit" 
             className={`mt-6 w-full font-bold py-3 px-6 rounded-lg transition-colors ${
               isEmailVerified 

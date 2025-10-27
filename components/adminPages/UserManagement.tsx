@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '../../services/api';
+import { getFileUrl } from '../../services/api';
 import { User, Payment, University } from '../../types';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
@@ -67,8 +68,8 @@ const UserManagement: React.FC = () => {
   };
 
   const handleResetPassword = async (userId: number) => {
-    const newPassword = prompt('Enter a new password (min 8 chars):');
-    if (!newPassword || newPassword.length < 8) return;
+    const newPassword = prompt('Enter a new password (min 7 chars):');
+    if (!newPassword || newPassword.length < 7) return;
     await apiClient.patch(`/users/${userId}/reset-password`, { newPassword });
     alert('Password reset successfully');
   };
@@ -189,15 +190,47 @@ const UserManagement: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {users.map((user) => (
                 <tr key={user.user_id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <div className="flex items-center">
+                      {user.profile_image_url ? (
+                        <img 
+                          src={getFileUrl(user.profile_image_url)} 
+                          alt={user.name}
+                          className="h-10 w-10 rounded-full mr-3 object-cover"
+                          onError={(e) => {
+                            const imgElement = e.target as HTMLImageElement;
+                            imgElement.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name) + '&background=random';
+                          }}
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full mr-3 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold">
+                          {user.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      {user.name}
+                    </div>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{user.role}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.university_name || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex flex-col space-y-1">
+                      {/* User Status */}
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${((user as any).status || 'active') === 'active' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>
                         {((user as any).status || 'active')}
                       </span>
+                      {/* Tutor Application Status (only for tutors) */}
+                      {(user.role as any) === 'tutor' && (user as any).tutor_profile && (
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          (user as any).tutor_profile.status === 'approved' 
+                            ? 'bg-green-100 text-green-800' 
+                            : (user as any).tutor_profile.status === 'rejected'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {(user as any).tutor_profile.status || 'pending'}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">

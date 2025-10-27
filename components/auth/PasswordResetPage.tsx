@@ -112,6 +112,8 @@ const PasswordResetPage: React.FC = () => {
     return null; // Will redirect to login
   }
 
+  const inputStyles = "mt-1 block w-full border border-slate-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-600 focus:border-primary-600 bg-white text-slate-900 focus:bg-slate-50 transition-colors duration-200";
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-sky-50 to-indigo-100 relative overflow-hidden">
       {/* Background Elements */}
@@ -299,7 +301,14 @@ const PasswordResetPage: React.FC = () => {
                             onChange={handleInputChange}
                             minLength={7}
                             maxLength={13}
-                            className="w-full pl-4 pr-10 py-3 bg-white/95 backdrop-blur-sm border-2 border-slate-200 rounded-lg focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all duration-300 placeholder-slate-400 font-medium shadow-lg hover:shadow-xl text-sm"
+                            // className="w-full pl-4 pr-10 py-3 bg-white/95 backdrop-blur-sm border-2 border-slate-200 rounded-lg focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all duration-300 placeholder-slate-400 font-medium shadow-lg hover:shadow-xl text-sm"
+                            className={`${inputStyles} pr-10 
+                              [&::-ms-reveal]:hidden 
+                              [&::-webkit-credentials-auto-fill-button]:!hidden 
+                              [&::-webkit-strong-password-auto-fill-button]:!hidden 
+                              [&::-webkit-credentials-auto-fill-button]:!hidden 
+                              [&::-webkit-strong-password-auto-fill-button]:!hidden`
+                            }
                             placeholder="Enter your new password"
                           />
                           <button
@@ -336,7 +345,14 @@ const PasswordResetPage: React.FC = () => {
                             onChange={handleInputChange}
                             minLength={7}
                             maxLength={13}
-                            className="w-full pl-4 pr-10 py-3 bg-white/95 backdrop-blur-sm border-2 border-slate-200 rounded-lg focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all duration-300 placeholder-slate-400 font-medium shadow-lg hover:shadow-xl text-sm"
+                            // className="w-full pl-4 pr-10 py-3 bg-white/95 backdrop-blur-sm border-2 border-slate-200 rounded-lg focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all duration-300 placeholder-slate-400 font-medium shadow-lg hover:shadow-xl text-sm"
+                            className={`${inputStyles} pr-10 
+                              [&::-ms-reveal]:hidden 
+                              [&::-webkit-credentials-auto-fill-button]:!hidden 
+                              [&::-webkit-strong-password-auto-fill-button]:!hidden 
+                              [&::-webkit-credentials-auto-fill-button]:!hidden 
+                              [&::-webkit-strong-password-auto-fill-button]:!hidden`
+                            }
                             placeholder="Confirm your new password"
                           />
                           <button
