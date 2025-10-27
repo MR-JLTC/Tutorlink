@@ -2,6 +2,8 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColum
 import { University } from './university.entity';
 import { Subject } from './subject.entity';
 import { User } from './user.entity';
+import { Student } from './student.entity';
+import { Tutor } from './tutor.entity';
 
 @Entity('courses')
 export class Course {
@@ -18,6 +20,9 @@ export class Course {
   @OneToMany(() => Subject, (subject) => subject.course)
   subjects: Subject[];
 
-  @OneToMany(() => User, (user) => user.course)
-  users: User[];
+  @OneToMany(() => Student, (student) => student.course)
+  students: Student[];
+
+  @OneToMany(() => Tutor, (tutor) => tutor.course)
+  tutors: Tutor[];
 }

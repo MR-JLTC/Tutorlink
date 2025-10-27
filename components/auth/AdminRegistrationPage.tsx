@@ -23,7 +23,6 @@ const RegistrationPage: React.FC = () => {
   const [universityId, setUniversityId] = useState<number | ''>('');
   const [emailDomainError, setEmailDomainError] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const [isEmailAlreadyVerified, setIsEmailAlreadyVerified] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
@@ -48,7 +47,6 @@ const RegistrationPage: React.FC = () => {
   useEffect(() => {
     if (!email) {
       setEmailDomainError(null);
-      setIsEmailAlreadyVerified(false);
       setIsEmailVerified(false);
       return;
     }
@@ -64,14 +62,12 @@ const RegistrationPage: React.FC = () => {
     const uni = universities.find(u => u.university_id === universityId);
     if (!uni) {
       setEmailDomainError(null);
-      setIsEmailAlreadyVerified(false);
       setIsEmailVerified(false);
       return;
     }
     const domain = email.split('@')[1] || '';
     if (!domain || domain.toLowerCase() !== uni.email_domain.toLowerCase()) {
       setEmailDomainError(`Email domain must be ${uni.email_domain}`);
-      setIsEmailAlreadyVerified(false);
       setIsEmailVerified(false);
     } else {
       setEmailDomainError(null);
@@ -82,22 +78,19 @@ const RegistrationPage: React.FC = () => {
 
   const checkEmailVerificationStatus = async (emailToCheck: string) => {
     if (!emailToCheck) {
-      setIsEmailAlreadyVerified(false);
+      setIsEmailVerified(false);
       return;
     }
 
     try {
-      const response = await apiClient.get(`/auth/email-verification/status?email=${encodeURIComponent(emailToCheck)}`);
+      const response = await apiClient.get(`/auth/email-verification/status?email=${encodeURIComponent(emailToCheck)}&user_type=admin`);
       if (response.data && response.data.is_verified === 1) {
-        setIsEmailAlreadyVerified(true);
         setIsEmailVerified(true);
       } else {
-        setIsEmailAlreadyVerified(false);
         setIsEmailVerified(false);
       }
     } catch (err) {
       // If API call fails, assume email is not verified
-      setIsEmailAlreadyVerified(false);
       setIsEmailVerified(false);
     }
   };
@@ -117,7 +110,10 @@ const RegistrationPage: React.FC = () => {
 
     try {
       console.log('Frontend: Sending verification code to:', email);
-      const response = await apiClient.post('/auth/email-verification/send-code', { email });
+      const response = await apiClient.post('/auth/email-verification/send-code', { 
+        email, 
+        user_type: 'admin' 
+      });
       console.log('Frontend: Verification code response:', response.data);
       
       if (response.data) {
@@ -145,9 +141,10 @@ const RegistrationPage: React.FC = () => {
 
     try {
       console.log('Frontend: Verifying code:', verificationCode);
-      const response = await apiClient.post('/auth/email-verification/verify-code', { 
-        email, 
-        code: verificationCode 
+      const response = await apiClient.post('/auth/email-verification/verify-code', {
+        email,
+        code: verificationCode,
+        user_type: 'admin'
       });
       console.log('Frontend: Verification response:', response.data);
       
@@ -194,7 +191,7 @@ const RegistrationPage: React.FC = () => {
     setError(null);
     setIsLoading(true);
     try {
-      await register({ name, email, password, ...(universityId ? { university_id: Number(universityId) } : {}) });
+      await register({ name, email, password, user_type: 'admin', ...(universityId ? { university_id: Number(universityId) } : {}) });
       // The register function in AuthContext handles navigation on success
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred during registration.');
@@ -310,13 +307,13 @@ const RegistrationPage: React.FC = () => {
               {/* Verification Status and Button */}
               <div className="mt-4 flex items-center justify-between">
                 <div className="flex items-center">
-                  {isEmailVerified || isEmailAlreadyVerified ? (
+                  {isEmailVerified ? (
                     <div className="flex items-center text-green-700">
                       <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       <span className="font-medium">
-                        {isEmailAlreadyVerified ? 'Email Already Verified!' : 'Email Verified Successfully!'}
+                        Email Verified Successfully!
                       </span>
                     </div>
                   ) : (
@@ -332,16 +329,16 @@ const RegistrationPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSendVerificationCode}
-                  disabled={!email || emailDomainError || isSendingCode || isEmailVerified || isEmailAlreadyVerified}
+                  disabled={!email || emailDomainError || isSendingCode || isEmailVerified}
                   className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform ${
-                    isEmailVerified || isEmailAlreadyVerified
+                    isEmailVerified
                       ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 
                       : !email || emailDomainError
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-lg hover:shadow-xl'
                   }`}
                   title={
-                    isEmailVerified || isEmailAlreadyVerified
+                    isEmailVerified
                       ? 'Email verified ✓' 
                       : !email 
                       ? 'Enter email first'
@@ -358,12 +355,12 @@ const RegistrationPage: React.FC = () => {
                       </svg>
                       Sending Code...
                     </div>
-                  ) : isEmailVerified || isEmailAlreadyVerified ? (
+                  ) : isEmailVerified ? (
                     <div className="flex items-center">
                       <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      {isEmailAlreadyVerified ? 'Already Verified ✓' : 'Verified ✓'}
+                      Verified ✓
                     </div>
                   ) : (
                     <div className="flex items-center">

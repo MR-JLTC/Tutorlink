@@ -30,6 +30,19 @@ async function bootstrap() {
     }
   }));
 
+  // Ensure user_profile_images folder exists and serve static files for user profile images
+  const userProfileImagesDir = join(process.cwd(), 'user_profile_images');
+  if (!fs.existsSync(userProfileImagesDir)) {
+    fs.mkdirSync(userProfileImagesDir, { recursive: true });
+  }
+  app.use('/user_profile_images', express.static(userProfileImagesDir, {
+    setHeaders: (res, path) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+  }));
+
   // Set a global prefix for all routes except the root path
   app.setGlobalPrefix('api', {
     exclude: ['/']

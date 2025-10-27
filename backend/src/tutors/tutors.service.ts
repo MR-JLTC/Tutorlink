@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tutor, User, TutorDocument, TutorAvailability, TutorSubject, TutorSubjectDocument, Subject, Course, University, SubjectApplication, SubjectApplicationDocument, BookingRequest } from '../database/entities';
@@ -43,8 +43,8 @@ export class TutorsService {
       where: { status: 'pending' },
       relations: [
         'user',
-        'user.university',
-        'user.course',
+        'university',
+        'course',
         'documents',
         'subjects',
         'subjects.subject',
@@ -67,7 +67,7 @@ export class TutorsService {
     if (status === 'approved') {
       const user = tutor.user;
       if (user) {
-        user.is_verified = true;
+        // user.is_verified = true; // Removed as is_verified is no longer on User entity
         await this.usersRepository.save(user);
       }
       
@@ -127,10 +127,10 @@ export class TutorsService {
     };
   }
 
-  async updateExistingUserToTutor(userId: number, data: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }): Promise<{ success: true; tutor_id: number }> {
+  async updateExistingUserToTutor(userId: number, data: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: number; gcash_number?: string }): Promise<{ success: true; tutor_id: number }> {
     const user = await this.usersRepository.findOne({ 
       where: { user_id: userId },
-      relations: ['tutor_profile']
+      relations: ['tutor_profile', 'tutor_profile.university', 'tutor_profile.course']
     });
     
     if (!user) {
@@ -141,73 +141,67 @@ export class TutorsService {
     if (data.full_name) {
       user.name = data.full_name;
     }
+    await this.usersRepository.save(user);
+
+    // Create or update tutor profile
+    let tutor = user.tutor_profile;
+    if (!tutor) {
+      tutor = this.tutorsRepository.create({ user: user });
+    }
+
     if (data.university_id) {
-      user.university_id = data.university_id;
+      const university = await this.universitiesRepository.findOne({ where: { university_id: data.university_id } });
+      if (!university) throw new BadRequestException('Invalid university ID');
+      tutor.university = university;
+      tutor.university_id = university.university_id;
     }
-    if (data.course_id) {
-      user.course_id = data.course_id;
-    }
-    if (data.course_name && !data.course_id) {
-      // Handle course name if no course_id provided
-      const uni = await this.universitiesRepository.findOne({ where: { university_id: data.university_id } });
+
+    let resolvedCourseId: number | null = data.course_id ?? null;
+    if (!resolvedCourseId && data.course_name && data.course_name.trim().length > 0) {
+      const uni = tutor.university || await this.universitiesRepository.findOne({ where: { university_id: tutor.university_id } });
       if (uni) {
         const existingCourse = await this.coursesRepository.findOne({ 
-          where: { course_name: data.course_name.trim(), university: { university_id: uni.university_id } as any }, 
+          where: { course_name: data.course_name.trim(), university: { university_id: uni.university_id } }, 
           relations: ['university'] 
         });
         if (existingCourse) {
-          user.course_id = existingCourse.course_id;
+          resolvedCourseId = existingCourse.course_id;
         } else {
           const newCourse = this.coursesRepository.create({ 
             course_name: data.course_name.trim(), 
             university: uni 
-          } as any);
-          const savedCourse = await this.coursesRepository.save(newCourse as any);
-          user.course_id = savedCourse.course_id;
+          });
+          const savedCourse = await this.coursesRepository.save(newCourse);
+          resolvedCourseId = savedCourse.course_id;
         }
       }
     }
-
-    // Save updated user
-    await this.usersRepository.save(user);
-
-    // Create or update tutor profile
-    let tutor;
-    if (user.tutor_profile) {
-      // Update existing tutor
-      tutor = user.tutor_profile;
-      if (data.bio !== undefined) {
-        tutor.bio = data.bio;
-      }
-      if (data.year_level !== undefined) {
-        tutor.year_level = data.year_level;
-      }
-      if (data.gcash_number !== undefined) {
-        tutor.gcash_number = data.gcash_number;
-      }
-      tutor.status = 'pending'; // Reset status to pending for re-application
-    } else {
-      // Create new tutor profile
-      tutor = this.tutorsRepository.create({
-        user: user,
-        bio: (data.bio || '').trim(),
-        status: 'pending',
-        profile_image_url: `/tutor_documents/tutorProfile_${user.user_id}`,
-        gcash_qr_url: `/tutor_documents/gcashQR_${user.user_id}`,
-        year_level: data.year_level || '',
-        gcash_number: data.gcash_number || '',
-      } as any);
+    if (resolvedCourseId) {
+      const course = await this.coursesRepository.findOne({ where: { course_id: resolvedCourseId } });
+      tutor.course = course;
+      tutor.course_id = course.course_id;
     }
+
+    if (data.bio !== undefined) {
+      tutor.bio = data.bio;
+    }
+    if (data.year_level !== undefined) {
+      tutor.year_level = Number(data.year_level); // Convert to number
+    }
+    if (data.gcash_number !== undefined) {
+      tutor.gcash_number = data.gcash_number;
+    }
+    tutor.status = 'pending'; // Reset status to pending for re-application
 
     const savedTutor = await this.tutorsRepository.save(tutor);
 
-    return { success: true, tutor_id: (savedTutor as any).tutor_id };
+    return { success: true, tutor_id: savedTutor.tutor_id };
   }
 
-  async updateTutor(tutorId: number, data: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }): Promise<{ success: true }> {
+  async updateTutor(tutorId: number, data: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: number; gcash_number?: string }): Promise<{ success: true }> {
     const tutor = await this.tutorsRepository.findOne({ 
       where: { tutor_id: tutorId },
-      relations: ['user']
+      relations: ['user', 'university', 'course']
     });
     
     if (!tutor) {
@@ -217,32 +211,40 @@ export class TutorsService {
     // Update user information
     if (data.full_name) {
       tutor.user.name = data.full_name;
+      await this.usersRepository.save(tutor.user);
     }
+
     if (data.university_id) {
-      tutor.user.university_id = data.university_id;
+      const university = await this.universitiesRepository.findOne({ where: { university_id: data.university_id } });
+      if (!university) throw new BadRequestException('Invalid university ID');
+      tutor.university = university;
+      tutor.university_id = university.university_id;
     }
-    if (data.course_id) {
-      tutor.user.course_id = data.course_id;
-    }
-    if (data.course_name && !data.course_id) {
-      // Handle course name if no course_id provided
-      const uni = await this.universitiesRepository.findOne({ where: { university_id: data.university_id } });
+
+    let resolvedCourseId: number | null = data.course_id ?? null;
+    if (!resolvedCourseId && data.course_name && data.course_name.trim().length > 0) {
+      const uni = tutor.university || await this.universitiesRepository.findOne({ where: { university_id: tutor.university_id } });
       if (uni) {
         const existingCourse = await this.coursesRepository.findOne({ 
-          where: { course_name: data.course_name.trim(), university: { university_id: uni.university_id } as any }, 
+          where: { course_name: data.course_name.trim(), university: { university_id: uni.university_id } }, 
           relations: ['university'] 
         });
         if (existingCourse) {
-          tutor.user.course_id = existingCourse.course_id;
+          resolvedCourseId = existingCourse.course_id;
         } else {
           const newCourse = this.coursesRepository.create({ 
             course_name: data.course_name.trim(), 
             university: uni 
-          } as any);
-          const savedCourse = await this.coursesRepository.save(newCourse as any);
-          tutor.user.course_id = savedCourse.course_id;
+          });
+          const savedCourse = await this.coursesRepository.save(newCourse);
+          resolvedCourseId = savedCourse.course_id;
         }
       }
+    }
+    if (resolvedCourseId) {
+      const course = await this.coursesRepository.findOne({ where: { course_id: resolvedCourseId } });
+      tutor.course = course;
+      tutor.course_id = course.course_id;
     }
 
     // Update tutor information
@@ -250,13 +252,12 @@ export class TutorsService {
       tutor.bio = data.bio;
     }
     if (data.year_level !== undefined) {
-      tutor.year_level = data.year_level;
+      tutor.year_level = Number(data.year_level); // Convert to number
     }
     if (data.gcash_number !== undefined) {
       tutor.gcash_number = data.gcash_number;
     }
 
-    await this.usersRepository.save(tutor.user);
     await this.tutorsRepository.save(tutor);
 
     return { success: true };
@@ -270,42 +271,52 @@ export class TutorsService {
 
     const hashed = await bcrypt.hash(data.password, 10);
 
-    // If no course_id but course_name provided, find or create the course under the university
+    // Declare variables once at the top of the function scope
     let resolvedCourseId: number | null = data.course_id ?? null;
-    if (!resolvedCourseId && data.course_name && data.course_name.trim().length > 0) {
-      const uni = await this.universitiesRepository.findOne({ where: { university_id: data.university_id as any } });
-      if (uni) {
-        const existingCourse = await this.coursesRepository.findOne({ where: { course_name: data.course_name.trim(), university: { university_id: uni.university_id } as any }, relations: ['university'] });
+    let universityEntity: University | undefined;
+    let courseEntity: Course | undefined;
+
+    if (data.university_id) {
+      universityEntity = await this.universitiesRepository.findOne({ where: { university_id: data.university_id } });
+      if (!universityEntity) {
+        throw new BadRequestException('Invalid university ID');
+      }
+    }
+    
+    if (!resolvedCourseId && data.course_name && data.course_name.trim().length > 0 && universityEntity) {
+        const existingCourse = await this.coursesRepository.findOne({ where: { course_name: data.course_name.trim(), university: { university_id: universityEntity.university_id } }, relations: ['university'] });
         if (existingCourse) {
           resolvedCourseId = existingCourse.course_id;
         } else {
-          const newCourse = this.coursesRepository.create({ course_name: data.course_name.trim(), university: uni } as any);
-          const savedCourse: Course = await this.coursesRepository.save(newCourse as any);
+          const newCourse = this.coursesRepository.create({ course_name: data.course_name.trim(), university: universityEntity });
+          const savedCourse: Course = await this.coursesRepository.save(newCourse);
           resolvedCourseId = savedCourse.course_id;
         }
-      }
     }
+
+    if (resolvedCourseId) {
+      courseEntity = await this.coursesRepository.findOne({ where: { course_id: resolvedCourseId } });
+    }
+
     const user = this.usersRepository.create({
       name: data.name && data.name.trim().length > 0 ? data.name : data.email.split('@')[0],
       email: data.email,
       password: hashed,
       user_type: 'tutor',
-      is_verified: false,
-      status: 'active' as any,
-      university_id: data.university_id as any,
-      course_id: (resolvedCourseId ?? null) as any,
+      status: 'active',
     });
-    const savedUser = await this.usersRepository.save(user);
+    const savedUser: User = await this.usersRepository.save(user);
 
     const tutor = this.tutorsRepository.create({
       user: savedUser,
       bio: (data.bio || '').trim(),
       status: 'pending',
-      profile_image_url: `/tutor_documents/tutorProfile_${savedUser.user_id}`,
       gcash_qr_url: `/tutor_documents/gcashQR_${savedUser.user_id}`,
-      year_level: data.year_level || '',
+      year_level: Number(data.year_level) || undefined,
       gcash_number: data.gcash_number || '',
-    } as any);
+      ...(universityEntity && { university: universityEntity, university_id: universityEntity.university_id }),
+      ...(courseEntity && { course: courseEntity, course_id: courseEntity.course_id }),
+    });
     const savedTutor = await this.tutorsRepository.save(tutor);
 
     return { success: true, user_id: savedUser.user_id, tutor_id: (savedTutor as any).tutor_id };
@@ -336,18 +347,24 @@ export class TutorsService {
     // If no file uploaded, create placeholder
     if (!file) {
       const userId = tutor.user.user_id;
-      const placeholderUrl = `/tutor_documents/tutorProfile_${userId}`;
-      await this.tutorsRepository.update({ tutor_id: tutor.tutor_id }, { profile_image_url: placeholderUrl });
+      const placeholderUrl = `/user_profile_images/userProfile_${userId}`;
+      await this.usersRepository.update({ user_id: userId }, { profile_image_url: placeholderUrl });
       return { success: true, profile_image_url: placeholderUrl };
     }
 
     // Rename the temporary file to the correct userId-based name
     const userId = tutor.user.user_id;
     const ext = path.extname(file.filename);
-    const newFilename = `tutorProfile_${userId}${ext}`;
-    const oldPath = path.join(process.cwd(), 'tutor_documents', file.filename);
-    const newPath = path.join(process.cwd(), 'tutor_documents', newFilename);
+    const newFilename = `userProfile_${userId}${ext}`;
+    const oldPath = path.join(process.cwd(), 'tutor_documents', file.filename); // Assuming temp upload goes to tutor_documents
+    const newPath = path.join(process.cwd(), 'user_profile_images', newFilename);
     
+    // Ensure the target directory exists
+    const targetDir = path.join(process.cwd(), 'user_profile_images');
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
     try {
       // Rename the file
       fs.renameSync(oldPath, newPath);
@@ -357,9 +374,9 @@ export class TutorsService {
       throw new Error('Failed to save profile image');
     }
 
-    // Update database with new file URL
-    const fileUrl = `/tutor_documents/${newFilename}`;
-    await this.tutorsRepository.update({ tutor_id: tutor.tutor_id }, { profile_image_url: fileUrl });
+    // Update database with new file URL on the User entity
+    const fileUrl = `/user_profile_images/${newFilename}`;
+    await this.usersRepository.update({ user_id: userId }, { profile_image_url: fileUrl });
 
     // Delete old profile image files AFTER new file is saved
     await this.deleteOldProfileImages(userId);
@@ -428,7 +445,7 @@ export class TutorsService {
   async saveSubjects(tutorId: number, subjectNames: string[]) {
     const tutor = await this.tutorsRepository.findOne({ where: { tutor_id: tutorId }, relations: ['user'] });
     if (!tutor) throw new Error('Tutor not found');
-    const userCourseId: number | undefined = (tutor.user as any)?.course_id;
+    const userCourseId: number | undefined = tutor.course_id;
 
     let courseEntity: Course | undefined;
     if (userCourseId) {
@@ -494,16 +511,17 @@ export class TutorsService {
   async getTutorId(userId: number): Promise<number> {
     console.log('Looking for tutor with user_id:', userId);
     
-    // Try to find tutor using the user_id directly in the tutors table
-    const tutor = await this.tutorsRepository
-      .createQueryBuilder('tutor')
-      .where('tutor.user_id = :userId', { userId })
-      .getOne();
+    const user = await this.usersRepository.findOne({
+      where: { user_id: userId },
+      relations: ['tutor_profile']
+    });
     
-    console.log('Found tutor:', tutor ? `tutor_id: ${tutor.tutor_id}` : 'null');
-    if (!tutor) throw new NotFoundException('Tutor not found');
+    if (!user || !user.tutor_profile) {
+      throw new NotFoundException('Tutor not found');
+    }
     
-    return tutor.tutor_id;
+    console.log('Found tutor profile for user:', user.tutor_profile.tutor_id);
+    return user.tutor_profile.tutor_id;
   }
 
   async getTutorProfile(userId: number) {
@@ -518,7 +536,7 @@ export class TutorsService {
     
     return {
       bio: tutor.bio,
-      profile_photo: tutor.profile_image_url,
+      profile_photo: tutor.user.profile_image_url,
       gcash_number: tutor.gcash_number || '',
       gcash_qr: tutor.gcash_qr_url || '',
       subjects: approvedSubjects.map(ts => ts.subject?.subject_name || ''),
@@ -810,20 +828,20 @@ export class TutorsService {
 
   // Helper method to delete old profile image files
   private async deleteOldProfileImages(userId: number) {
-    const tutor = await this.tutorsRepository.findOne({ where: { user: { user_id: userId } } });
-    if (!tutor) return;
+    const user = await this.usersRepository.findOne({ where: { user_id: userId } });
+    if (!user) return;
 
-    const tutorDocumentsPath = path.join(process.cwd(), 'tutor_documents');
+    const userProfileImagesPath = path.join(process.cwd(), 'user_profile_images');
     
     try {
-      // Get all files in the tutor_documents directory
-      const files = fs.readdirSync(tutorDocumentsPath);
+      // Get all files in the user_profile_images directory
+      const files = fs.readdirSync(userProfileImagesPath);
       
       // Find files that match the profile image pattern for this user
-      const profileImagePattern = new RegExp(`^tutorProfile_${userId}(\\..*)?$`);
+      const profileImagePattern = new RegExp(`^userProfile_${userId}(\\..*)?$`);
       const filesToDelete = files.filter(file => {
         const matchesPattern = profileImagePattern.test(file);
-        const isCurrentFile = tutor.profile_image_url && file === path.basename(tutor.profile_image_url);
+        const isCurrentFile = user.profile_image_url && file === path.basename(user.profile_image_url);
         return matchesPattern && !isCurrentFile; // Don't delete the current file
       });
       
@@ -831,7 +849,7 @@ export class TutorsService {
       
       // Delete each matching file
       for (const file of filesToDelete) {
-        const filePath = path.join(tutorDocumentsPath, file);
+        const filePath = path.join(userProfileImagesPath, file);
         try {
           if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
@@ -842,7 +860,7 @@ export class TutorsService {
         }
       }
     } catch (error) {
-      console.error('Error reading tutor_documents directory:', error);
+      console.error('Error reading user_profile_images directory:', error);
     }
   }
 

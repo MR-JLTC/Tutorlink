@@ -170,8 +170,8 @@ const TutorManagement: React.FC = () => {
                   <tr key={tutor.tutor_id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       <div className="flex items-center gap-3">
-                        {(tutor as any).profile_image_url ? (
-                          <img src={getFileUrl((tutor as any).profile_image_url)} alt="Tutor" className="h-8 w-8 rounded-full object-cover border" />
+                        {tutor.user?.profile_image_url ? (
+                          <img src={getFileUrl(tutor.user.profile_image_url)} alt="Tutor" className="h-8 w-8 rounded-full object-cover border" />
                         ) : (
                           <div className="h-8 w-8 rounded-full bg-slate-200 border" />
                         )}
@@ -217,8 +217,8 @@ const TutorManagement: React.FC = () => {
                     <tr key={tutorSubject.tutor_subject_id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <div className="flex items-center gap-3">
-                          {(tutorSubject.tutor as any)?.profile_image_url ? (
-                            <img src={getFileUrl((tutorSubject.tutor as any).profile_image_url)} alt="Tutor" className="h-8 w-8 rounded-full object-cover border" />
+                          {(tutorSubject.tutor.user as any)?.profile_image_url ? (
+                            <img src={getFileUrl((tutorSubject.tutor.user as any).profile_image_url)} alt="Tutor" className="h-8 w-8 rounded-full object-cover border" />
                           ) : (
                             <div className="h-8 w-8 rounded-full bg-slate-200 border" />
                           )}
@@ -274,12 +274,12 @@ const TutorManagement: React.FC = () => {
             {/* Content grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                {(selectedTutor as any).profile_image_url && (
+                {selectedTutor.user?.profile_image_url && (
                   <div>
                     <h4 className="font-semibold">Profile Image</h4>
                     <div className="mt-2">
                       <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
-                        <img src={getFileUrl((selectedTutor as any).profile_image_url)} alt="Tutor Profile" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
+                        <img src={getFileUrl(selectedTutor.user.profile_image_url)} alt="Tutor Profile" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
                       </div>
                     </div>
                   </div>

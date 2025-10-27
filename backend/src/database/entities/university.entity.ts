@@ -1,6 +1,9 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { User } from './user.entity';
 import { Course } from './course.entity';
+import { Admin } from './admin.entity';
+import { Student } from './student.entity';
+import { Tutor } from './tutor.entity';
 
 @Entity('universities')
 export class University {
@@ -23,8 +26,14 @@ export class University {
   })
   status: 'active' | 'inactive';
 
-  @OneToMany(() => User, (user) => user.university)
-  users: User[];
+  @OneToMany(() => Admin, (admin) => admin.university)
+  admins: Admin[];
+
+  @OneToMany(() => Student, (student) => student.university)
+  students: Student[];
+
+  @OneToMany(() => Tutor, (tutor) => tutor.university)
+  tutors: Tutor[];
 
   @OneToMany(() => Course, (course) => course.university)
   courses: Course[];

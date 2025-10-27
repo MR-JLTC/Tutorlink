@@ -16,3 +16,4 @@ export * from './subject-application.entity';
 export * from './subject-application-document.entity';
 export * from './booking-request.entity';
 export * from './password-reset-token.entity';
+export * from './email-verification-registry.entity';

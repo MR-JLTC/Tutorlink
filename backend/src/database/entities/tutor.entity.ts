@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, OneToMany, ManyToOne } from 'typeorm';
 import { User } from './user.entity';
 import { TutorDocument } from './tutor-document.entity';
 import { TutorSubject } from './tutor-subject.entity';
@@ -8,6 +8,8 @@ import { Payment } from './payment.entity';
 import { SubjectApplication } from './subject-application.entity';
 // AvailabilityChangeRequest entity removed
 import { BookingRequest } from './booking-request.entity';
+import { University } from './university.entity';
+import { Course } from './course.entity';
 
 @Entity('tutors')
 export class Tutor {
@@ -22,16 +24,27 @@ export class Tutor {
   bio: string;
 
   @Column({ nullable: true })
-  profile_image_url: string;
-
-  @Column({ nullable: true })
   gcash_qr_url: string;
 
   @Column({ nullable: true })
   gcash_number: string;
 
   @Column({ nullable: true })
-  year_level: string;
+  university_id: number;
+
+  @Column({ nullable: true })
+  course_id: number;
+
+  @Column({ nullable: true })
+  year_level: number; // Changed to number
+
+  @ManyToOne(() => University, (university) => university.tutors)
+  @JoinColumn({ name: 'university_id' })
+  university: University;
+
+  @ManyToOne(() => Course, (course) => course.tutors)
+  @JoinColumn({ name: 'course_id' })
+  course: Course;
 
   @Column({
     type: 'enum',

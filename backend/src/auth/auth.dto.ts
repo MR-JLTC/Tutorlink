@@ -17,6 +17,30 @@ export class RegisterDto {
   @IsOptional()
   @IsInt()
   university_id?: number;
+
+  @IsOptional()
+  @IsString()
+  user_type?: 'tutor' | 'tutee' | 'admin';
+
+  @IsOptional()
+  @IsInt()
+  year_level?: number; // Change to number
+
+  @IsOptional()
+  @IsInt()
+  course_id?: number;
+
+  @IsOptional()
+  @IsString()
+  course_name?: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+
+  @IsOptional()
+  @IsString()
+  gcash_number?: string;
 }
 
 export class LoginDto {

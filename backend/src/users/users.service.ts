@@ -23,11 +23,11 @@ export class UsersService {
   ) {}
 
   async findAll(): Promise<User[]> {
-    return this.usersRepository.find({ relations: ['university', 'admin_profile', 'tutor_profile'] });
+    return this.usersRepository.find({ relations: ['admin_profile', 'tutor_profile', 'student_profile', 'student_profile.university', 'student_profile.course', 'tutor_profile.university', 'tutor_profile.course'] });
   }
 
   async findOneById(id: number): Promise<User | undefined> {
-    return this.usersRepository.findOne({ where: { user_id: id } });
+    return this.usersRepository.findOne({ where: { user_id: id }, relations: ['admin_profile', 'tutor_profile', 'student_profile', 'student_profile.university', 'student_profile.course', 'tutor_profile.university', 'tutor_profile.course'] });
   }
 
   async findOneByEmail(email: string): Promise<User | undefined> {
@@ -35,17 +35,28 @@ export class UsersService {
   }
 
   async createAdmin(registerDto: RegisterDto): Promise<User> {
-    const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-    const newUser = this.usersRepository.create({
-      ...registerDto,
-      password: hashedPassword,
-      user_type: 'admin',
-      is_verified: true,
-    });
-    const savedUser = await this.usersRepository.save(newUser);
+    let university: University | undefined;
+    if (registerDto.university_id) {
+      university = await this.universitiesRepository.findOne({ where: { university_id: registerDto.university_id } });
+      if (!university) {
+        throw new BadRequestException('Invalid university ID');
+      }
+    }
 
-    // Create an admin profile for this user
-    const adminProfile = this.adminRepository.create({ user: savedUser });
+    const newUser = this.usersRepository.create({
+      name: registerDto.name,
+      email: registerDto.email,
+      password: registerDto.password,
+      user_type: 'admin',
+      status: 'active',
+    });
+    const savedUser: User = await this.usersRepository.save(newUser);
+
+    // Create an admin profile for this user and link university if provided
+    const adminProfile = this.adminRepository.create({ 
+      user: savedUser,
+      ...(university && { university: university, university_id: university.university_id }) // Link university to admin profile if exists
+    });
     await this.adminRepository.save(adminProfile);
     
     // Reload user with profile
@@ -59,6 +70,10 @@ export class UsersService {
 
   async findTutorProfile(userId: number): Promise<Tutor | null> {
     return this.tutorRepository.findOne({ where: { user: { user_id: userId } } });
+  }
+
+  async updatePassword(userId: number, hashedPassword: string): Promise<void> {
+    await this.usersRepository.update(userId, { password: hashedPassword });
   }
 
   async updateStatus(userId: number, status: 'active' | 'inactive'): Promise<User> {
@@ -107,20 +122,22 @@ export class UsersService {
     return { success: true };
   }
 
-  async createStudent(body: { name: string; email: string; password: string; university_id: number; course_id?: number; course_name?: string; year_level: number }): Promise<User> {
-    const hashed = await bcrypt.hash(body.password, 10);
+  async createStudent(body: RegisterDto): Promise<User> {
+    // Password is already hashed in AuthService.register(), so use it directly
+    console.log('=== CREATE STUDENT DEBUG ===');
+    console.log('Password already hashed:', body.password.startsWith('$2b$'));
 
     // Resolve course: either provided course_id or create/find by name under university
     let resolvedCourseId: number | null = body.course_id ?? null;
     if (!resolvedCourseId && body.course_name && body.course_name.trim().length > 0) {
-      const uni = await this.universitiesRepository.findOne({ where: { university_id: body.university_id as any } });
+      const uni = await this.universitiesRepository.findOne({ where: { university_id: body.university_id } });
       if (uni) {
-        const existingCourse = await this.coursesRepository.findOne({ where: { course_name: body.course_name.trim(), university: { university_id: uni.university_id } as any }, relations: ['university'] });
+        const existingCourse = await this.coursesRepository.findOne({ where: { course_name: body.course_name.trim(), university: { university_id: uni.university_id } }, relations: ['university'] });
         if (existingCourse) {
           resolvedCourseId = existingCourse.course_id;
         } else {
-          const newCourse = this.coursesRepository.create({ course_name: body.course_name.trim(), university: uni } as any);
-          const savedCourse: Course = await this.coursesRepository.save(newCourse as any);
+          const newCourse = this.coursesRepository.create({ course_name: body.course_name.trim(), university: uni });
+          const savedCourse: Course = await this.coursesRepository.save(newCourse);
           resolvedCourseId = savedCourse.course_id;
         }
       }
@@ -129,20 +146,95 @@ export class UsersService {
     const user = this.usersRepository.create({
       name: body.name,
       email: body.email,
-      password: hashed,
+      password: body.password, // Use the already hashed password
       user_type: 'tutee',
-      is_verified: false,
-      status: 'active' as any,
-      university_id: body.university_id as any,
-      course_id: (resolvedCourseId ?? null) as any,
-      year_level: body.year_level as any,
-    } as any);
-    const savedUser: User = await this.usersRepository.save(user as any as User);
+      status: 'active', // Assuming registration only happens after email is verified
+    });
+    const savedUser: User = await this.usersRepository.save(user);
+
+    // Resolve university and course for student profile
+    let university: University | undefined;
+    if (body.university_id) {
+      university = await this.universitiesRepository.findOne({ where: { university_id: body.university_id } });
+      if (!university) {
+        throw new BadRequestException('Invalid university ID');
+      }
+    }
+
+    let course: Course | undefined;
+    if (resolvedCourseId) {
+      course = await this.coursesRepository.findOne({ where: { course_id: resolvedCourseId } });
+    }
 
     // Create student profile
-    const student = this.studentRepository.create({ user: savedUser } as any);
-    await this.studentRepository.save(student as any);
+    const student = this.studentRepository.create({
+      user: savedUser,
+      year_level: body.year_level,
+      ...(university && { university: university, university_id: university.university_id }),
+      ...(course && { course: course, course_id: course.course_id }),
+    });
+    await this.studentRepository.save(student);
 
-    return (await this.findOneById(savedUser.user_id)) as User;
+    // Reload user with profile
+    return (await this.usersRepository.findOne({ where: { user_id: savedUser.user_id }, relations: ['student_profile', 'student_profile.university', 'student_profile.course'] })) as User;
+  }
+
+  async createTutor(body: RegisterDto): Promise<User> {
+    // Password is already hashed in AuthService.register(), so use it directly
+    console.log('=== CREATE TUTOR DEBUG ===');
+    console.log('Password already hashed:', body.password.startsWith('$2b$'));
+    
+    // Resolve course: either provided course_id or create/find by name under university
+    let resolvedCourseId: number | null = body.course_id ?? null;
+    if (!resolvedCourseId && body.course_name && body.course_name.trim().length > 0) {
+      const uni = await this.universitiesRepository.findOne({ where: { university_id: body.university_id } });
+      if (uni) {
+        const existingCourse = await this.coursesRepository.findOne({ where: { course_name: body.course_name.trim(), university: { university_id: uni.university_id } }, relations: ['university'] });
+        if (existingCourse) {
+          resolvedCourseId = existingCourse.course_id;
+        } else {
+          const newCourse = this.coursesRepository.create({ course_name: body.course_name.trim(), university: uni });
+          const savedCourse: Course = await this.coursesRepository.save(newCourse);
+          resolvedCourseId = savedCourse.course_id;
+        }
+      }
+    }
+
+    const user = this.usersRepository.create({
+      name: body.name,
+      email: body.email,
+      password: body.password, // Use the already hashed password
+      user_type: 'tutor',
+      status: 'active',
+    });
+    const savedUser: User = await this.usersRepository.save(user);
+
+    // Resolve university and course for tutor profile
+    let university: University | undefined;
+    if (body.university_id) {
+      university = await this.universitiesRepository.findOne({ where: { university_id: body.university_id } });
+      if (!university) {
+        throw new BadRequestException('Invalid university ID');
+      }
+    }
+
+    let course: Course | undefined;
+    if (resolvedCourseId) {
+      course = await this.coursesRepository.findOne({ where: { course_id: resolvedCourseId } });
+    }
+
+    // Create tutor profile
+    const tutor = this.tutorRepository.create({
+      user: savedUser,
+      bio: body.bio,
+      year_level: body.year_level,
+      gcash_number: body.gcash_number,
+      ...(university && { university: university, university_id: university.university_id }),
+      ...(course && { course: course, course_id: course.course_id }),
+    });
+    await this.tutorRepository.save(tutor);
+
+    // Reload user with profile
+    return (await this.usersRepository.findOne({ where: { user_id: savedUser.user_id }, relations: ['tutor_profile', 'tutor_profile.university', 'tutor_profile.course'] })) as User;
   }
 }

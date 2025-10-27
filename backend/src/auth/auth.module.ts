@@ -15,11 +15,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { User } from '../database/entities/user.entity';
 import { PasswordResetToken } from '../database/entities/password-reset-token.entity';
+import { EmailVerificationRegistry } from '../database/entities/email-verification-registry.entity';
 import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, PasswordResetToken]),
+    TypeOrmModule.forFeature([User, PasswordResetToken, EmailVerificationRegistry]),
     UsersModule,
     EmailModule,
     PassportModule,

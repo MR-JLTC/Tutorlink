@@ -28,19 +28,10 @@ export class User {
   })
   user_type: 'tutor' | 'tutee' | 'admin';
 
-  @Column({ default: false })
-  is_verified: boolean;
-
-  @Column({ nullable: true })
-  verification_code: string;
-
-  @Column({ type: 'datetime', nullable: true })
-  verification_expires: Date;
-
   @Column({
     type: 'enum',
     enum: ['active', 'inactive', 'pending_verification'],
-    default: 'pending_verification',
+    nullable: true,
   })
   status: 'active' | 'inactive' | 'pending_verification';
 
@@ -48,24 +39,11 @@ export class User {
   created_at: Date;
 
   @Column({ nullable: true })
-  university_id: number;
-
-  @Column({ nullable: true })
-  course_id: number;
-
-  @Column({ nullable: true })
   profile_image_url: string;
 
-  @Column({ nullable: true })
-  year_level: number;
+  // Removed university_id and course_id columns from User entity as they are profile-specific
 
-  @ManyToOne(() => University, (university) => university.users)
-  @JoinColumn({ name: 'university_id' })
-  university: University;
-
-  @ManyToOne(() => Course, (course) => course.users)
-  @JoinColumn({ name: 'course_id' })
-  course: Course;
+  // Removed ManyToOne and JoinColumn for university and course as they are profile-specific
 
   @OneToOne(() => Admin, (admin) => admin.user)
   admin_profile: Admin;

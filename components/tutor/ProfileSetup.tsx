@@ -50,7 +50,7 @@ const ProfileSetup: React.FC = () => {
     if (!tutorId) return;
     try {
       const response = await apiClient.get(`/tutors/${tutorId}/profile`);
-      setProfile(response.data);
+      setProfile(prev => ({ ...prev, ...response.data, profile_photo: response.data.profile_photo || user?.profile_image_url || '' }));
     } catch (error) {
       console.error('Failed to fetch profile:', error);
     }
@@ -93,6 +93,9 @@ const ProfileSetup: React.FC = () => {
         });
         // Update the profile photo URL immediately
         setProfile(prev => ({ ...prev, profile_photo: profileResponse.data.profile_image_url }));
+      } else if (user?.profile_image_url && !profileImage) {
+        // If no new image is selected and user already has one, keep it
+        setProfile(prev => ({ ...prev, profile_photo: user.profile_image_url }));
       }
 
       // Upload GCash QR if changed
@@ -218,7 +221,7 @@ const ProfileSetup: React.FC = () => {
             <div className="relative">
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
                 <img
-                  src={getFileUrl(profile.profile_photo)}
+                  src={profile.profile_photo ? getFileUrl(profile.profile_photo) : undefined}
                   alt="Profile"
                   className="w-full h-full object-cover"
                   style={{aspectRatio: '1/1'}}

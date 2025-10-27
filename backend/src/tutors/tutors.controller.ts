@@ -138,12 +138,12 @@ export class TutorsController {
 
   @Put(':tutorId')
   async updateTutor(@Param('tutorId') tutorId: string, @Body() body: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }) {
-    return this.tutorsService.updateTutor(+tutorId, body);
+    return this.tutorsService.updateTutor(+tutorId, { ...body, year_level: body.year_level ? Number(body.year_level) : undefined });
   }
 
   @Put('update-existing-user/:userId')
   async updateExistingUserToTutor(@Param('userId') userId: string, @Body() body: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }) {
-    return this.tutorsService.updateExistingUserToTutor(+userId, body);
+    return this.tutorsService.updateExistingUserToTutor(+userId, { ...body, year_level: body.year_level ? Number(body.year_level) : undefined });
   }
 
   @Get(':tutorId/status')

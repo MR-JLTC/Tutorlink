@@ -15,10 +15,9 @@ export class UsersController {
       user_id: u.user_id,
       name: u.name,
       email: u.email,
-      university_id: (u as any).university_id,
-      university_name: u.university?.name || 'N/A',
-      is_verified: u.is_verified,
-      status: (u as any).status,
+      university_id: u.student_profile?.university_id || u.tutor_profile?.university_id || null,
+      university_name: u.student_profile?.university?.name || u.tutor_profile?.university?.name || 'N/A',
+      status: u.status,
       created_at: u.created_at,
       // Simplified role for now. A real implementation would check the related tables (admin, tutor, student).
       role: u.admin_profile ? 'admin' : (u.tutor_profile ? 'tutor' : 'student')

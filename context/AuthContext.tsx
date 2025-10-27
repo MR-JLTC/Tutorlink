@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password?: string) => Promise<void>;
   loginTutorTutee: (email: string, password: string) => Promise<void>;
-  register: (details: { name: string; email: string; password?: string }) => Promise<void>;
+  register: (details: { name: string; email: string; password: string; university_id?: number }) => Promise<void>;
   logout: () => void;
 }
 
@@ -83,9 +83,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
   
-  const register = async (details: { name: string; email: string; password?: string }) => {
+  const register = async (details: { name: string; email: string; password: string; university_id?: number }) => {
     try {
-      const response = await apiClient.post('/auth/register', details);
+      const response = await apiClient.post('/auth/register', { ...details, user_type: 'admin' });
       handleAuthSuccess(response.data);
     } catch (err: any) {
       // Toast is shown globally by axios interceptor; avoid duplicate here

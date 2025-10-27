@@ -42,7 +42,7 @@ export class PasswordResetService {
     // Find user by email with explicit field selection
     const user = await this.userRepository.findOne({ 
       where: { email: trimmedEmail },
-      select: ['user_id', 'name', 'email', 'status', 'is_verified']
+      select: ['user_id', 'name', 'email', 'status']
     });
 
     // Debug: Check if user was found
@@ -67,7 +67,6 @@ export class PasswordResetService {
       name: user.name,
       email: user.email,
       status: user.status,
-      is_verified: user.is_verified
     });
     console.log('=== END DEBUG ===');
 
@@ -140,7 +139,7 @@ export class PasswordResetService {
     // Find user by email with explicit field selection
     const user = await this.userRepository.findOne({ 
       where: { email: trimmedEmail },
-      select: ['user_id', 'name', 'email', 'status', 'is_verified']
+      select: ['user_id', 'name', 'email', 'status']
     });
 
     // Debug: Check if user was found

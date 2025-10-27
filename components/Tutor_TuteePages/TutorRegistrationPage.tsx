@@ -40,7 +40,6 @@ const TutorRegistrationPage: React.FC = () => {
   const [gcashNumber, setGcashNumber] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const [isEmailAlreadyVerified, setIsEmailAlreadyVerified] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
@@ -117,21 +116,18 @@ const TutorRegistrationPage: React.FC = () => {
   useEffect(() => {
     if (!email || !universityId) {
       setEmailDomainError(null);
-      setIsEmailAlreadyVerified(false);
       setIsEmailVerified(false);
       return;
     }
     const uni = universities.find(u => u.university_id === universityId);
     if (!uni) {
       setEmailDomainError(null);
-      setIsEmailAlreadyVerified(false);
       setIsEmailVerified(false);
       return;
     }
     const domain = email.split('@')[1] || '';
     if (!domain || domain.toLowerCase() !== uni.email_domain.toLowerCase()) {
       setEmailDomainError(`Email domain must be ${uni.email_domain}`);
-      setIsEmailAlreadyVerified(false);
       setIsEmailVerified(false);
     } else {
       setEmailDomainError(null);
@@ -604,22 +600,19 @@ const TutorRegistrationPage: React.FC = () => {
 
   const checkEmailVerificationStatus = async (emailToCheck: string) => {
     if (!emailToCheck || !universityId) {
-      setIsEmailAlreadyVerified(false);
+      setIsEmailVerified(false);
       return;
     }
 
     try {
-      const response = await apiClient.get(`/auth/email-verification/status?email=${encodeURIComponent(emailToCheck)}`);
+      const response = await apiClient.get(`/auth/email-verification/status?email=${encodeURIComponent(emailToCheck)}&user_type=tutor`);
       if (response.data && response.data.is_verified === 1) {
-        setIsEmailAlreadyVerified(true);
         setIsEmailVerified(true);
       } else {
-        setIsEmailAlreadyVerified(false);
         setIsEmailVerified(false);
       }
     } catch (err) {
       // If API call fails, assume email is not verified
-      setIsEmailAlreadyVerified(false);
       setIsEmailVerified(false);
     }
   };
@@ -797,7 +790,10 @@ const TutorRegistrationPage: React.FC = () => {
 
     try {
       console.log('Frontend: Sending verification code to:', email);
-      const response = await apiClient.post('/auth/email-verification/send-code', { email });
+      const response = await apiClient.post('/auth/email-verification/send-code', { 
+        email, 
+        user_type: 'tutor' 
+      });
       console.log('Frontend: Verification code response:', response.data);
       
       if (response.data) {
@@ -827,7 +823,8 @@ const TutorRegistrationPage: React.FC = () => {
       console.log('Frontend: Verifying code:', verificationCode);
       const response = await apiClient.post('/auth/email-verification/verify-code', { 
         email, 
-        code: verificationCode 
+        code: verificationCode,
+        user_type: 'tutor'
       });
       console.log('Frontend: Verification response:', response.data);
       
@@ -885,7 +882,7 @@ const TutorRegistrationPage: React.FC = () => {
         course_id: courseId ? Number(courseId) : undefined,
         course_name: !courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined,
         bio,
-        year_level: yearLevel,
+        year_level: Number(yearLevel), // Convert to number
         gcash_number: gcashNumber,
         selectedSubjects: Array.from(selectedSubjects),
         uploadedFiles: uploadedFiles.length,
@@ -893,64 +890,29 @@ const TutorRegistrationPage: React.FC = () => {
         gcashQRImage: !!gcashQRImage
       });
 
-      // 1) Get existing user by email and update them
-      console.log('Step 1: Getting existing user by email...');
-      let tutorId;
+      // 1) Register the user as a tutor
+      console.log('Step 1: Registering new tutor user...');
+      const registerPayload = {
+        name: fullName.trim(),
+        email: email,
+        password: password,
+        user_type: 'tutor',
+        university_id: Number(universityId),
+        course_id: courseId ? Number(courseId) : undefined,
+        course_name: !courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined,
+        bio: bio,
+        year_level: Number(yearLevel), // Convert to number
+        gcash_number: gcashNumber,
+      };
+
+      const registrationResponse = await apiClient.post('/auth/register', registerPayload);
+      const newTutorId = registrationResponse.data.user.tutor_profile?.tutor_id;
       
-      try {
-        // Get existing user by email
-        const existingUserRes = await apiClient.get(`/tutors/by-email/${encodeURIComponent(email)}`);
-        const userId = existingUserRes.data?.user_id;
-        const userType = existingUserRes.data?.user_type;
-        
-        if (!userId) throw new Error('Could not find existing user ID');
-        console.log('Existing User ID:', userId, 'User Type:', userType);
-        
-        // Update existing user and create/update tutor profile
-        console.log('Updating existing user to tutor...');
-        const updateRes = await apiClient.put(`/tutors/update-existing-user/${userId}`, {
-          full_name: fullName.trim(),
-          university_id: Number(universityId),
-          course_id: courseId ? Number(courseId) : undefined,
-          course_name: !courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined,
-          bio,
-          year_level: yearLevel,
-          gcash_number: gcashNumber,
-        });
-        
-        tutorId = updateRes.data?.tutor_id;
-        if (!tutorId) throw new Error('Could not get tutor ID after update');
-        console.log('Updated Tutor ID:', tutorId);
-        
-        // Clear existing data before adding new data
-        console.log('Clearing existing tutor data...');
-        try {
-          // Clear existing documents
-          await apiClient.delete(`/tutors/${tutorId}/documents`);
-          console.log('Existing documents cleared');
-        } catch (clearError) {
-          console.log('No existing documents to clear or error clearing:', clearError);
-        }
-        
-        try {
-          // Clear existing subjects
-          await apiClient.delete(`/tutors/${tutorId}/subjects`);
-          console.log('Existing subjects cleared');
-        } catch (clearError) {
-          console.log('No existing subjects to clear or error clearing:', clearError);
-        }
-        
-        try {
-          // Clear existing availability
-          await apiClient.delete(`/tutors/${tutorId}/availability`);
-          console.log('Existing availability cleared');
-        } catch (clearError) {
-          console.log('No existing availability to clear or error clearing:', clearError);
-        }
-      } catch (error: any) {
-        console.error('Error updating existing user:', error);
-        throw new Error('Could not find or update existing user account. Please contact support.');
-      }
+      if (!newTutorId) throw new Error('Could not get tutor ID after registration');
+      console.log('New Tutor User Registered with ID:', newTutorId);
+
+      // Use newTutorId for subsequent steps
+      const tutorId = newTutorId;
 
       // 2) Upload profile image (optional) or set placeholder
       console.log('Step 2: Handling profile image...');
@@ -1085,7 +1047,7 @@ const TutorRegistrationPage: React.FC = () => {
                   )}
                   {emailDomainError && <p className="text-sm text-red-600 mt-2 flex items-center">
                     <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 000 16zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                     {emailDomainError}
                   </p>}
@@ -1110,13 +1072,13 @@ const TutorRegistrationPage: React.FC = () => {
               {/* Verification Status and Button */}
               <div className="mt-4 flex items-center justify-between">
                 <div className="flex items-center">
-                  {isEmailVerified || isEmailAlreadyVerified ? (
+                  {isEmailVerified ? (
                     <div className="flex items-center text-green-700">
                       <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       <span className="font-medium">
-                        {isEmailAlreadyVerified ? 'Email Already Verified!' : 'Email Verified Successfully!'}
+                        Email Verified Successfully!
                       </span>
                     </div>
                   ) : (
@@ -1132,16 +1094,16 @@ const TutorRegistrationPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSendVerificationCode}
-                  disabled={!email || !universityId || emailDomainError || isSendingCode || isEmailVerified || isEmailAlreadyVerified}
+                  disabled={!email || !universityId || emailDomainError || isSendingCode || isEmailVerified}
                   className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform ${
-                    isEmailVerified || isEmailAlreadyVerified
+                    isEmailVerified
                       ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 
                       : !email || !universityId || emailDomainError
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-lg hover:shadow-xl'
                   }`}
                   title={
-                    isEmailVerified || isEmailAlreadyVerified
+                    isEmailVerified
                       ? 'Email verified ✓' 
                       : !email || !universityId 
                       ? 'Enter email and select university first'
@@ -1158,12 +1120,12 @@ const TutorRegistrationPage: React.FC = () => {
                       </svg>
                       Sending Code...
                     </div>
-                  ) : isEmailVerified || isEmailAlreadyVerified ? (
+                  ) : isEmailVerified ? (
                     <div className="flex items-center">
                       <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      {isEmailAlreadyVerified ? 'Already Verified ✓' : 'Verified ✓'}
+                      Verified ✓
                     </div>
                   ) : (
                     <div className="flex items-center">
@@ -1285,11 +1247,11 @@ const TutorRegistrationPage: React.FC = () => {
                 required
               >
                 <option value="">Select Year Level</option>
-                <option value="1st Year">1st Year</option>
-                <option value="2nd Year">2nd Year</option>
-                <option value="3rd Year">3rd Year</option>
-                <option value="4th Year">4th Year</option>
-                <option value="5th Year">5th Year</option>
+                <option value="1">1st Year</option>
+                <option value="2">2nd Year</option>
+                <option value="3">3rd Year</option>
+                <option value="4">4th Year</option>
+                <option value="5">5th Year</option>
                 {/* <option value="Graduate">Graduate</option>
                 <option value="Post-Graduate">Post-Graduate</option> */}
               </select>
