@@ -31,6 +31,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     console.log('=== END JWT VALIDATION DEBUG ===');
     
     // The returned value will be attached to the request object as `req.user`
-    return { userId: payload.sub, email: payload.email, name: payload.name };
+    // Use `user_id` to match the rest of the codebase which expects req.user.user_id
+    return { user_id: payload.sub, email: payload.email, name: payload.name };
   }
 }

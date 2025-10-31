@@ -495,6 +495,92 @@ export class TutorsService {
 
   // New methods for tutor dashboard functionality
 
+  async createBookingRequest(tutorId: number, studentUserId: number, data: { subject: string; date: string; time: string; duration: number; student_notes?: string }) {
+    const tutor = await this.tutorsRepository.findOne({ where: { tutor_id: tutorId } });
+    if (!tutor) throw new NotFoundException('Tutor not found');
+
+    const student = await this.usersRepository.findOne({ where: { user_id: studentUserId } });
+    if (!student) throw new NotFoundException('Student not found');
+
+    // Basic validation
+    if (!data.subject || !data.date || !data.time || !data.duration) {
+      throw new BadRequestException('Missing required booking fields');
+    }
+
+    // Parse requested start and end times (in minutes since midnight)
+    const parseTimeToMinutes = (t: string) => {
+      // Accept formats like HH:MM or HH:MM:SS
+      const parts = t.split(':').map(p => parseInt(p, 10));
+      if (isNaN(parts[0])) return NaN;
+      const minutes = (parts[0] || 0) * 60 + (parts[1] || 0);
+      return minutes;
+    };
+
+    const requestedStart = parseTimeToMinutes(data.time);
+    const requestedEnd = requestedStart + Math.round(Number(data.duration) * 60);
+    if (isNaN(requestedStart) || requestedStart < 0) throw new BadRequestException('Invalid time format');
+
+    // Check tutor availability for the requested day
+    const requestedDate = new Date(data.date);
+    if (isNaN(requestedDate.getTime())) throw new BadRequestException('Invalid date');
+    const dowMap = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeek = dowMap[requestedDate.getDay()];
+
+    const availabilities = await this.availabilityRepository.find({ where: { tutor: { tutor_id: tutor.tutor_id } as any } });
+    const availForDay = availabilities.filter(a => (a.day_of_week || '').toLowerCase() === dayOfWeek.toLowerCase());
+    if (!availForDay || availForDay.length === 0) {
+      throw new BadRequestException('Tutor has no availability on the requested day');
+    }
+
+    // Ensure requested slot fits within at least one availability slot
+    const fitsInAvailability = availForDay.some(a => {
+      const aStart = parseTimeToMinutes(a.start_time as any);
+      const aEnd = parseTimeToMinutes(a.end_time as any);
+      if (isNaN(aStart) || isNaN(aEnd)) return false;
+      return requestedStart >= aStart && requestedEnd <= aEnd;
+    });
+    if (!fitsInAvailability) {
+      throw new BadRequestException('Requested time is outside tutor availability');
+    }
+
+    // Check for booking conflicts on the same date for this tutor
+    const existing = await this.bookingRequestRepository.find({ where: { tutor: { tutor_id: tutor.tutor_id } as any, date: requestedDate } });
+    const blockingStatuses = ['pending', 'accepted', 'awaiting_payment', 'confirmed'];
+    const hasConflict = existing.some((e: any) => {
+      if (!blockingStatuses.includes(e.status)) return false;
+      const eStart = parseTimeToMinutes(e.time as any);
+      const eEnd = eStart + Math.round(Number(e.duration) * 60);
+      // overlap if start < otherEnd && otherStart < end
+      return requestedStart < eEnd && eStart < requestedEnd;
+    });
+    if (hasConflict) {
+      throw new BadRequestException('Requested time conflicts with an existing booking');
+    }
+
+    const entity = this.bookingRequestRepository.create({
+      tutor,
+      student,
+      subject: data.subject,
+      date: requestedDate,
+      time: data.time,
+      duration: Number(data.duration),
+      student_notes: data.student_notes || null,
+      status: 'pending',
+    } as any);
+
+    const saved = await this.bookingRequestRepository.save(entity as any);
+    console.log(`createBookingRequest: saved booking id=${(saved as any).id} tutor_id=${tutor.tutor_id} tutor_user_id=${(tutor.user as any)?.user_id} student_user_id=${(student as any)?.user_id}`);
+    return { success: true, bookingId: (saved as any).id };
+  }
+
+  async getStudentBookingRequests(studentUserId: number) {
+    const student = await this.usersRepository.findOne({ where: { user_id: studentUserId } });
+    if (!student) throw new NotFoundException('Student not found');
+
+    const requests = await this.bookingRequestRepository.find({ where: { student: { user_id: studentUserId } as any }, relations: ['tutor', 'tutor.user'], order: { created_at: 'DESC' } });
+    return requests;
+  }
+
   async getTutorStatus(userId: number) {
     const tutor = await this.tutorsRepository.findOne({ 
       where: { user: { user_id: userId } },
@@ -525,10 +611,17 @@ export class TutorsService {
   }
 
   async getTutorProfile(userId: number) {
-    const tutor = await this.tutorsRepository.findOne({ 
-      where: { user: { user_id: userId } },
+    // Accept either tutor_id or user.user_id
+    let tutor = await this.tutorsRepository.findOne({ 
+      where: { tutor_id: userId as any },
       relations: ['user', 'subjects', 'subjects.subject']
     });
+    if (!tutor) {
+      tutor = await this.tutorsRepository.findOne({ 
+        where: { user: { user_id: userId } },
+        relations: ['user', 'subjects', 'subjects.subject']
+      });
+    }
     if (!tutor) throw new NotFoundException('Tutor not found');
     
     // Filter only approved subjects
@@ -560,12 +653,19 @@ export class TutorsService {
   }
 
   async getTutorAvailability(userId: number) {
-    const tutor = await this.tutorsRepository.findOne({ 
-      where: { user: { user_id: userId } },
+    // Accept either tutor_id or user.user_id
+    let tutor = await this.tutorsRepository.findOne({ 
+      where: { tutor_id: userId as any },
       relations: ['user']
     });
+    if (!tutor) {
+      tutor = await this.tutorsRepository.findOne({ 
+        where: { user: { user_id: userId } },
+        relations: ['user']
+      });
+    }
     if (!tutor) throw new NotFoundException('Tutor not found');
-    
+
     const availabilities = await this.availabilityRepository.find({
       where: { tutor: { tutor_id: tutor.tutor_id } as any }
     });
@@ -761,17 +861,25 @@ export class TutorsService {
   // Availability change request feature removed
 
   async getBookingRequests(userId: number) {
-    const tutor = await this.tutorsRepository.findOne({ 
-      where: { user: { user_id: userId } },
-      relations: ['user']
-    });
-    if (!tutor) throw new NotFoundException('Tutor not found');
-    
+    // Accept either tutor_id or user.user_id
+    let tutor = await this.tutorsRepository.findOne({ where: { tutor_id: userId as any } });
+    if (!tutor) {
+      tutor = await this.tutorsRepository.findOne({ 
+        where: { user: { user_id: userId } },
+        relations: ['user']
+      });
+    }
+    if (!tutor) {
+      console.warn(`getBookingRequests: Tutor not found for id/user_id=${userId}`);
+      throw new NotFoundException('Tutor not found');
+    }
+
     const requests = await this.bookingRequestRepository.find({
       where: { tutor: { tutor_id: tutor.tutor_id } as any },
       relations: ['student'],
       order: { created_at: 'DESC' }
     });
+    console.log(`getBookingRequests: found ${requests.length} requests for tutor_id=${tutor.tutor_id}`);
     return requests;
   }
 

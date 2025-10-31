@@ -22,7 +22,10 @@ const Header: React.FC<HeaderProps> = ({ onNavigate }) => {
           aria-label="Back to Home"
         >
           <ChevronLeftIcon className="w-6 h-6 transform transition-transform group-hover:-translate-x-1" />
-          <Logo className="h-10 w-auto" />
+            <div className="flex items-center gap-3">
+            <Logo className="h-10 w-auto" />
+            <span className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">TutorLink</span>
+          </div>
         </button>
       </div>
     </header>

@@ -4,12 +4,14 @@ import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { UsersService } from './users.service';
+import { TutorsService } from '../tutors/tutors.service';
+import { Req } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService, private readonly tutorsService: TutorsService) {}
 
   @Get()
   async findAll() {
@@ -158,5 +160,16 @@ export class UsersController {
       message: 'Placeholder profile image set successfully',
       profile_image_url: null 
     };
+  }
+
+  @Get('me/bookings')
+  async getMyBookings(@Req() req: any) {
+    const userId = req.user?.user_id;
+    return this.tutorsService.getStudentBookingRequests(userId);
+  }
+
+  @Get(':id/bookings')
+  async getBookingsForUser(@Param('id') id: string) {
+    return this.tutorsService.getStudentBookingRequests(+id);
   }
 }

@@ -9,6 +9,7 @@ import { RefreshCw, Ban, FileText, Edit, Trash2 } from 'lucide-react';
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<(User & { university_name?: string })[]>([]);
+  const [userTypeFilter, setUserTypeFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
@@ -174,6 +175,23 @@ const UserManagement: React.FC = () => {
   return (
     <div>
       <h1 className="text-3xl font-bold text-slate-800 mb-6">User Management</h1>
+
+      {/* User Type Filter */}
+      <div className="mb-4 flex items-center gap-2">
+        <label htmlFor="user-type-filter" className="text-sm font-medium text-slate-700">Filter by User Type:</label>
+        <select
+          id="user-type-filter"
+          className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+          value={userTypeFilter}
+          onChange={e => setUserTypeFilter(e.target.value)}
+        >
+          <option value="all">All</option>
+          <option value="admin">Admin</option>
+          <option value="tutor">Tutor</option>
+          <option value="student">Tutee</option>
+        </select>
+      </div>
+
       <Card>
         <div className="overflow-x-auto">
           <table className="min-w-full table-auto divide-y divide-gray-200">
@@ -188,7 +206,9 @@ const UserManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
+              {users
+                .filter(user => userTypeFilter === 'all' ? true : (user.role === userTypeFilter))
+                .map((user) => (
                 <tr key={user.user_id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     <div className="flex items-center">
@@ -235,13 +255,16 @@ const UserManagement: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                     <div className="inline-flex items-center gap-2">
-                      <button className="text-slate-700 hover:text-slate-900" title="Edit" onClick={() => openEdit(user)}>
+                      {/* Edit button - green */}
+                      <button className="text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 border border-green-200 rounded px-2 py-1 transition-colors" title="Edit" onClick={() => openEdit(user)}>
                         <Edit className="inline h-4 w-4" />
                       </button>
-                      <button className="text-slate-700 hover:text-slate-900 disabled:opacity-50" title="Reset Password" onClick={() => handleResetPassword(user.user_id)} disabled={updatingUserId === user.user_id}>
+                      {/* Reset password button - blue */}
+                      <button className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-2 py-1 transition-colors disabled:opacity-50" title="Reset Password" onClick={() => handleResetPassword(user.user_id)} disabled={updatingUserId === user.user_id}>
                         <RefreshCw className="inline h-4 w-4" />
                       </button>
-                      <button className="text-slate-700 hover:text-slate-900 disabled:opacity-50" title="Toggle Active" onClick={() => handleStatusToggle(user.user_id, ((user as any).status || 'active'))} disabled={updatingUserId === user.user_id}>
+                      {/* Deactivate/activate button - red */}
+                      <button className="text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 rounded px-2 py-1 transition-colors disabled:opacity-50" title="Toggle Active" onClick={() => handleStatusToggle(user.user_id, ((user as any).status || 'active'))} disabled={updatingUserId === user.user_id}>
                         <Ban className="inline h-4 w-4" />
                       </button>
                       {/* <button className="text-red-600 hover:text-red-700" title="Delete" onClick={() => deleteUser(user.user_id)}>

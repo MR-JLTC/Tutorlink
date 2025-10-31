@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../../components/Logo';
 import Modal from '../../components/ui/Modal';
+import * as TutorRegistrationModule from './TutorRegistrationPage';
 
 // New icons for "How it works" section
 const MagnifyingGlassIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -191,8 +192,13 @@ const LandingPage: React.FC = () => {
   const [termsOpen, setTermsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('');
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isTutorModalOpen, setIsTutorModalOpen] = useState(false);
 
   const handleNavigate = (path: string) => {
+    if (path === '/TutorRegistrationPage') {
+      setIsTutorModalOpen(true);
+      return;
+    }
     navigate(path);
   };
 
@@ -207,7 +213,7 @@ const LandingPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="bg-white text-slate-800 antialiased"> {/* Added antialiased for smoother fonts */}
+    <div className="bg-white text-slate-800 antialiased min-h-screen flex flex-col"> {/* Added antialiased for smoother fonts */}
       <header className={`relative py-3 px-4 sm:px-6 md:px-10 sticky top-0 z-50 transition-all duration-300 ${
         isScrolled 
           ? 'bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-lg' 
@@ -373,15 +379,15 @@ const LandingPage: React.FC = () => {
 
       <main>
         {/* Hero Section */}
-        <section className="px-6 sm:px-8 md:px-16 py-16 md:py-24 grid md:grid-cols-2 gap-12 md:gap-16 items-center min-h-[80vh]">
+        <section className="px-3 sm:px-5 md:px-8 lg:px-16 py-3 md:py-5 xl:py-8 grid md:grid-cols-2 gap-8 md:gap-14 items-center min-h-[80vh] max-w-7xl mx-auto w-full">
           <div className="hero-text text-center md:text-left space-y-6">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 leading-tight">
+            <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 leading-tight break-words">
               Connecting Students with <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-indigo-600">Tutors</span> <br className="hidden sm:inline" /> for Success.
             </h1>
-            <p className="mt-6 text-lg md:text-xl text-slate-600 max-w-lg mx-auto md:mx-0 leading-relaxed">
+            <p className="mt-4 md:mt-6 text-base sm:text-lg md:text-xl text-slate-600 max-w-lg mx-auto md:mx-0 leading-relaxed">
               Find the perfect local tutor to help you excel in any subject. Personalized learning, simplified.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 mt-10">
+            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 lg:gap-8 mt-7 md:mt-10">
               <button 
                 className="bg-sky-600 text-white font-bold py-3.5 px-10 rounded-lg shadow-xl hover:bg-sky-700 transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1 hover:shadow-2xl"
                 onClick={() => setIsModalOpen(true)}
@@ -396,14 +402,14 @@ const LandingPage: React.FC = () => {
               </button>
             </div>
           </div>
-          <div className="hero-image h-64 sm:h-80 md:h-96 lg:h-[500px] rounded-2xl overflow-hidden relative shadow-2xl border-4 border-white"> {/* Enhanced shadow and border */}
+          <div className="hero-image aspect-[1.4/1] h-56 xs:h-72 sm:h-80 md:h-96 lg:h-[500px] rounded-2xl overflow-hidden relative shadow-2xl border-4 border-white w-full max-w-[600px] mx-auto md:mx-0"> {/* Enhanced shadow and border */}
             <HeroImageSlider />
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
           </div>
         </section>
 
         {/* Features Section (with live stats) */}
-        <section id="features" className="bg-gradient-to-br from-slate-50 to-blue-50 px-6 sm:px-8 md:px-16 py-20 md:py-28">
+        <section id="features" className="bg-gradient-to-br from-slate-50 to-blue-50 px-3 sm:px-8 md:px-12 lg:px-20 py-14 md:py-20 xl:py-28 w-full">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6">Powerful Features for Everyone</h2>
@@ -411,7 +417,7 @@ const LandingPage: React.FC = () => {
             </div>
 
             {/* Live Stats from DB */}
-            <LiveStats />
+            <div className="overflow-x-auto"><LiveStats /></div>
 
             {/* Student Features */}
             <div className="mb-20">
@@ -419,7 +425,7 @@ const LandingPage: React.FC = () => {
                 <h3 className="text-3xl font-bold text-sky-600 mb-4">For Students</h3>
                 <p className="text-lg text-slate-600">Everything you need to find the perfect tutor and excel in your studies</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                 <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
                   <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
                     <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -488,7 +494,7 @@ const LandingPage: React.FC = () => {
                 <h3 className="text-3xl font-bold text-indigo-600 mb-4">For Tutors</h3>
                 <p className="text-lg text-slate-600">Share your expertise and build a successful tutoring business</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
                 <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
                   <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-indigo-200 transition-colors">
                     <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -554,13 +560,13 @@ const LandingPage: React.FC = () => {
         </section>
 
         {/* How It Works Section */}
-        <section id="how-it-works" className="bg-white px-6 sm:px-8 md:px-16 py-20 md:py-28">
+        <section id="how-it-works" className="bg-white px-3 sm:px-8 md:px-16 py-14 md:py-20 xl:py-28 w-full">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6">How It Works</h2>
               <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">Getting academic help is easier than ever. Follow these simple steps to connect with your ideal tutor.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 md:gap-8">
               <div className="text-center p-8 bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl shadow-lg border border-sky-100 transform hover:scale-105 transition-all duration-300 group">
                 <div className="flex items-center justify-center h-20 w-20 rounded-full bg-gradient-to-br from-sky-500 to-sky-600 text-white mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow">
                   <MagnifyingGlassIcon className="w-10 h-10" />
@@ -587,7 +593,7 @@ const LandingPage: React.FC = () => {
         </section>
 
         {/* Contact Section */}
-        <section id="contact" className="bg-gradient-to-br from-slate-900 to-slate-800 px-6 sm:px-8 md:px-16 py-20 md:py-28">
+        <section id="contact" className="bg-gradient-to-br from-slate-900 to-slate-800 px-3 sm:px-8 md:px-16 py-14 md:py-20 xl:py-28 w-full">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl sm:text-5xl font-bold text-white mb-6">Get in Touch</h2>
@@ -642,12 +648,12 @@ const LandingPage: React.FC = () => {
         </section>
       </main>
 
-      <footer className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-300 py-12 px-8 overflow-hidden">
+      <footer className="relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-300 py-8 sm:py-12 px-3 sm:px-8 overflow-hidden w-full mt-auto">
         {/* Background pattern overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-sky-900/10 via-transparent to-indigo-900/10 pointer-events-none"></div>
         <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-sky-500/30 to-transparent"></div>
         <div className="max-w-6xl mx-auto relative">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-6 sm:mb-8">
             <div>
               <div className="flex items-center mb-4 space-x-3">
                 <Logo className="h-14 w-14 object-contain" style={{aspectRatio: '1/1'}} />
@@ -784,7 +790,7 @@ const LandingPage: React.FC = () => {
             </div>
           </Modal>
           
-          <div className="border-t border-gradient-to-r from-transparent via-slate-600 to-transparent pt-10 text-center relative">
+          <div className="border-t border-gradient-to-r from-transparent via-slate-600 to-transparent pt-7 sm:pt-10 text-center relative">
             <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-24 h-px bg-gradient-to-r from-transparent via-sky-500 to-transparent"></div>
             <p className="text-slate-400 text-base font-medium">&copy; {new Date().getFullYear()} TutorLink. All rights reserved.</p>
             <p className="text-slate-500 text-sm mt-2">Empowering education through technology</p>
@@ -793,6 +799,8 @@ const LandingPage: React.FC = () => {
       </footer>
       
       <RoleSelectionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onNavigate={handleNavigate} />
+      {/** Using default export to ensure compatibility */}
+      {React.createElement((TutorRegistrationModule as any).default, { isOpen: isTutorModalOpen, onClose: () => setIsTutorModalOpen(false) })}
     </div>
   );
 };

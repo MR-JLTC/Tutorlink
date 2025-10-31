@@ -28,16 +28,51 @@ const SessionHandling: React.FC = () => {
 
   useEffect(() => {
     if (user?.user_id) {
-      setTutorId(user.user_id);
-      fetchBookingRequests();
+      // Resolve actual tutor_id for this user (tutor_id may differ from user_id)
+      const resolveTutorIdAndFetch = async () => {
+        try {
+          const res = await apiClient.get(`/tutors/by-user/${user.user_id}/tutor-id`);
+          const resolved = res.data?.tutor_id;
+          if (resolved) {
+            console.log('Resolved tutor_id for user', user.user_id, '->', resolved);
+            setTutorId(resolved);
+            await fetchBookingRequests(resolved);
+            return;
+          }
+        } catch (err) {
+          console.warn('Failed to resolve tutor id for user', user.user_id, err);
+        }
+        // Fallback to using user.user_id if resolver fails
+        setTutorId(user.user_id);
+        await fetchBookingRequests(user.user_id);
+      };
+      resolveTutorIdAndFetch();
     }
   }, [user]);
 
-  const fetchBookingRequests = async () => {
-    if (!tutorId) return;
+  const fetchBookingRequests = async (overrideTutorId?: number) => {
+    const idToUse = overrideTutorId || tutorId;
+    if (!idToUse) return;
     try {
-      const response = await apiClient.get(`/tutors/${tutorId}/booking-requests`);
-      setBookingRequests(response.data);
+      const response = await apiClient.get(`/tutors/${idToUse}/booking-requests`);
+      const data = response.data || [];
+      console.log('Fetched booking-requests raw for tutor', idToUse, ':', data);
+      // Map backend booking entity shape to the UI-friendly shape expected below
+      const mapped = (data as any[]).map(b => ({
+        id: b.id,
+        student_name: b.student?.name || (b.student_name as any) || 'Student',
+        student_email: b.student?.email || (b.student_email as any) || '',
+        subject: b.subject,
+  date: b.date,
+        time: b.time,
+        duration: b.duration,
+        status: b.status,
+        payment_proof: b.payment_proof ? (b.payment_proof.startsWith('http') ? b.payment_proof : b.payment_proof) : undefined,
+        student_notes: b.student_notes,
+        created_at: b.created_at,
+      })) as BookingRequest[];
+      console.log('Mapped booking-requests:', mapped);
+      setBookingRequests(mapped);
     } catch (error) {
       console.error('Failed to fetch booking requests:', error);
     }

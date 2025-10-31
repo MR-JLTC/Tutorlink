@@ -1,24 +1,39 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import apiClient from '../../services/api';
-import { useNavigate } from 'react-router-dom';
+import { Page } from '../../types';
 // Subjects now fetched from backend
 import { CheckCircleIcon } from '../../components/icons/CheckCircleIcon';
 import { DocumentArrowUpIcon } from '../../components/icons/DocumentArrowUpIcon';
 import { useToast } from '../../components/ui/Toast';
 import * as nsfwjs from 'nsfwjs';
 
-interface DayAvailability {
-  available: boolean;
+interface TimeSlot {
   startTime: string;
   endTime: string;
 }
 
+interface DayAvailability {
+  slots: TimeSlot[];
+}
+
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-const TutorRegistrationPage: React.FC = () => {
-  const navigate = useNavigate();
+interface TutorRegistrationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, onClose }) => {
   const { notify } = useToast();
   const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set<string>());
+  const [warningModal, setWarningModal] = useState<{
+    show: boolean;
+    message: string;
+    type: 'warning' | 'success';
+  }>({ show: false, message: '', type: 'warning' });
+  
+  // Navigation handler placeholder (kept for type compatibility where used internally)
+  const handleNavigate = (page: Page) => {};
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
@@ -26,7 +41,7 @@ const TutorRegistrationPage: React.FC = () => {
   const [universityId, setUniversityId] = useState<number | ''>('');
   const [emailDomainError, setEmailDomainError] = useState<string | null>(null);
   const [courses, setCourses] = useState<{ course_id: number; course_name: string; university_id: number }[]>([]);
-  const [courseId, setCourseId] = useState<number | ''>('');
+  const [courseId, setCourseId] = useState<number | '' | 'other'>('');
   const [courseInput, setCourseInput] = useState<string>('');
   const [subjectToAdd, setSubjectToAdd] = useState<string>('');
   const [availableSubjects, setAvailableSubjects] = useState<{ subject_id: number; subject_name: string }[]>([]);
@@ -47,12 +62,151 @@ const TutorRegistrationPage: React.FC = () => {
   const [verificationError, setVerificationError] = useState('');
   const [nsfwModel, setNsfwModel] = useState<any>(null);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
-  const [availability, setAvailability] = useState<Record<string, DayAvailability>>(
-    daysOfWeek.reduce((acc, day) => {
-      acc[day] = { available: false, startTime: '09:00', endTime: '17:00' };
-      return acc;
-    }, {} as Record<string, DayAvailability>)
-  );
+  const [availability, setAvailability] = useState<Record<string, DayAvailability>>({});
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    message: string;
+    onConfirm: () => void;
+  }>({ show: false, message: '', onConfirm: () => {} });
+
+  const [dayToAdd, setDayToAdd] = useState<string>('');
+
+  const addedDays = useMemo(() => Object.keys(availability), [availability]);
+  const remainingDays = useMemo(() => daysOfWeek.filter(d => !addedDays.includes(d)), [addedDays]);
+
+  const addDay = (day: string) => {
+    if (!day) return;
+    setAvailability(prev => ({ ...prev, [day]: { slots: [{ startTime: '09:00', endTime: '17:00' }] } }));
+    setDayToAdd('');
+  };
+
+  const removeDay = (day: string) => {
+    setConfirmModal({
+      show: true,
+      message: `Remove ${day} and all its time slots?`,
+      onConfirm: () => {
+        setAvailability(prev => {
+          const next = { ...prev };
+          delete next[day];
+          return next;
+        });
+      }
+    });
+  };
+
+  const [addingSlotFor, setAddingSlotFor] = useState<Record<string, boolean>>({});
+
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const timesOverlap = (aStart: string, aEnd: string, bStart: string, bEnd: string) => {
+    const aS = toMinutes(aStart);
+    const aE = toMinutes(aEnd);
+    const bS = toMinutes(bStart);
+    const bE = toMinutes(bEnd);
+    return !(aE <= bS || aS >= bE);
+  };
+
+  const findNonOverlappingSlot = (day: string, durationMins = 60) => {
+    const existing = (availability[day] as DayAvailability | undefined)?.slots || [];
+    // search from 08:00 to 20:00 in 30-min steps
+    for (let start = 8 * 60; start <= 20 * 60; start += 30) {
+      const end = start + durationMins;
+      const startStr = `${String(Math.floor(start / 60)).padStart(2, '0')}:${String(start % 60).padStart(2, '0')}`;
+      const endStr = `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
+      const conflict = existing.some(s => timesOverlap(startStr, endStr, s.startTime, s.endTime));
+      if (!conflict) return { startTime: startStr, endTime: endStr };
+    }
+    return null;
+  };
+
+  const addTimeSlot = (day: string) => {
+    if (!day) return;
+
+    setAvailability(prev => {
+      // If this day doesn't exist in the previous state, initialize it
+      if (!prev[day]) {
+        return {
+          ...prev,
+          [day]: { slots: [{ startTime: '09:00', endTime: '10:00' }] }
+        };
+      }
+
+      // Get the current day's availability
+      const current = prev[day];
+      
+      // try to find a non-overlapping 1-hour slot
+      const candidate = findNonOverlappingSlot(day, 60);
+      const newSlot = candidate || { startTime: '09:00', endTime: '10:00' };
+
+      // Return new state with the added slot
+      return {
+        ...prev,
+        [day]: {
+          ...current,
+          slots: [...current.slots, newSlot]
+        }
+      };
+    });
+  };
+
+  const removeTimeSlot = (day: string, index: number) => {
+    setConfirmModal({
+      show: true,
+      message: 'Remove this time slot?',
+      onConfirm: () => {
+        setAvailability(prev => {
+          const next = { ...prev };
+          const current = next[day];
+          if (!current) return prev;
+          current.slots = current.slots.filter((_, i) => i !== index);
+          if (current.slots.length === 0) {
+            delete next[day];
+          } else {
+            next[day] = current;
+          }
+          return next;
+        });
+      }
+    });
+  };
+
+  const updateSlotTime = (day: string, index: number, type: 'startTime' | 'endTime', value: string) => {
+    // Validate proposed new slot before applying
+    const current = availability[day] as DayAvailability | undefined;
+    if (!current) return;
+    const newSlots = current.slots.map((s, i) => i === index ? { ...s, [type]: value } : s);
+
+    const slot = newSlots[index];
+    if (!slot) return;
+    const sMin = toMinutes(slot.startTime);
+    const eMin = toMinutes(slot.endTime);
+    if (eMin <= sMin) {
+      notify('End time must be after start time', 'error');
+      return;
+    }
+
+    // check overlap with other slots
+    for (let i = 0; i < newSlots.length; i++) {
+      if (i === index) continue;
+      if (timesOverlap(newSlots[index].startTime, newSlots[index].endTime, newSlots[i].startTime, newSlots[i].endTime)) {
+        notify('This time overlaps with another slot. Please choose a different time.', 'error');
+        return;
+      }
+    }
+
+    // apply
+    setAvailability(prev => {
+      const next = { ...prev };
+      const cur = next[day];
+      if (!cur) return prev;
+      cur.slots = newSlots;
+      next[day] = cur;
+      return next;
+    });
+  };
 
   // Load NSFWJS model
   useEffect(() => {
@@ -79,7 +233,7 @@ const TutorRegistrationPage: React.FC = () => {
           return;
         }
         const params: any = { university_id: universityId };
-        if (courseId) params.course_id = courseId;
+        if (courseId && courseId !== 'other') params.course_id = courseId as number;
         const res = await apiClient.get(`/subjects`, { params });
         setAvailableSubjects(res.data || []);
       } catch (e) {
@@ -572,9 +726,17 @@ const TutorRegistrationPage: React.FC = () => {
         const isGCashQRCode = await validateGCashQRCode(file);
         if (isGCashQRCode) {
           setGcashQRImage(file);
-          notify('GCash QR code uploaded successfully!', 'success');
+          setWarningModal({
+            show: true,
+            message: 'GCash QR code uploaded successfully!',
+            type: 'success'
+          });
         } else {
-          notify('Please upload a valid GCash QR code image. This doesn\'t appear to be a GCash QR code.', 'error');
+          setWarningModal({
+            show: true,
+            message: 'Please upload a valid GCash QR code image. This doesn\'t appear to be a GCash QR code.',
+            type: 'warning'
+          });
           e.target.value = '';
         }
       } else {
@@ -584,19 +746,7 @@ const TutorRegistrationPage: React.FC = () => {
     }
   };
 
-  const handleAvailabilityToggle = (day: string) => {
-    setAvailability(prev => ({
-      ...prev,
-      [day]: { ...prev[day], available: !prev[day].available }
-    }));
-  };
-
-  const handleTimeChange = (day: string, type: 'startTime' | 'endTime', value: string) => {
-    setAvailability(prev => ({
-      ...prev,
-      [day]: { ...prev[day], [type]: value }
-    }));
-  };
+  // Availability is now managed via addDay / removeDay / addTimeSlot / removeTimeSlot / updateSlotTime
 
   const checkEmailVerificationStatus = async (emailToCheck: string) => {
     if (!emailToCheck || !universityId) {
@@ -741,11 +891,19 @@ const TutorRegistrationPage: React.FC = () => {
                 isDrawingOrMeme: isDrawingOrMeme,
                 fileName: fileName
               });
-              notify('This image contains inappropriate content and cannot be uploaded. Please choose a different image.', 'error');
+              setWarningModal({
+                show: true,
+                message: 'This image contains inappropriate content and cannot be uploaded. Please choose a different image.',
+                type: 'warning'
+              });
               resolve(false);
             } else {
               console.log('Image content is appropriate');
-              notify('Nice! Your photo looks clean and good to go!', 'success');
+              setWarningModal({
+                show: true,
+                message: 'Nice! Your photo looks clean and good to go!',
+                type: 'success'
+              });
               resolve(true);
             }
           } catch (error) {
@@ -879,8 +1037,8 @@ const TutorRegistrationPage: React.FC = () => {
         email,
         full_name: fullName.trim(),
         university_id: Number(universityId),
-        course_id: courseId ? Number(courseId) : undefined,
-        course_name: !courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined,
+        course_id: (courseId && courseId !== 'other') ? Number(courseId) : undefined,
+        course_name: (courseId === 'other' && courseInput.trim().length > 0) ? courseInput.trim() : (!courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined),
         bio,
         year_level: Number(yearLevel), // Convert to number
         gcash_number: gcashNumber,
@@ -898,8 +1056,8 @@ const TutorRegistrationPage: React.FC = () => {
         password: password,
         user_type: 'tutor',
         university_id: Number(universityId),
-        course_id: courseId ? Number(courseId) : undefined,
-        course_name: !courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined,
+        course_id: (courseId && courseId !== 'other') ? Number(courseId) : undefined,
+        course_name: (courseId === 'other' && courseInput.trim().length > 0) ? courseInput.trim() : (!courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined),
         bio: bio,
         year_level: Number(yearLevel), // Convert to number
         gcash_number: gcashNumber,
@@ -951,9 +1109,10 @@ const TutorRegistrationPage: React.FC = () => {
 
       // 5) Save availability
       console.log('Step 5: Saving availability...');
-      const slots = Object.entries(availability)
-        .filter(([, d]) => (d as any).available)
-        .map(([day, d]) => ({ day_of_week: day, start_time: (d as any).startTime, end_time: (d as any).endTime }));
+      const slots = Object.entries(availability).flatMap(([day, d]) => {
+        const dayObj = d as DayAvailability;
+        return dayObj.slots.map(s => ({ day_of_week: day, start_time: s.startTime, end_time: s.endTime }));
+      });
       console.log('Availability slots:', slots);
       await apiClient.post(`/tutors/${tutorId}/availability`, { slots });
       console.log('Availability saved successfully');
@@ -982,34 +1141,34 @@ const TutorRegistrationPage: React.FC = () => {
     }
   };
 
-  if (isSubmitted) {
-    return (
-      <div className="min-h-[calc(100vh-68px)] flex flex-col items-center justify-center bg-slate-50 p-4">
-        <div className="max-w-md w-full text-center bg-white p-10 rounded-xl shadow-lg">
-          <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto" />
-          <h2 className="text-3xl font-bold text-slate-800 mt-4">Application Submitted!</h2>
-          <p className="text-slate-600 mt-2">
-          Thank you for your application. Our team will review your submitted documents. Once approved, your account status will be marked as "Approved" in the Application and Verification section of your dashboard.
-          </p>
-          <button
-            onClick={() => navigate('/LandingPage')}
-            className="mt-8 w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!isOpen) return null;
 
   return (
-    <div className="min-h-[calc(100vh-68px)] flex flex-col items-center justify-center bg-gradient-to-br from-indigo-200 to-sky-100 p-4">
-      <div className="max-w-3xl w-full bg-white/80 backdrop-blur-lg p-8 rounded-2xl shadow-xl border border-white/50">
-        <div className="text-center">
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">Tutor Application</h1>
-            <p className="text-slate-600 mb-6">Share your expertise and start earning.</p>
-        </div>
-        <form onSubmit={handleSubmit}>
+    <>
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" role="dialog" aria-modal="true">
+        <div className="w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
+            <div className="text-center sm:text-left">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Tutor Application</h1>
+              <p className="text-slate-600 text-sm sm:text-base">Share your expertise and start earning.</p>
+            </div>
+            <button aria-label="Close" onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div className="max-h-[85vh] overflow-y-auto px-4 sm:px-6 py-6 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
+            {isSubmitted ? (
+              <div className="max-w-md mx-auto text-center bg-white p-8 rounded-xl shadow-lg">
+                <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto" />
+                <h2 className="text-2xl font-bold text-slate-800 mt-4">Application Submitted!</h2>
+                <p className="text-slate-600 mt-2">
+                  Thank you for your application. Our team will review your submitted documents. You will be notified once approved.
+                </p>
+                <button onClick={onClose} className="mt-6 w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors">Close</button>
+              </div>
+            ) : (
+            <div className="w-full bg-white/80 backdrop-blur-lg p-4 sm:p-6 rounded-2xl shadow-xl border border-white/50">
+        <form onSubmit={handleSubmit} className="mx-auto max-w-4xl">
           {/* Account Info */}
           <div className="space-y-6 mb-6">
             {/* Email Verification Section */}
@@ -1022,7 +1181,7 @@ const TutorRegistrationPage: React.FC = () => {
               </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+                <div className="max-w-lg">
                   <label className="block text-slate-700 font-semibold mb-2">Email Address</label>
                   <input 
                     type="email" 
@@ -1053,10 +1212,10 @@ const TutorRegistrationPage: React.FC = () => {
                   </p>}
                 </div>
                 
-                <div>
+                <div className="w-full max-w-3xl">
                   <label className="block text-slate-700 font-semibold mb-2">University</label>
                   <select 
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                    className="w-full min-w-[40ch] px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
                     value={universityId} 
                     onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')} 
                     required
@@ -1141,26 +1300,29 @@ const TutorRegistrationPage: React.FC = () => {
 
             {/* Other Account Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="max-w-lg">
                 <label className="block text-slate-700 font-semibold mb-1">Full Name</label>
                 <input 
                   type="text" 
                   value={fullName} 
-                  onChange={(e) => setFullName(e.target.value)} 
+                  onChange={(e) => {
+                    const next = e.target.value.replace(/[^A-Za-z\-\s]/g, '').slice(0, 60);
+                    setFullName(next);
+                  }} 
                   className="w-full py-2 pl-4 pr-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   placeholder="Enter your full name"
                   required 
                 />
               </div>
               
-              <div>
+              <div className="max-w-sm">
                 <label className="block text-slate-700 font-semibold mb-1">Password</label>
-                <div className="relative w-full">
+                <div className="relative w-fit">
                   <input 
                     type={showPassword ? "text" : "password"} 
                     value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
-                    minLength={7} 
+                    onChange={(e) => setPassword(e.target.value.slice(0, 13))} 
+                    minLength={13} 
                     maxLength={13} 
                     autoComplete="new-password"
                     data-form-type="other"
@@ -1172,14 +1334,14 @@ const TutorRegistrationPage: React.FC = () => {
                       MozAppearance: 'textfield'
                     }}
                     required 
-                    className="w-full py-2 pl-4 pr-12 border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
-                    placeholder="********"
+                    className="w-[27ch] py-2 pl-4 pr-12 border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
+                    placeholder="13 characters"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 z-10" 
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 z-10" 
                   >
                     {showPassword ? (
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
@@ -1195,45 +1357,52 @@ const TutorRegistrationPage: React.FC = () => {
                 </div>
               </div>
               
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">Course (optional)</label>
-                <select
-                  className={`w-full px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
-                  value={courseId}
-                  onChange={(e) => {
-                    const value = e.target.value ? Number(e.target.value) : '';
-                    setCourseId(value);
-                    if (value) {
-                      setCourseInput('');
-                    }
-                  }}
-                  disabled={!universityId}
-                  title={!universityId ? 'Select a university first' : undefined}
-                >
-                  <option value="">Select Course</option>
-                  {filteredCourses.map(c => (
-                    <option key={c.course_id} value={c.course_id}>{c.course_name}</option>
-                  ))}
-                </select>
-              <div className="mt-2">
-                <label htmlFor="course-input" className="block text-slate-600 text-sm mb-1">Not in the list? Input your course (optional):</label>
-                <input
-                  id="course-input"
-                  type="text"
-                  value={courseInput}
-                  onChange={(e) => setCourseInput(e.target.value)}
-                  placeholder="e.g., BS Astrophysics"
-                  disabled={!universityId || !!courseId}
-                  className={`w-full px-4 py-2 border rounded-lg ${(!universityId || courseId) ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
-                />
-                {courseId && (
-                  <p className="text-xs text-slate-500 mt-1">Select "Select Course" above to enable manual input.</p>
+              <div className="max-w-3xl">
+                <label className="block text-slate-700 font-semibold mb-1">Course</label>
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+                  <select
+                    className={`flex-1 px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
+                    value={courseId}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw === 'other') {
+                        setCourseId('other');
+                      } else {
+                        const value = raw ? Number(raw) : '';
+                        setCourseId(value);
+                        if (value !== '' ) setCourseInput('');
+                      }
+                    }}
+                    disabled={!universityId}
+                    title={!universityId ? 'Select a university first' : undefined}
+                  >
+                    <option value="">Select Course</option>
+                    {filteredCourses.map(c => (
+                      <option key={c.course_id} value={c.course_id}>{c.course_name}</option>
+                    ))}
+                    <option value="other">Other</option>
+                  </select>
+                  {courseId === 'other' && (
+                    <div className="flex-1 max-w-lg">
+                      <label htmlFor="course-input" className="block text-slate-600 text-sm mb-1 sm:sr-only">Custom course</label>
+                      <input
+                        id="course-input"
+                        type="text"
+                        value={courseInput}
+                        onChange={(e) => setCourseInput(e.target.value)}
+                        placeholder="e.g., BS Astrophysics"
+                        className="w-full px-4 py-2 border rounded-lg border-slate-300"
+                      />
+                    </div>
+                  )}
+                </div>
+                {(courseId !== 'other' && courseId !== '') && universityId && (
+                  <p className="text-xs text-slate-500 mt-1">Choose "Other" to enter a custom course.</p>
                 )}
                 {!courseId && !universityId && (
                   <p className="text-xs text-slate-500 mt-1">Select a university to enable course selection or manual input.</p>
                 )}
               </div>
-            </div>
           </div>
 
           {/* Additional Info */}
@@ -1243,7 +1412,7 @@ const TutorRegistrationPage: React.FC = () => {
               <select 
                 value={yearLevel} 
                 onChange={(e) => setYearLevel(e.target.value)} 
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                className="w-[18ch] px-3 py-2 border border-slate-300 rounded-lg"
                 required
               >
                 <option value="">Select Year Level</option>
@@ -1269,7 +1438,7 @@ const TutorRegistrationPage: React.FC = () => {
                     setGcashNumber(numbersOnly);
                   }
                 }} 
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg" 
+                className="w-[20ch] px-3 py-2 border border-slate-300 rounded-lg" 
                 placeholder="09XXXXXXXXX"
                 pattern="09[0-9]{9}"
                 maxLength={11}
@@ -1280,9 +1449,9 @@ const TutorRegistrationPage: React.FC = () => {
           </div>
 
           {/* Bio */}
-          <div className="mb-6">
+          <div className="mb-6 max-w-3xl">
             <label className="block text-slate-700 font-semibold mb-1">Your Bio (why you'd be a great tutor)</label>
-            <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="w-full px-4 py-2 border border-slate-300 rounded-lg" placeholder="Briefly describe your teaching experience, specialties, and approach." />
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="w-full px-4 py-2 border border-slate-300 rounded-lg" placeholder="Share your peer-to-peer tutoring style, subjects you can help with, relevant study experience, and how you support fellow students." />
           </div>
           {/* Subjects of Expertise */}
           <div>
@@ -1306,7 +1475,7 @@ const TutorRegistrationPage: React.FC = () => {
               )}
             </div>
             
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2 mb-4 max-w-3xl">
               <select
                 value={subjectToAdd}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSubjectToAdd(e.target.value)}
@@ -1319,11 +1488,12 @@ const TutorRegistrationPage: React.FC = () => {
                 {availableSubjects
                   .filter(s => !selectedSubjects.has(s.subject_name))
                   .map(s => <option key={s.subject_id} value={s.subject_name}>{s.subject_name}</option>)}
+                <option value="other">Other</option>
               </select>
               <button
                 type="button"
                 onClick={handleAddSubject}
-                disabled={!universityId || !subjectToAdd || normalizedSelected.has(subjectToAdd.toLowerCase())}
+                disabled={!universityId || !subjectToAdd || subjectToAdd === 'other' || normalizedSelected.has(subjectToAdd.toLowerCase())}
                 className="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
               >
                 Add
@@ -1332,74 +1502,99 @@ const TutorRegistrationPage: React.FC = () => {
             {!universityId && (
               <p className="text-xs text-slate-500 mb-4">Select a university to view and add subjects.</p>
             )}
-
-            <div>
-              <label htmlFor="other-subject" className="block text-slate-600 text-sm mb-1">Not in the list? Add another subject (optional):</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  id="other-subject"
-                  value={otherSubject}
-                  onChange={(e) => setOtherSubject(e.target.value)}
-                  placeholder="e.g., Astrophysics"
-                  className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400 ${!universityId ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
-                  disabled={!universityId}
-                  title={!universityId ? 'Select a university first' : undefined}
-                />
-                <button
-                  type="button"
-                  onClick={handleAddOtherSubject}
-                  disabled={!universityId || !otherSubject.trim() || otherSubjectExistsInDropdown}
-                  className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
-                >
-                  Add
-                </button>
+            {subjectToAdd === 'other' && (
+              <div className="max-w-3xl">
+                <label htmlFor="other-subject" className="block text-slate-600 text-sm mb-1">Not in the list? Add another subject:</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    id="other-subject"
+                    value={otherSubject}
+                    onChange={(e) => setOtherSubject(e.target.value)}
+                    placeholder="e.g., Astrophysics"
+                    className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400 ${!universityId ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
+                    disabled={!universityId}
+                    title={!universityId ? 'Select a university first' : undefined}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddOtherSubject}
+                    disabled={!universityId || subjectToAdd !== 'other' || !otherSubject.trim() || otherSubjectExistsInDropdown}
+                    className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                  >
+                    Add
+                  </button>
+                </div>
+                {otherSubjectExistsInDropdown && (
+                  <p className="mt-1 text-xs text-red-300">Subject already exists. Please select it from the dropdown above.</p>
+                )}
               </div>
-              {otherSubjectExistsInDropdown && (
-                <p className="mt-1 text-xs text-red-300">Subject already exists. Please select it from the dropdown above.</p>
-              )}
-            </div>
+            )}
           </div>
 
 
            {/* Availability Scheduling */}
           <div className="mt-8">
             <h2 className="block text-slate-700 font-semibold mb-2 text-lg">2. Weekly Availability</h2>
-            <div className="space-y-3">
-              {daysOfWeek.map(day => (
-                <div key={day} className={`grid grid-cols-1 md:grid-cols-3 items-center gap-4 p-3 border rounded-lg transition-all ${availability[day].available ? 'bg-white' : 'bg-slate-50'}`}>
-                  <label className="flex items-center space-x-3">
-                    <input
-                      type="checkbox"
-                      className="h-5 w-5 rounded border-slate-600 bg-slate-700 text-indigo-600 focus:ring-indigo-500"
-                      checked={availability[day].available}
-                      onChange={() => handleAvailabilityToggle(day)}
-                    />
-                    <span className="font-medium text-slate-800 w-24">{day}</span>
-                  </label>
-                  <div className={`flex items-center gap-2 md:col-span-2 ${!availability[day].available ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <input
-                      type="time"
-                      aria-label={`${day} start time`}
-                      value={availability[day].startTime}
-                      onChange={(e) => handleTimeChange(day, 'startTime', e.target.value)}
-                      disabled={!availability[day].available}
-                      className="w-full px-2 py-1 border border-slate-600 bg-slate-700 text-white rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      style={{ colorScheme: 'dark' }}
-                    />
-                    <span className="text-slate-500">-</span>
-                    <input
-                      type="time"
-                      aria-label={`${day} end time`}
-                      value={availability[day].endTime}
-                      onChange={(e) => handleTimeChange(day, 'endTime', e.target.value)}
-                      disabled={!availability[day].available}
-                      className="w-full px-2 py-1 border border-slate-600 bg-slate-700 text-white rounded-md focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                      style={{ colorScheme: 'dark' }}
-                    />
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <select
+                  id="day-to-add"
+                  value={dayToAdd}
+                  onChange={(e) => setDayToAdd(e.target.value)}
+                  className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+                >
+                  <option value="">Select a day</option>
+                  {remainingDays.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => addDay(dayToAdd)}
+                  disabled={!dayToAdd}
+                  className={`px-4 py-2 rounded-md text-sm font-medium ${!dayToAdd ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                >
+                  Add
+                </button>
+              </div>
+
+              {Object.keys(availability).length === 0 && (
+                <p className="text-sm text-slate-500">No availability added yet. Click "Add Day" to begin.</p>
+              )}
+
+              <div className="space-y-3">
+                {Object.entries(availability).map(([day, d]) => (
+                  <div key={day} className="p-3 border rounded-lg bg-white">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-medium text-slate-800">{day}</div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => addTimeSlot(day)} className="text-sm px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-md">Add Time</button>
+                        <button type="button" onClick={() => removeDay(day)} className="text-sm px-3 py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-md">Remove Day</button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {(d as DayAvailability).slots.map((slot, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={slot.startTime}
+                            onChange={(e) => updateSlotTime(day, idx, 'startTime', e.target.value)}
+                            className="px-2 py-1 border rounded-md text-sm"
+                          />
+                          <span className="text-slate-500">-</span>
+                          <input
+                            type="time"
+                            value={slot.endTime}
+                            onChange={(e) => updateSlotTime(day, idx, 'endTime', e.target.value)}
+                            className="px-2 py-1 border rounded-md text-sm"
+                          />
+                          <button type="button" onClick={() => removeTimeSlot(day, idx)} className="ml-2 text-sm text-red-600">Remove</button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1460,13 +1655,13 @@ const TutorRegistrationPage: React.FC = () => {
                   <p>Drag and drop your files here</p>
                   <p className="text-xs text-slate-500 mt-1">or click to browse</p>
                 </div>
-                <p className="text-xs text-slate-500">PDF, PNG, JPG, JPEG up to 10MB</p>
+                <p className="text-xs text-slate-500">PDF, DOCX, PNG, JPG, JPEG up to 10MB</p>
                 <input 
                   id="file-upload-drag"
                   type="file" 
                   className="sr-only" 
                   multiple 
-                  accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,image/jpg" 
+                  accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg" 
                   onChange={handleFileChange} 
                 />
               </div>
@@ -1496,6 +1691,10 @@ const TutorRegistrationPage: React.FC = () => {
             {isEmailVerified ? 'Submit Application' : 'Verify Email to Submit'}
           </button>
         </form>
+      </div>
+      )}
+      </div>
+        </div>
       </div>
 
       {/* Email Verification Modal */}
@@ -1605,8 +1804,10 @@ const TutorRegistrationPage: React.FC = () => {
 
             {/* Close Button */}
             <button
+              type="button"
               onClick={handleCloseVerificationModal}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 transition-colors"
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 transition-colors z-10 pointer-events-auto"
+              aria-label="Close verification"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1615,8 +1816,76 @@ const TutorRegistrationPage: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+
+      {/* Confirmation Modal */}
+      {confirmModal.show && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 max-w-md w-full relative overflow-hidden">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-4">Confirm Action</h3>
+              <p className="text-slate-600 mb-6">{confirmModal.message}</p>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setConfirmModal({ show: false, message: '', onConfirm: () => {} })}
+                  className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    confirmModal.onConfirm();
+                    setConfirmModal({ show: false, message: '', onConfirm: () => {} });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Warning Modal */}
+      {warningModal.show && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 max-w-md w-full relative overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-center mb-4">
+                {warningModal.type === 'warning' ? (
+                  <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              <h3 className="text-lg font-semibold text-slate-800 mb-4 text-center">
+                {warningModal.type === 'warning' ? 'Warning' : 'Success'}
+              </h3>
+              <p className="text-slate-600 mb-6 text-center">{warningModal.message}</p>
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setWarningModal({ show: false, message: '', type: 'warning' })}
+                  className={`px-6 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+                    warningModal.type === 'warning' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+                  }`}
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+  </>
   );
 };
 
 export default TutorRegistrationPage;
+export const TutorRegistrationModal = TutorRegistrationPage;

@@ -9,5 +9,6 @@ import { EmailService } from '../email/email.service';
   imports: [TypeOrmModule.forFeature([Tutor, User, TutorDocument, TutorAvailability, TutorSubject, TutorSubjectDocument, Subject, Course, University, SubjectApplication, SubjectApplicationDocument, BookingRequest])],
   controllers: [TutorsController],
   providers: [TutorsService, EmailService],
+  exports: [TutorsService],
 })
 export class TutorsModule {}

@@ -1,3 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tailwind base is used; keep custom rules below */
 /* Global Modern Scrollbar Styles */
 ::-webkit-scrollbar {
   width: 8px;

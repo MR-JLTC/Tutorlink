@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, UseGuards, Post, Put } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, UseGuards, Post, Put, Req } from '@nestjs/common';
 import type { Express } from 'express';
 import { TutorsService } from './tutors.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -203,6 +203,13 @@ export class TutorsController {
   @UseGuards(JwtAuthGuard)
   async getBookingRequests(@Param('tutorId') tutorId: string) {
     return this.tutorsService.getBookingRequests(+tutorId);
+  }
+
+  @Post(':tutorId/booking-requests')
+  @UseGuards(JwtAuthGuard)
+  async createBookingRequest(@Param('tutorId') tutorId: string, @Body() body: { subject: string; date: string; time: string; duration: number; student_notes?: string }, @Req() req: any) {
+    const userId = req.user?.user_id;
+    return this.tutorsService.createBookingRequest(+tutorId, userId, body);
   }
 
   @Post('booking-requests/:bookingId/accept')
