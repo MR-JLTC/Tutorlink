@@ -273,8 +273,8 @@ const TuteeRegistrationPage: React.FC = () => {
       return;
     }
     
-    if (formData.password.length < 7 || formData.password.length > 13) {
-      notify('Password must be between 7 and 13 characters.', 'error');
+    if (formData.password.length < 7 || formData.password.length > 21) {
+      notify('Password must be between 7 and 21 characters.', 'error');
       return;
     }
     
@@ -571,7 +571,7 @@ const TuteeRegistrationPage: React.FC = () => {
                   value={formData.password} 
                   onChange={handleInputChange} 
                   minLength={7} 
-                  maxLength={13} 
+                  maxLength={21} 
                   className="w-full px-4 py-2 pr-10 border border-slate-300 rounded-lg 
                   [&::-ms-reveal]:hidden 
                   [&::-webkit-credentials-auto-fill-button]:!hidden 

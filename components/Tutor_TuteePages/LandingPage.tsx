@@ -67,20 +67,22 @@ const LiveStats: React.FC = () => {
 
 const slides = [
     { 
-        src: 'https://images.unsplash.com/photo-1543269865-cbf427effbad?q=80&w=2070&auto=format&fit=crop',
-        alt: 'A tutor helping a student with a laptop in a well-lit room.' 
+        src: 'assets/images/bgp1.jpg'
+        // alt: 'A tutor helping a student with a laptop in a well-lit room.' 
     },
     { 
-        src: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=2070&auto=format&fit=crop',
-        alt: 'A diverse group of young students studying together around a table.' 
+        src: 'assets/images/bgp2.jpg'
+        // alt: 'A diverse group of young students studying together around a table.' 
     },
     { 
-        src: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=2070&auto=format&fit=crop',
-        alt: 'Students in a university lecture hall, focused on learning.' 
+        src: 'assets/images/bgp3.jpg'
+        // alt: 'Students in a university lecture hall, focused on learning.' 
     },
     { 
-        src: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=2070&auto=format&fit=crop',
-        alt: 'A female student smiling and raising her hand in a classroom setting.' 
+        src: 'assets/images/bgp4.jpg'
+    },
+    { 
+      src: 'assets/images/bgp5.jpg'
     },
 ];
 
@@ -196,6 +198,7 @@ const LandingPage: React.FC = () => {
 
   const handleNavigate = (path: string) => {
     if (path === '/TutorRegistrationPage') {
+      setIsModalOpen(false);
       setIsTutorModalOpen(true);
       return;
     }

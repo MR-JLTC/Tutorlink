@@ -157,8 +157,8 @@ const RegistrationPage: React.FC = () => {
       setError("Passwords do not match.");
       return;
     }
-    if (password.length < 7 || password.length > 13) {
-      setError('Password must be between 7 and 13 characters.');
+    if (password.length < 7 || password.length > 21) {
+      setError('Password must be between 7 and 21 characters.');
       return;
     }
     if (emailDomainError) {
@@ -377,7 +377,7 @@ const RegistrationPage: React.FC = () => {
                     [&::-webkit-strong-password-auto-fill-button]:!hidden`
                   }
                   minLength={7}
-                  maxLength={13}
+                  maxLength={21}
                   placeholder="********"
                 />
                 <button
@@ -457,7 +457,7 @@ const RegistrationPage: React.FC = () => {
                     [&::-webkit-strong-password-auto-fill-button]:!hidden`
                   }
                   minLength={7}
-                  maxLength={13}
+                  maxLength={21}
                   placeholder="********"
                 />
                 <button
@@ -672,16 +672,20 @@ const AdminRegisterSlideshow: React.FC = () => {
   const [index, setIndex] = React.useState(0);
   const slides = React.useMemo(() => [
     {
-      src: 'https://images.unsplash.com/photo-1552581234-26160f608093?q=80&w=2070&auto=format&fit=crop',
-      alt: 'Admin secure registration environment',
+      src: 'assets/images/bgp3.jpg',
+      alt: 'Team collaborating on platform operations with laptops',
     },
     {
-      src: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=2070&auto=format&fit=crop',
-      alt: 'Admin collaboration in modern workspace',
+      src: 'assets/images/bgp5.jpg',
+      alt: 'Administrator monitoring online tutoring platform dashboard',
+    },    
+    {
+      src: 'https://images.unsplash.com/photo-1603791440384-56cd371ee9a7?q=80&w=2070&auto=format&fit=crop',
+      alt: 'Team collaborating on student-tutor system management',
     },
     {
-      src: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=2070&auto=format&fit=crop',
-      alt: 'Admin teamwork in modern office',
+      src: 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?q=80&w=2070&auto=format&fit=crop',
+      alt: 'Administrator overseeing secure online tutoring operations',
     },
   ], []);
 

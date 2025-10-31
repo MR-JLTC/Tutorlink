@@ -300,7 +300,7 @@ const PasswordResetPage: React.FC = () => {
                             value={formData.newPassword}
                             onChange={handleInputChange}
                             minLength={7}
-                            maxLength={13}
+                            maxLength={21}
                             // className="w-full pl-4 pr-10 py-3 bg-white/95 backdrop-blur-sm border-2 border-slate-200 rounded-lg focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all duration-300 placeholder-slate-400 font-medium shadow-lg hover:shadow-xl text-sm"
                             className={`${inputStyles} pr-10 
                               [&::-ms-reveal]:hidden 
@@ -344,7 +344,7 @@ const PasswordResetPage: React.FC = () => {
                             value={formData.confirmPassword}
                             onChange={handleInputChange}
                             minLength={7}
-                            maxLength={13}
+                            maxLength={21}
                             // className="w-full pl-4 pr-10 py-3 bg-white/95 backdrop-blur-sm border-2 border-slate-200 rounded-lg focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all duration-300 placeholder-slate-400 font-medium shadow-lg hover:shadow-xl text-sm"
                             className={`${inputStyles} pr-10 
                               [&::-ms-reveal]:hidden 

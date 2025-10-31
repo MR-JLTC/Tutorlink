@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import Logo from '../../components/Logo';
 import apiClient from '../../services/api';
 import { Page } from '../../types';
 // Subjects now fetched from backend
@@ -19,8 +20,8 @@ interface DayAvailability {
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 interface TutorRegistrationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, onClose }) => {
@@ -41,11 +42,12 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   const [universityId, setUniversityId] = useState<number | ''>('');
   const [emailDomainError, setEmailDomainError] = useState<string | null>(null);
   const [courses, setCourses] = useState<{ course_id: number; course_name: string; university_id: number }[]>([]);
-  const [courseId, setCourseId] = useState<number | '' | 'other'>('');
+  const [courseId, setCourseId] = useState<string>(''); // '' | 'other' | course_id as string
   const [courseInput, setCourseInput] = useState<string>('');
   const [subjectToAdd, setSubjectToAdd] = useState<string>('');
   const [availableSubjects, setAvailableSubjects] = useState<{ subject_id: number; subject_name: string }[]>([]);
   const [otherSubject, setOtherSubject] = useState('');
+  const [subjectFilesMap, setSubjectFilesMap] = useState<Record<string, File[]>>({});
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [gcashQRImage, setGcashQRImage] = useState<File | null>(null);
@@ -53,6 +55,9 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   const [bio, setBio] = useState('');
   const [yearLevel, setYearLevel] = useState('');
   const [gcashNumber, setGcashNumber] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [sessionRate, setSessionRate] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
@@ -96,61 +101,124 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
 
   const [addingSlotFor, setAddingSlotFor] = useState<Record<string, boolean>>({});
 
-  const toMinutes = (t: string) => {
-    const [h, m] = t.split(':').map(Number);
-    return h * 60 + m;
+  // --- Robust helpers & mutators for availability slots ---
+
+  // Normalizes "H:M", "HH:MM:SS", etc. to "HH:MM"
+  const normalizeTime = (raw: string) => {
+    if (!raw) return raw;
+    const trimmed = raw.trim();
+    // keep only HH:MM (ignore seconds if present)
+    const [hhmm] = trimmed.split('.');
+    const parts = trimmed.split(':').map(p => p.replace(/\D/g, ''));
+    const hh = parts[0] ? String(Number(parts[0])).padStart(2, '0') : '00';
+    const mm = parts[1] ? String(Math.min(59, Number(parts[1]))).padStart(2, '0') : '00';
+    return `${hh}:${mm}`;
   };
 
+  const toMinutes = (time: string) => {
+    const t = normalizeTime(time);
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + (m || 0);
+  };
+
+  const minutesToTime = (mins: number) => {
+    const hh = Math.floor(mins / 60).toString().padStart(2, '0');
+    const mm = (mins % 60).toString().padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  // true only when intervals actually intersect (adjacent allowed)
   const timesOverlap = (aStart: string, aEnd: string, bStart: string, bEnd: string) => {
     const aS = toMinutes(aStart);
     const aE = toMinutes(aEnd);
     const bS = toMinutes(bStart);
     const bE = toMinutes(bEnd);
-    return !(aE <= bS || aS >= bE);
+    return aS < bE && bS < aE;
   };
 
-  const findNonOverlappingSlot = (day: string, durationMins = 60) => {
-    const existing = (availability[day] as DayAvailability | undefined)?.slots || [];
-    // search from 08:00 to 20:00 in 30-min steps
-    for (let start = 8 * 60; start <= 20 * 60; start += 30) {
+  // Search for an available slot using the CURRENT state inside caller, so here we accept existing slots explicitly
+  const findNonOverlappingSlotFromExisting = (
+    existingSlots: { startTime: string; endTime: string }[],
+    durationMins = 60,
+    earliestMinute = 7 * 60,
+    latestMinute = 22 * 60,
+    step = 15
+  ) => {
+    for (let start = earliestMinute; start + durationMins <= latestMinute; start += step) {
       const end = start + durationMins;
-      const startStr = `${String(Math.floor(start / 60)).padStart(2, '0')}:${String(start % 60).padStart(2, '0')}`;
-      const endStr = `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
-      const conflict = existing.some(s => timesOverlap(startStr, endStr, s.startTime, s.endTime));
-      if (!conflict) return { startTime: startStr, endTime: endStr };
+      const cand = { startTime: minutesToTime(start), endTime: minutesToTime(end) };
+      const conflict = existingSlots.some(s => timesOverlap(s.startTime, s.endTime, cand.startTime, cand.endTime));
+      if (!conflict) return cand;
     }
     return null;
   };
 
-  const addTimeSlot = (day: string) => {
+  // Add slot (validated against latest state inside updater)
+  const addTimeSlot = (day: string, durationMins = 60) => {
     if (!day) return;
-
     setAvailability(prev => {
-      // If this day doesn't exist in the previous state, initialize it
-      if (!prev[day]) {
-        return {
-          ...prev,
-          [day]: { slots: [{ startTime: '09:00', endTime: '10:00' }] }
-        };
+      const next = { ...prev };
+      const current = next[day] ? { slots: [...next[day].slots] } : { slots: [] };
+
+      // normalize existing times
+      current.slots = current.slots.map(s => ({
+        startTime: normalizeTime(s.startTime),
+        endTime: normalizeTime(s.endTime)
+      }));
+
+      const candidate = findNonOverlappingSlotFromExisting(current.slots, durationMins);
+      if (!candidate) {
+        notify('No available non-overlapping slot could be found for that day.', 'error');
+        return prev;
       }
 
-      // Get the current day's availability
-      const current = prev[day];
-      
-      // try to find a non-overlapping 1-hour slot
-      const candidate = findNonOverlappingSlot(day, 60);
-      const newSlot = candidate || { startTime: '09:00', endTime: '10:00' };
-
-      // Return new state with the added slot
-      return {
-        ...prev,
-        [day]: {
-          ...current,
-          slots: [...current.slots, newSlot]
-        }
-      };
+      // add and sort
+      current.slots.push(candidate);
+      current.slots.sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+      next[day] = current;
+      return next;
     });
   };
+
+  // Update a slot time safely (validated inside updater)
+  const updateSlotTime = (day: string, index: number, type: 'startTime' | 'endTime', rawValue: string) => {
+    const value = normalizeTime(rawValue);
+    setAvailability(prev => {
+      const next = { ...prev };
+      const current = next[day];
+      if (!current) return prev;
+
+      // clone and normalize
+      const slots = current.slots.map(s => ({ startTime: normalizeTime(s.startTime), endTime: normalizeTime(s.endTime) }));
+
+      if (index < 0 || index >= slots.length) return prev;
+
+      slots[index] = { ...slots[index], [type]: value };
+
+      const sMin = toMinutes(slots[index].startTime);
+      const eMin = toMinutes(slots[index].endTime);
+      if (eMin <= sMin) {
+        // invalid end before/equals start -> keep state unchanged, show error
+        notify('End time must be after start time', 'error');
+        return prev;
+      }
+
+      // validate against other slots (do not compare against itself)
+      for (let i = 0; i < slots.length; i++) {
+        if (i === index) continue;
+        if (timesOverlap(slots[index].startTime, slots[index].endTime, slots[i].startTime, slots[i].endTime)) {
+          notify('This time overlaps with another slot. Please choose a different time.', 'error');
+          return prev;
+        }
+      }
+
+      // If valid, apply, sort, and return new state
+      slots.sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+      next[day] = { slots };
+      return next;
+    });
+  };
+
 
   const removeTimeSlot = (day: string, index: number) => {
     setConfirmModal({
@@ -170,41 +238,6 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           return next;
         });
       }
-    });
-  };
-
-  const updateSlotTime = (day: string, index: number, type: 'startTime' | 'endTime', value: string) => {
-    // Validate proposed new slot before applying
-    const current = availability[day] as DayAvailability | undefined;
-    if (!current) return;
-    const newSlots = current.slots.map((s, i) => i === index ? { ...s, [type]: value } : s);
-
-    const slot = newSlots[index];
-    if (!slot) return;
-    const sMin = toMinutes(slot.startTime);
-    const eMin = toMinutes(slot.endTime);
-    if (eMin <= sMin) {
-      notify('End time must be after start time', 'error');
-      return;
-    }
-
-    // check overlap with other slots
-    for (let i = 0; i < newSlots.length; i++) {
-      if (i === index) continue;
-      if (timesOverlap(newSlots[index].startTime, newSlots[index].endTime, newSlots[i].startTime, newSlots[i].endTime)) {
-        notify('This time overlaps with another slot. Please choose a different time.', 'error');
-        return;
-      }
-    }
-
-    // apply
-    setAvailability(prev => {
-      const next = { ...prev };
-      const cur = next[day];
-      if (!cur) return prev;
-      cur.slots = newSlots;
-      next[day] = cur;
-      return next;
     });
   };
 
@@ -233,7 +266,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           return;
         }
         const params: any = { university_id: universityId };
-        if (courseId && courseId !== 'other') params.course_id = courseId as number;
+        if (courseId && courseId !== 'other') params.course_id = Number(courseId);
         const res = await apiClient.get(`/subjects`, { params });
         setAvailableSubjects(res.data || []);
       } catch (e) {
@@ -303,14 +336,14 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     if (!trimmed || courseId) return;
     const match = filteredCourses.find(c => c.course_name.toLowerCase() === trimmed);
     if (match) {
-      setCourseId(match.course_id);
+      setCourseId(String(match.course_id));
     }
   }, [courseInput, courseId, filteredCourses]);
 
   // If university changes and current selected course no longer applies, reset selection and enable input
   useEffect(() => {
-    if (!courseId) return;
-    const stillValid = filteredCourses.some(c => c.course_id === courseId);
+    if (!courseId || courseId === 'other') return;
+    const stillValid = filteredCourses.some(c => String(c.course_id) === courseId);
     if (!stillValid) {
       setCourseId('');
       setCourseInput('');
@@ -328,6 +361,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   const handleAddSubject = () => {
     if (subjectToAdd && !selectedSubjects.has(subjectToAdd)) {
         setSelectedSubjects(prev => new Set(prev).add(subjectToAdd));
+        setSubjectFilesMap(prev => ({ ...prev, [subjectToAdd]: prev[subjectToAdd] || [] }));
         setSubjectToAdd('');
     }
   };
@@ -336,6 +370,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     const trimmedSubject = otherSubject.trim();
     if (trimmedSubject && !selectedSubjects.has(trimmedSubject)) {
         setSelectedSubjects(prev => new Set(prev).add(trimmedSubject));
+        setSubjectFilesMap(prev => ({ ...prev, [trimmedSubject]: prev[trimmedSubject] || [] }));
         setOtherSubject('');
     }
   };
@@ -345,6 +380,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         const newSubjects = new Set(prev);
         newSubjects.delete(subjectToRemove);
         return newSubjects;
+    });
+    setSubjectFilesMap(prev => {
+      const next = { ...prev };
+      delete next[subjectToRemove];
+      return next;
     });
   };
 
@@ -1008,6 +1048,10 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     setVerificationError('');
   };
   
+  const handleCloseTermsModal = () => {
+    setShowTermsModal(false);
+  };
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !universityId || !fullName.trim()) {
@@ -1022,12 +1066,18 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       notify('Please verify your email address before submitting the application.', 'error');
       return;
     }
-    if (password.length < 7 || password.length > 13) {
-      notify('Password must be between 7 and 13 characters.', 'error');
+    if (password.length < 7 || password.length > 21) {
+      notify('Password must be between 7 and 21 characters.', 'error');
       return;
     }
     if (selectedSubjects.size === 0 || uploadedFiles.length === 0) {
       notify('Please select at least one subject and upload at least one document.', 'error');
+      return;
+    }
+    // Ensure every subject has at least one supporting document
+    const missingDocs = (Array.from(selectedSubjects) as string[]).filter((s: string) => !subjectFilesMap[s] || subjectFilesMap[s].length === 0);
+    if (missingDocs.length > 0) {
+      notify(`Please upload supporting document(s) for: ${missingDocs.join(', ')}`, 'error');
       return;
     }
 
@@ -1038,10 +1088,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         full_name: fullName.trim(),
         university_id: Number(universityId),
         course_id: (courseId && courseId !== 'other') ? Number(courseId) : undefined,
-        course_name: (courseId === 'other' && courseInput.trim().length > 0) ? courseInput.trim() : (!courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined),
+        course_name: (courseId === 'other' && courseInput.trim().length > 0) ? courseInput.trim() : undefined,
         bio,
         year_level: Number(yearLevel), // Convert to number
         gcash_number: gcashNumber,
+        SessionRatePerHour: sessionRate ? Number(sessionRate) : undefined,
         selectedSubjects: Array.from(selectedSubjects),
         uploadedFiles: uploadedFiles.length,
         profileImage: !!profileImage,
@@ -1057,10 +1108,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         user_type: 'tutor',
         university_id: Number(universityId),
         course_id: (courseId && courseId !== 'other') ? Number(courseId) : undefined,
-        course_name: (courseId === 'other' && courseInput.trim().length > 0) ? courseInput.trim() : (!courseId && courseInput.trim().length > 0 ? courseInput.trim() : undefined),
+        course_name: (courseId === 'other' && courseInput.trim().length > 0) ? courseInput.trim() : undefined,
         bio: bio,
         year_level: Number(yearLevel), // Convert to number
         gcash_number: gcashNumber,
+        SessionRatePerHour: sessionRate ? Number(sessionRate) : undefined,
       };
 
       const registrationResponse = await apiClient.post('/auth/register', registerPayload);
@@ -1119,10 +1171,20 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
 
       // 6) Save subjects
       console.log('Step 6: Saving subjects...');
-      const subjectsArray = Array.from(selectedSubjects);
+      const subjectsArray: string[] = Array.from(selectedSubjects) as string[];
       console.log('Selected subjects:', subjectsArray);
       await apiClient.post(`/tutors/${tutorId}/subjects`, { subjects: subjectsArray });
       console.log('Subjects saved successfully');
+
+      // 7) Upload supporting documents per subject
+      console.log('Step 7: Uploading subject supporting documents...');
+      for (const subject of subjectsArray) {
+        const files = subjectFilesMap[subject] || [];
+        const form = new FormData();
+        files.forEach(f => form.append('files', f));
+        await apiClient.post(`/tutors/${tutorId}/subjects/${encodeURIComponent(subject)}/documents`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+        console.log(`Uploaded documents for subject: ${subject}`);
+      }
 
       setIsSubmitted(true);
     } catch (err: any) {
@@ -1141,22 +1203,31 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     }
   };
 
-  if (!isOpen) return null;
+  const isModalOpen = typeof isOpen === 'boolean' ? isOpen : true;
+  const handleCloseModal = () => {
+    if (onClose) return onClose();
+    try { window.history.back(); } catch {}
+  };
+
+  if (!isModalOpen) return null;
 
   return (
     <>
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" role="dialog" aria-modal="true">
         <div className="w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
-            <div className="text-center sm:text-left">
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Tutor Application</h1>
-              <p className="text-slate-600 text-sm sm:text-base">Share your expertise and start earning.</p>
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
+            <div className="flex items-center gap-3">
+              <Logo className="h-14 w-14" />
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Tutor Application</h1>
+                <p className="text-slate-600 text-xs sm:text-sm">Share your expertise and start earning.</p>
+              </div>
             </div>
-            <button aria-label="Close" onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
+            <button aria-label="Close" onClick={handleCloseModal} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
           </div>
-          <div className="max-h-[85vh] overflow-y-auto px-4 sm:px-6 py-6 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
+          <div className="max-h-[85vh] overflow-y-auto px-4 sm:px-5 py-5 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
             {isSubmitted ? (
               <div className="max-w-md mx-auto text-center bg-white p-8 rounded-xl shadow-lg">
                 <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto" />
@@ -1167,12 +1238,12 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <button onClick={onClose} className="mt-6 w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors">Close</button>
               </div>
             ) : (
-            <div className="w-full bg-white/80 backdrop-blur-lg p-4 sm:p-6 rounded-2xl shadow-xl border border-white/50">
+            <div className="w-full bg-white/80 backdrop-blur-lg p-4 sm:p-5 rounded-2xl shadow-xl border border-white/50">
         <form onSubmit={handleSubmit} className="mx-auto max-w-4xl">
           {/* Account Info */}
-          <div className="space-y-6 mb-6">
+          <div className="space-y-5 mb-6">
             {/* Email Verification Section */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 shadow-sm">
               <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
                 <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -1180,7 +1251,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 Email Verification
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="max-w-lg">
                   <label className="block text-slate-700 font-semibold mb-2">Email Address</label>
                   <input 
@@ -1215,7 +1286,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <div className="w-full max-w-3xl">
                   <label className="block text-slate-700 font-semibold mb-2">University</label>
                   <select 
-                    className="w-full min-w-[40ch] px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                    className="w-full min-w-[40ch] px-4 py-3 border border-slate-300 rounded-lg focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white" 
                     value={universityId} 
                     onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')} 
                     required
@@ -1299,8 +1370,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
             </div>
 
             {/* Other Account Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="max-w-lg">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-6 bg-white rounded-xl border border-slate-200 shadow-sm items-start">
+              <div className="max-w-lg md:col-span-8">
                 <label className="block text-slate-700 font-semibold mb-1">Full Name</label>
                 <input 
                   type="text" 
@@ -1315,15 +1386,15 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 />
               </div>
               
-              <div className="max-w-sm">
+              <div className="max-w-sm md:col-span-4">
                 <label className="block text-slate-700 font-semibold mb-1">Password</label>
                 <div className="relative w-fit">
                   <input 
                     type={showPassword ? "text" : "password"} 
                     value={password} 
-                    onChange={(e) => setPassword(e.target.value.slice(0, 13))} 
-                    minLength={13} 
-                    maxLength={13} 
+                    onChange={(e) => setPassword(e.target.value.slice(0, 21))} 
+                    minLength={7} 
+                    maxLength={21} 
                     autoComplete="new-password"
                     data-form-type="other"
                     data-lpignore="true"
@@ -1335,7 +1406,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     }}
                     required 
                     className="w-[27ch] py-2 pl-4 pr-12 border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
-                    placeholder="13 characters"
+                    placeholder="Desired Password"
                   />
                   <button
                     type="button"
@@ -1357,11 +1428,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 </div>
               </div>
               
-              <div className="max-w-3xl">
+              <div className="max-w-3xl md:col-span-12">
                 <label className="block text-slate-700 font-semibold mb-1">Course</label>
-                <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+                <div className={`flex ${courseId === 'other' ? 'flex-col' : 'flex-col md:flex-row'} gap-3 items-start w-full`}>
                   <select
-                    className={`flex-1 px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
+                    className={`flex-1 min-w-0 px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
                     value={courseId}
                     onChange={(e) => {
                       const raw = e.target.value;
@@ -1376,14 +1447,14 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     disabled={!universityId}
                     title={!universityId ? 'Select a university first' : undefined}
                   >
-                    <option value="">Select Course</option>
-                    {filteredCourses.map(c => (
-                      <option key={c.course_id} value={c.course_id}>{c.course_name}</option>
-                    ))}
+                  <option value="">Select Course</option>
+                  {filteredCourses.map(c => (
+                    <option key={c.course_id} value={String(c.course_id)}>{c.course_name}</option>
+                  ))}
                     <option value="other">Other</option>
                   </select>
                   {courseId === 'other' && (
-                    <div className="flex-1 max-w-lg">
+                    <div className="flex-1 min-w-0 md:flex-[1.2] max-w-full md:max-w-lg">
                       <label htmlFor="course-input" className="block text-slate-600 text-sm mb-1 sm:sr-only">Custom course</label>
                       <input
                         id="course-input"
@@ -1406,8 +1477,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Additional Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6 p-5 bg-white rounded-xl border border-slate-200 shadow-sm items-start">
+            <div className="md:col-span-3">
               <label className="block text-slate-700 font-semibold mb-1">Year Level</label>
               <select 
                 value={yearLevel} 
@@ -1425,7 +1496,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <option value="Post-Graduate">Post-Graduate</option> */}
               </select>
             </div>
-            <div>
+            <div className="md:col-span-5">
               <label className="block text-slate-700 font-semibold mb-1">GCash Number</label>
               <input 
                 type="tel" 
@@ -1446,15 +1517,33 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               />
               <p className="text-xs text-slate-500 mt-1">Format: 09XXXXXXXXX (11 digits, numbers only)</p>
             </div>
+            <div className="md:col-span-4">
+              <label className="block text-slate-700 font-semibold mb-1">Session Rate (₱/hour)</label>
+              <div className="relative w-[20ch]">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500">₱</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={sessionRate}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                    setSessionRate(cleaned);
+                  }}
+                  className="w-full pl-6 pr-2 py-2 border border-slate-300 rounded-lg"
+                  placeholder="e.g., 350"
+                />
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Typical range: ₱200 - ₱800</p>
+            </div>
           </div>
 
           {/* Bio */}
-          <div className="mb-6 max-w-3xl">
+          <div className="mb-6 max-w-4xl p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
             <label className="block text-slate-700 font-semibold mb-1">Your Bio (why you'd be a great tutor)</label>
-            <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="w-full px-4 py-2 border border-slate-300 rounded-lg" placeholder="Share your peer-to-peer tutoring style, subjects you can help with, relevant study experience, and how you support fellow students." />
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Share your peer-to-peer tutoring style, subjects you can help with, relevant study experience, and how you support fellow students." />
           </div>
           {/* Subjects of Expertise */}
-          <div>
+          <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
             <h2 className="block text-slate-700 font-semibold mb-2 text-lg">1. Subjects of Expertise</h2>
             <div className="flex flex-wrap gap-2 mb-4 min-h-[2.5rem] items-center">
               {Array.from(selectedSubjects).map((subject: string) => (
@@ -1474,12 +1563,63 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <p className="text-sm text-slate-500">No subjects selected yet.</p>
               )}
             </div>
+
+            {/* Per-subject supporting documents */}
+            {selectedSubjects.size > 0 && (
+              <div className="space-y-4 mb-6">
+                {Array.from(selectedSubjects as Set<string>).map((subject: string) => (
+                  <div key={`files-${subject}`} className="border rounded-lg p-3 bg-slate-50/50">
+                    <label className="block text-slate-700 font-semibold mb-1">Supporting documents for: <span className="text-indigo-700">{subject}</span></label>
+                    <p className="text-xs text-slate-500 mb-2">Upload proofs (PDF, PNG, JPG, JPEG). At least one file required.</p>
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,image/jpg"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length === 0) return;
+                        setSubjectFilesMap((prev) => ({
+                          ...prev,
+                          [subject]: [...(prev[subject] || []), ...files],
+                        }));
+                        e.currentTarget.value = '';
+                      }}
+                      className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                    />
+                    {(subjectFilesMap[subject] || []).length > 0 && (
+                      <ul className="mt-2 list-disc list-inside text-xs text-slate-600 space-y-1">
+                        {(subjectFilesMap[subject] || []).map((f, idx) => (
+                          <li key={`${subject}-f-${idx}`} className="flex items-center justify-between">
+                            <span className="truncate mr-2">{f.name}</span>
+                            <button
+                              type="button"
+                              className="text-red-600 hover:underline"
+                              onClick={() => {
+                                setSubjectFilesMap((prev) => {
+                                  const next = { ...prev };
+                                  const arr = [...(next[subject] || [])];
+                                  arr.splice(idx, 1);
+                                  next[subject] = arr;
+                                  return next;
+                                });
+                              }}
+                            >
+                              remove
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             
             <div className="flex items-center gap-2 mb-4 max-w-3xl">
               <select
                 value={subjectToAdd}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSubjectToAdd(e.target.value)}
-                className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${!universityId ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
+                className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 ${!universityId ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
                 aria-label="Select a subject to add"
                 disabled={!universityId}
                 title={!universityId ? 'Select a university first' : undefined}
@@ -1512,7 +1652,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     value={otherSubject}
                     onChange={(e) => setOtherSubject(e.target.value)}
                     placeholder="e.g., Astrophysics"
-                    className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-slate-400 ${!universityId ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
+                    className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder-slate-400 ${!universityId ? 'border-slate-500 bg-slate-700/60 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
                     disabled={!universityId}
                     title={!universityId ? 'Select a university first' : undefined}
                   />
@@ -1534,7 +1674,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
 
 
            {/* Availability Scheduling */}
-          <div className="mt-8">
+          <div className="mt-8 p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
             <h2 className="block text-slate-700 font-semibold mb-2 text-lg">2. Weekly Availability</h2>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -1599,7 +1739,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Document Upload */}
-          <div className="mt-8">
+          <div className="mt-8 p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
             <h2 className="block text-slate-700 font-semibold mb-2 text-lg">3. Proof Documents</h2>
             <div className="mb-6">
               <label className="block text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
@@ -1640,30 +1780,40 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               {gcashQRImage && <p className="text-xs text-slate-500 mt-1">Selected: {gcashQRImage.name}</p>}
               <p className="text-xs text-slate-500 mt-1">Upload your GCash QR code for payment processing</p>
             </div>
-            {/* Drag and Drop Area */}
-            <div 
-              className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-md hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors cursor-pointer"
-              onDragOver={handleDragOver}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => document.getElementById('file-upload-drag')?.click()}
-            >
-              <div className="space-y-1 text-center">
-                <DocumentArrowUpIcon className="mx-auto h-12 w-12 text-slate-400" />
-                <div className="text-sm text-slate-600">
-                  <p>Drag and drop your files here</p>
-                  <p className="text-xs text-slate-500 mt-1">or click to browse</p>
+            {/* Supporting Documents Upload Section */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Supporting Documents <span className="text-red-500">*</span>
+              </label>
+              <p className="text-xs text-slate-500">
+                Upload valid supporting documents (e.g., transcript, student ID, certification) to verify your credibility as a tutor.
+              </p>
+
+              {/* Drag and Drop Area */}
+              <div 
+                className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-md hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors cursor-pointer"
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById('file-upload-drag')?.click()}
+              > 
+                <div className="space-y-1 text-center">
+                  <DocumentArrowUpIcon className="mx-auto h-12 w-12 text-slate-400" />
+                  <div className="text-sm text-slate-600">
+                    <p>Drag and drop your files here</p>
+                    <p className="text-xs text-slate-500 mt-1">or click to browse</p>
+                  </div>
+                  <p className="text-xs text-slate-500">PDF, DOCX, PNG, JPG, JPEG up to 10MB</p>
+                  <input 
+                    id="file-upload-drag"
+                    type="file" 
+                    className="sr-only" 
+                    multiple 
+                    accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg" 
+                    onChange={handleFileChange} 
+                  />
                 </div>
-                <p className="text-xs text-slate-500">PDF, DOCX, PNG, JPG, JPEG up to 10MB</p>
-                <input 
-                  id="file-upload-drag"
-                  type="file" 
-                  className="sr-only" 
-                  multiple 
-                  accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg" 
-                  onChange={handleFileChange} 
-                />
               </div>
             </div>
 
@@ -1678,19 +1828,37 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
           </div>
           
-          <button 
-            type="submit" 
-            className={`mt-8 w-full font-bold py-3 px-6 rounded-lg transition-colors ${
-              isEmailVerified 
-                ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
-                : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-            }`}
-            disabled={!isEmailVerified}
-            title={!isEmailVerified ? 'Please verify your email first' : 'Submit your tutor application'}
-          >
-            {isEmailVerified ? 'Submit Application' : 'Verify Email to Submit'}
-          </button>
+          <div className="pt-4">
+            <div className="flex items-start gap-2 text-sm text-slate-700">
+              <input
+                id="accept-terms"
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <label htmlFor="accept-terms" className="leading-5">
+                I have read and agree to the Tutor Terms and Conditions.
+                <button type="button" className="ml-2 text-indigo-600 hover:text-indigo-700 underline" onClick={() => setShowTermsModal(true)}>Read Terms</button>
+              </label>
+            </div>
+            <div className="sticky bottom-0 mt-3 bg-gradient-to-t from-white/80 to-transparent pt-3">
+              <button 
+                type="submit" 
+                className={`w-full font-bold py-3 px-6 rounded-lg transition-colors ${
+                  isEmailVerified && acceptedTerms
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                    : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                }`}
+                disabled={!isEmailVerified || !acceptedTerms}
+                title={!isEmailVerified ? 'Please verify your email first' : (!acceptedTerms ? 'Please read and accept the Terms and Conditions' : 'Submit your tutor application')}
+              >
+                {isEmailVerified ? 'Submit Application' : 'Verify Email to Submit'}
+              </button>
+            </div>
+          </div>
         </form>
+        
       </div>
       )}
       </div>
@@ -1813,6 +1981,83 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Terms and Conditions Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 max-w-3xl w-full relative overflow-hidden">
+            <div className="relative z-10 p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-slate-800">Tutor Terms and Conditions</h2>
+                <button type="button" onClick={handleCloseTermsModal} className="p-2 text-slate-400 hover:text-slate-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+              <div className="max-h-[65vh] overflow-y-auto pr-1 text-slate-700 space-y-4">
+                <p><strong>Effective Date:</strong> October 31, 2025</p>
+                <p><strong>Platform Name:</strong> TutorLink (“the Platform”)</p>
+                <h3 className="font-semibold">1. Overview</h3>
+                <p>These Terms govern your participation as a Tutor on TutorLink. By joining and providing tutoring services, you agree to follow these rules and maintain professionalism throughout your use of the Platform.</p>
+                <h3 className="font-semibold">2. Tutor Application</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Only qualified individuals may apply as tutors.</li>
+                  <li>You must submit accurate personal and academic details for verification.</li>
+                  <li>Uploading false, incomplete, or inappropriate documents is not allowed and may result in suspension or removal.</li>
+                  <li>TutorLink reserves the right to approve or revoke tutor access at any time.</li>
+                </ul>
+                <h3 className="font-semibold">3. Profile and Availability</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Once approved, you must complete your profile with accurate information, subjects, and GCash details.</li>
+                  <li>Keep your profile and schedule updated to ensure proper session bookings.</li>
+                </ul>
+                <h3 className="font-semibold">4. Session Handling</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Tutors may accept or decline session requests.</li>
+                  <li>Once a session is completed, both parties must confirm it through TutorLink.</li>
+                  <li>After confirmation, TutorLink will verify and process the tutor’s payment.</li>
+                  <li>Any disputes will be reviewed by the platform’s admin team.</li>
+                </ul>
+                <h3 className="font-semibold">5. Payment</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>All payments are handled securely by TutorLink.</li>
+                  <li>Tutors will receive their earnings after successful session verification.</li>
+                  <li>A small service fee may be deducted for operational costs.</li>
+                  <li>Payments are typically released within 3–5 business days.</li>
+                  <li>Tutors must not request or accept payments outside the Platform.</li>
+                </ul>
+                <h3 className="font-semibold">6. Conduct and Responsibilities</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Act professionally and respectfully during sessions.</li>
+                  <li>Provide accurate, relevant, and appropriate teaching materials.</li>
+                  <li>Protect students’ personal and academic information.</li>
+                  <li>Avoid uploading inappropriate or unrelated files.</li>
+                  <li>Report any issues or concerns to TutorLink support.</li>
+                  <li>Violations may lead to suspension, withholding of payments, or permanent removal.</li>
+                </ul>
+                <h3 className="font-semibold">7. Ratings and Feedback</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Tutees may leave ratings and feedback after each session.</li>
+                  <li>Tutors must not manipulate or pressure tutees to alter reviews.</li>
+                  <li>Constructive and professional engagement with feedback is encouraged.</li>
+                </ul>
+                <h3 className="font-semibold">8. Privacy and Security</h3>
+                <p>TutorLink handles all tutor data and GCash information with confidentiality. Personal information is used only for verification, payment, and platform operations, following the Data Privacy Act of 2012.</p>
+                <h3 className="font-semibold">9. Liability</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>TutorLink acts only as a facilitator and payment handler between tutors and tutees.</li>
+                  <li>The Platform is not responsible for internet issues, GCash delays, or factors beyond its control.</li>
+                  <li>TutorLink does not guarantee a fixed number of sessions or earnings.</li>
+                </ul>
+                <h3 className="font-semibold">10. Modifications</h3>
+                <p>TutorLink may update these Terms anytime. Continued use of the Platform means you accept the revised version.</p>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button type="button" onClick={handleCloseTermsModal} className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">Close</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

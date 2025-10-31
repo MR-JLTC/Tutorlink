@@ -29,7 +29,7 @@ const UnifiedLoginPage: React.FC = () => {
       src: 'https://images.unsplash.com/photo-1543269865-cbf427effbad?q=80&w=2070&auto=format&fit=crop',
       alt: 'Tutor helping student with laptop',
       title: 'Expert Guidance',
-      description: 'Experienced tutors providing personalized support'
+      description: 'Students empowering each other through personalized learning'
     },
     {
       src: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?q=80&w=2070&auto=format&fit=crop',
@@ -37,12 +37,24 @@ const UnifiedLoginPage: React.FC = () => {
       title: 'Academic Excellence',
       description: 'Building knowledge and skills for future success'
     },
-    {
-      src: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=2070&auto=format&fit=crop',
+    { 
+      src: 'assets/images/bgp2.jpg',
       alt: 'Student raising hand in classroom',
       title: 'Interactive Learning',
       description: 'Engaging educational experiences that inspire growth'
-    }
+    },
+    {
+      src: 'assets/images/bgp3.jpg',
+      alt: 'Person using laptop with virtual learning icons',
+      title: 'Digital Education',
+      description: 'Empowering learning through innovative online platforms'
+    },
+    {
+      src: 'assets/images/bgp4.jpg',
+      alt: 'Student attending online tutoring session',
+      title: 'Personalized Tutoring',
+      description: 'One-on-one online sessions that make learning more effective'
+    }    
   ];
 
   // Auto-advance slideshow

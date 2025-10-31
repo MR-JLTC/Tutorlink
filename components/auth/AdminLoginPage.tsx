@@ -19,8 +19,8 @@ const LoginPage: React.FC = () => {
     setIsLoading(true);
     setError('');
     try {
-      if (password.length < 7 || password.length > 13) {
-        setError('Password must be between 7 and 13 characters.');
+      if (password.length < 7 || password.length > 21) {
+        setError('Password must be between 7 and 21 characters.');
         setIsLoading(false);
         return;
       }
@@ -138,7 +138,7 @@ const LoginPage: React.FC = () => {
                   [&::-webkit-credentials-auto-fill-button]:!hidden 
                   [&::-webkit-strong-password-auto-fill-button]:!hidden`}
                 minLength={7}
-                maxLength={13}
+                maxLength={21}
                 placeholder="********"
               />
                 <button
@@ -215,16 +215,20 @@ const AdminLoginSlideshow: React.FC = () => {
   const [index, setIndex] = React.useState(0);
   const slides = React.useMemo(() => [
     {
-      src: 'https://images.unsplash.com/photo-1553729459-efe14ef6055d?q=80&w=2070&auto=format&fit=crop',
-      alt: 'Admin reviewing dashboard analytics charts',
+      src: 'assets/images/bgp3.jpg',
+      alt: 'Team collaborating on platform operations with laptops',
     },
     {
-      src: 'https://images.unsplash.com/photo-1556157382-97eda2d62296?q=80&w=2070&auto=format&fit=crop',
-      alt: 'Team collaboration with laptops in modern office',
+      src: 'assets/images/bgp5.jpg',
+      alt: 'Administrator monitoring online tutoring platform dashboard',
+    },    
+    {
+      src: 'https://images.unsplash.com/photo-1603791440384-56cd371ee9a7?q=80&w=2070&auto=format&fit=crop',
+      alt: 'Team collaborating on student-tutor system management',
     },
     {
-      src: 'https://images.unsplash.com/photo-1552581234-26160f608093?q=80&w=2070&auto=format&fit=crop',
-      alt: 'Secure admin operations on computer',
+      src: 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?q=80&w=2070&auto=format&fit=crop',
+      alt: 'Administrator overseeing secure online tutoring operations',
     },
   ], []);
 
