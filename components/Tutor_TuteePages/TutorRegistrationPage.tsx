@@ -57,6 +57,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   const [gcashNumber, setGcashNumber] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsViewed, setTermsViewed] = useState(false); // Track if user has viewed/scrolled through terms
+  const [termsScrollProgress, setTermsScrollProgress] = useState(0); // Track scroll progress in terms modal
   const [sessionRate, setSessionRate] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
@@ -137,6 +139,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   };
 
   // Search for an available slot using the CURRENT state inside caller, so here we accept existing slots explicitly
+  // Improved: First tries to find gaps between existing slots, then falls back to searching the full day
   const findNonOverlappingSlotFromExisting = (
     existingSlots: { startTime: string; endTime: string }[],
     durationMins = 60,
@@ -144,12 +147,53 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     latestMinute = 22 * 60,
     step = 15
   ) => {
+    // Normalize and sort existing slots
+    const normalized = existingSlots.map(s => ({
+      startTime: normalizeTime(s.startTime),
+      endTime: normalizeTime(s.endTime)
+    })).sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+
+    // Strategy 1: Look for gaps between existing slots
+    for (let i = 0; i <= normalized.length; i++) {
+      let gapStart: number;
+      let gapEnd: number;
+
+      if (i === 0) {
+        // Gap before first slot
+        gapStart = earliestMinute;
+        gapEnd = normalized.length > 0 ? toMinutes(normalized[0].startTime) : latestMinute;
+      } else if (i === normalized.length) {
+        // Gap after last slot
+        gapStart = toMinutes(normalized[normalized.length - 1].endTime);
+        gapEnd = latestMinute;
+      } else {
+        // Gap between two slots
+        gapStart = toMinutes(normalized[i - 1].endTime);
+        gapEnd = toMinutes(normalized[i].startTime);
+      }
+
+      // Check if gap is large enough
+      if (gapEnd - gapStart >= durationMins) {
+        // Try to place slot in the gap, starting from the beginning of the gap
+        const slotStart = gapStart;
+        const slotEnd = slotStart + durationMins;
+        if (slotEnd <= gapEnd) {
+          const cand = { startTime: minutesToTime(slotStart), endTime: minutesToTime(slotEnd) };
+          // Double-check it doesn't overlap (shouldn't, but be safe)
+          const conflict = normalized.some(s => timesOverlap(s.startTime, s.endTime, cand.startTime, cand.endTime));
+          if (!conflict) return cand;
+        }
+      }
+    }
+
+    // Strategy 2: Fall back to original approach - search the entire day
     for (let start = earliestMinute; start + durationMins <= latestMinute; start += step) {
       const end = start + durationMins;
       const cand = { startTime: minutesToTime(start), endTime: minutesToTime(end) };
-      const conflict = existingSlots.some(s => timesOverlap(s.startTime, s.endTime, cand.startTime, cand.endTime));
+      const conflict = normalized.some(s => timesOverlap(s.startTime, s.endTime, cand.startTime, cand.endTime));
       if (!conflict) return cand;
     }
+    
     return null;
   };
 
@@ -183,38 +227,71 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   // Update a slot time safely (validated inside updater)
   const updateSlotTime = (day: string, index: number, type: 'startTime' | 'endTime', rawValue: string) => {
     const value = normalizeTime(rawValue);
+    
     setAvailability(prev => {
       const next = { ...prev };
       const current = next[day];
       if (!current) return prev;
 
-      // clone and normalize
-      const slots = current.slots.map(s => ({ startTime: normalizeTime(s.startTime), endTime: normalizeTime(s.endTime) }));
+      // clone and normalize all existing slots first
+      const slots = current.slots.map(s => ({ 
+        startTime: normalizeTime(s.startTime), 
+        endTime: normalizeTime(s.endTime) 
+      }));
 
       if (index < 0 || index >= slots.length) return prev;
 
-      slots[index] = { ...slots[index], [type]: value };
+      // Create updated slot with new value
+      const updatedSlot = { ...slots[index], [type]: value };
+      const tempSlots = [...slots];
+      tempSlots[index] = updatedSlot;
 
-      const sMin = toMinutes(slots[index].startTime);
-      const eMin = toMinutes(slots[index].endTime);
+      // Get time values in minutes for comparison
+      const sMin = toMinutes(updatedSlot.startTime);
+      const eMin = toMinutes(updatedSlot.endTime);
+      
+      // Validate that both times are valid (not NaN or invalid)
+      // If invalid, allow the update to proceed (might be incomplete input)
+      if (isNaN(sMin) || isNaN(eMin)) {
+        // Still update the state even if validation can't proceed
+        tempSlots.sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+        next[day] = { slots: tempSlots };
+        return next;
+      }
+
+      // Validate end time is after start time
       if (eMin <= sMin) {
-        // invalid end before/equals start -> keep state unchanged, show error
-        notify('End time must be after start time', 'error');
+        // Only show error if both times are complete and valid
+        // This prevents showing errors during intermediate editing states
+        const startTimeValid = updatedSlot.startTime && updatedSlot.startTime.match(/^\d{2}:\d{2}$/);
+        const endTimeValid = updatedSlot.endTime && updatedSlot.endTime.match(/^\d{2}:\d{2}$/);
+        if (startTimeValid && endTimeValid) {
+          notify('End time must be after start time', 'error');
+        }
         return prev;
       }
 
-      // validate against other slots (do not compare against itself)
-      for (let i = 0; i < slots.length; i++) {
+      // Validate against other slots (do not compare against itself)
+      for (let i = 0; i < tempSlots.length; i++) {
         if (i === index) continue;
-        if (timesOverlap(slots[index].startTime, slots[index].endTime, slots[i].startTime, slots[i].endTime)) {
+        const otherSlot = tempSlots[i];
+        const otherStart = toMinutes(otherSlot.startTime);
+        const otherEnd = toMinutes(otherSlot.endTime);
+        
+        // Skip if other slot has invalid times
+        if (isNaN(otherStart) || isNaN(otherEnd)) continue;
+        
+        // Check if there's actual overlap (not just adjacent)
+        // Overlap means: start1 < end2 && start2 < end1
+        if (sMin < otherEnd && otherStart < eMin) {
           notify('This time overlaps with another slot. Please choose a different time.', 'error');
           return prev;
         }
       }
 
       // If valid, apply, sort, and return new state
-      slots.sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
-      next[day] = { slots };
+      tempSlots.sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+      next[day] = { slots: tempSlots };
       return next;
     });
   };
@@ -261,15 +338,32 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   useEffect(() => {
     (async () => {
       try {
+        // Clear subjects if university or course is not selected
         if (!universityId) {
           setAvailableSubjects([]);
+          setSelectedSubjects(new Set());
+          setSubjectFilesMap({});
           return;
         }
-        const params: any = { university_id: universityId };
-        if (courseId && courseId !== 'other') params.course_id = Number(courseId);
+        
+        // Only fetch subjects if a specific course is selected
+        if (!courseId) {
+          setAvailableSubjects([]);
+          setSelectedSubjects(new Set());
+          setSubjectFilesMap({});
+          return;
+        }
+        
+        // Fetch subjects specifically for the selected course
+        const params: any = { 
+          university_id: universityId,
+          course_id: Number(courseId)
+        };
         const res = await apiClient.get(`/subjects`, { params });
         setAvailableSubjects(res.data || []);
+        console.log(`Fetched ${res.data?.length || 0} subjects for course_id: ${courseId}`);
       } catch (e) {
+        console.error('Error fetching subjects:', e);
         setAvailableSubjects([]);
       }
     })();
@@ -330,31 +424,22 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     });
   }, [courses, universityId]);
 
-  // Auto-select course if the typed input matches an existing course in the dropdown (case-insensitive)
+  // If university changes and current selected course no longer applies, reset selection
   useEffect(() => {
-    const trimmed = courseInput.trim().toLowerCase();
-    if (!trimmed || courseId) return;
-    const match = filteredCourses.find(c => c.course_name.toLowerCase() === trimmed);
-    if (match) {
-      setCourseId(String(match.course_id));
-    }
-  }, [courseInput, courseId, filteredCourses]);
+    if (!courseId || !universityId) return;
+    // Only reset if we have courses loaded and the selected one isn't in the list
+      if (filteredCourses.length > 0) {
+        const stillValid = filteredCourses.some(c => String(c.course_id) === courseId);
+        if (!stillValid) {
+          setCourseId('');
+        }
+      }
+  }, [filteredCourses, courseId, universityId]);
 
-  // If university changes and current selected course no longer applies, reset selection and enable input
-  useEffect(() => {
-    if (!courseId || courseId === 'other') return;
-    const stillValid = filteredCourses.some(c => String(c.course_id) === courseId);
-    if (!stillValid) {
-      setCourseId('');
-      setCourseInput('');
-    }
-  }, [filteredCourses, courseId]);
-
-  // If no university selected, lock course selection and clear any existing selection/input
+  // If no university selected, lock course selection and clear any existing selection
   useEffect(() => {
     if (!universityId) {
       setCourseId('');
-      setCourseInput('');
     }
   }, [universityId]);
 
@@ -388,12 +473,13 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     });
   };
 
-  // When available subjects change (due to university change), prune selections not in list
+  // When available subjects change (due to university or course change), prune selections not in list
   useEffect(() => {
     if (!availableSubjects || availableSubjects.length === 0) {
       // If no university selected, clear selections
       if (!universityId && selectedSubjects.size > 0) {
         setSelectedSubjects(new Set());
+        setSubjectFilesMap({});
       }
       return;
     }
@@ -403,7 +489,19 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       prev.forEach(s => { if (names.has(s)) next.add(s); });
       return next;
     });
-  }, [availableSubjects, universityId]);
+    
+    // Also clear files for subjects that are no longer valid
+    setSubjectFilesMap(prev => {
+      const next = { ...prev };
+      const validNames = new Set(availableSubjects.map(s => s.subject_name));
+      Object.keys(next).forEach(subject => {
+        if (!validNames.has(subject)) {
+          delete next[subject];
+        }
+      });
+      return next;
+    });
+  }, [availableSubjects, universityId, courseId]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -1049,7 +1147,26 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   };
   
   const handleCloseTermsModal = () => {
+    // Mark terms as viewed if user has scrolled through at least 80% of the content
+    if (termsScrollProgress >= 80) {
+      setTermsViewed(true);
+    }
     setShowTermsModal(false);
+  };
+
+  // Handle scroll in terms modal to track if user is reading
+  const handleTermsModalScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollTop = target.scrollTop;
+    const scrollHeight = target.scrollHeight;
+    const clientHeight = target.clientHeight;
+    const scrollPercentage = (scrollTop / (scrollHeight - clientHeight)) * 100;
+    setTermsScrollProgress(scrollPercentage);
+    
+    // Mark as viewed when user has scrolled through at least 80% of the content
+    if (scrollPercentage >= 80) {
+      setTermsViewed(true);
+    }
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1070,6 +1187,14 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       notify('Password must be between 7 and 21 characters.', 'error');
       return;
     }
+    if (!yearLevel) {
+      notify('Please select your year level.', 'error');
+      return;
+    }
+    if (!gcashNumber || gcashNumber.length !== 11) {
+      notify('Please enter a valid GCash number (11 digits).', 'error');
+      return;
+    }
     if (selectedSubjects.size === 0 || uploadedFiles.length === 0) {
       notify('Please select at least one subject and upload at least one document.', 'error');
       return;
@@ -1080,6 +1205,15 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       notify(`Please upload supporting document(s) for: ${missingDocs.join(', ')}`, 'error');
       return;
     }
+    if (!termsViewed) {
+      notify('Please read the Terms and Conditions before submitting. Click "Read Terms" to view them.', 'error');
+      setShowTermsModal(true);
+      return;
+    }
+    if (!acceptedTerms) {
+      notify('Please accept the Terms and Conditions before submitting.', 'error');
+      return;
+    }
 
     try {
       console.log('Starting tutor application submission...');
@@ -1087,8 +1221,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         email,
         full_name: fullName.trim(),
         university_id: Number(universityId),
-        course_id: (courseId && courseId !== 'other') ? Number(courseId) : undefined,
-        course_name: (courseId === 'other' && courseInput.trim().length > 0) ? courseInput.trim() : undefined,
+        course_id: courseId ? Number(courseId) : undefined,
         bio,
         year_level: Number(yearLevel), // Convert to number
         gcash_number: gcashNumber,
@@ -1107,18 +1240,58 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         password: password,
         user_type: 'tutor',
         university_id: Number(universityId),
-        course_id: (courseId && courseId !== 'other') ? Number(courseId) : undefined,
-        course_name: (courseId === 'other' && courseInput.trim().length > 0) ? courseInput.trim() : undefined,
-        bio: bio,
-        year_level: Number(yearLevel), // Convert to number
+        course_id: courseId ? Number(courseId) : undefined,
+        bio: bio || undefined,
+        year_level: Number(yearLevel),
         gcash_number: gcashNumber,
         SessionRatePerHour: sessionRate ? Number(sessionRate) : undefined,
       };
-
-      const registrationResponse = await apiClient.post('/auth/register', registerPayload);
-      const newTutorId = registrationResponse.data.user.tutor_profile?.tutor_id;
       
-      if (!newTutorId) throw new Error('Could not get tutor ID after registration');
+      console.log('Registration payload:', registerPayload);
+      console.log('Making POST request to /auth/register...');
+      
+      let registrationResponse;
+      try {
+        registrationResponse = await apiClient.post('/auth/register', registerPayload);
+        console.log('Registration response:', registrationResponse.data);
+      } catch (registerErr: any) {
+        console.error('Registration API error details:', {
+          message: registerErr?.message,
+          response: registerErr?.response?.data,
+          status: registerErr?.response?.status,
+          url: registerErr?.config?.url,
+          method: registerErr?.config?.method,
+          baseURL: registerErr?.config?.baseURL,
+          fullUrl: `${registerErr?.config?.baseURL}${registerErr?.config?.url}`,
+        });
+        
+        // Provide helpful error message for 404 errors
+        if (registerErr?.response?.status === 404) {
+          const errorMsg = registerErr?.response?.data?.message || registerErr?.message || 'Endpoint not found';
+          notify(`Registration failed: ${errorMsg}. Please ensure the backend server is running on http://localhost:3000`, 'error');
+        }
+        
+        throw registerErr;
+      }
+      
+      // Store the access token for authenticated requests
+      const { user, accessToken } = registrationResponse.data;
+      if (accessToken) {
+        localStorage.setItem('token', accessToken);
+        localStorage.setItem('user', JSON.stringify(user));
+        console.log('Token stored for authenticated requests');
+      }
+      
+      // Try different possible response structures
+      const newTutorId = registrationResponse.data?.user?.tutor_profile?.tutor_id 
+        || registrationResponse.data?.tutor_profile?.tutor_id
+        || registrationResponse.data?.tutor_id
+        || registrationResponse.data?.user?.tutor_id;
+      
+      if (!newTutorId) {
+        console.error('Registration response structure:', JSON.stringify(registrationResponse.data, null, 2));
+        throw new Error('Could not get tutor ID after registration. Please check the response structure.');
+      }
       console.log('New Tutor User Registered with ID:', newTutorId);
 
       // Use newTutorId for subsequent steps
@@ -1173,32 +1346,71 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       console.log('Step 6: Saving subjects...');
       const subjectsArray: string[] = Array.from(selectedSubjects) as string[];
       console.log('Selected subjects:', subjectsArray);
-      await apiClient.post(`/tutors/${tutorId}/subjects`, { subjects: subjectsArray });
+      
+      // Get the actual course_id that was saved during registration
+      const resolvedCourseId = courseId ? Number(courseId) : null;
+      
+      // Note: We don't validate against existing subjects here because:
+      // 1. Users can add new subjects that don't exist in the database yet
+      // 2. The backend will automatically create new subjects if they don't exist
+      // 3. The backend handles proper course_id linking for new subjects
+      // This allows users to add custom subjects like "Ethical Hacking" that aren't pre-defined
+      
+      // Save subjects - backend will create new subjects if they don't exist
+      await apiClient.post(`/tutors/${tutorId}/subjects`, { 
+        subjects: subjectsArray,
+        course_id: resolvedCourseId || undefined // Include course_id for additional validation
+      });
       console.log('Subjects saved successfully');
 
       // 7) Upload supporting documents per subject
       console.log('Step 7: Uploading subject supporting documents...');
       for (const subject of subjectsArray) {
         const files = subjectFilesMap[subject] || [];
-        const form = new FormData();
-        files.forEach(f => form.append('files', f));
-        await apiClient.post(`/tutors/${tutorId}/subjects/${encodeURIComponent(subject)}/documents`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
-        console.log(`Uploaded documents for subject: ${subject}`);
+        if (files.length === 0) {
+          console.warn(`No files found for subject: ${subject}, skipping...`);
+          continue;
+        }
+        try {
+          const form = new FormData();
+          // Append subject name to FormData body (required by backend)
+          form.append('subject_name', subject);
+          // Append all files
+          files.forEach(f => form.append('files', f));
+          // Use the correct endpoint: /tutors/:tutorId/subject-application
+          await apiClient.post(`/tutors/${tutorId}/subject-application`, form, { 
+            headers: { 'Content-Type': 'multipart/form-data' } 
+          });
+          console.log(`Uploaded ${files.length} document(s) for subject: ${subject}`);
+        } catch (subjectErr: any) {
+          console.error(`Failed to upload documents for subject ${subject}:`, subjectErr);
+          console.error('Error details:', {
+            message: subjectErr?.message,
+            response: subjectErr?.response?.data,
+            status: subjectErr?.response?.status,
+            url: subjectErr?.config?.url
+          });
+          // Continue with other subjects even if one fails
+          notify(`Warning: Failed to upload documents for ${subject}. Continuing...`, 'error');
+        }
       }
+      console.log('Step 7: Subject supporting documents upload completed');
 
       setIsSubmitted(true);
+      notify('Application submitted successfully!', 'success');
     } catch (err: any) {
       console.error('Submission error:', err);
       console.error('Error response:', err?.response?.data);
       console.error('Error status:', err?.response?.status);
+      console.error('Error config:', err?.config);
       
-      const message = err?.response?.data?.message || err?.message || 'Failed to submit application';
+      const message = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Failed to submit application';
       
       // Use the notify function from useToast hook
       if (typeof message === 'string' && message.toLowerCase().includes('email already registered')) {
         notify('Email already registered', 'error');
       } else {
-        notify(message, 'error');
+        notify(`Submission failed: ${message}`, 'error');
       }
     }
   };
@@ -1228,16 +1440,6 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
             </button>
           </div>
           <div className="max-h-[85vh] overflow-y-auto px-4 sm:px-5 py-5 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
-            {isSubmitted ? (
-              <div className="max-w-md mx-auto text-center bg-white p-8 rounded-xl shadow-lg">
-                <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto" />
-                <h2 className="text-2xl font-bold text-slate-800 mt-4">Application Submitted!</h2>
-                <p className="text-slate-600 mt-2">
-                  Thank you for your application. Our team will review your submitted documents. You will be notified once approved.
-                </p>
-                <button onClick={onClose} className="mt-6 w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors">Close</button>
-              </div>
-            ) : (
             <div className="w-full bg-white/80 backdrop-blur-lg p-4 sm:p-5 rounded-2xl shadow-xl border border-white/50">
         <form onSubmit={handleSubmit} className="mx-auto max-w-4xl">
           {/* Account Info */}
@@ -1430,48 +1632,22 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               
               <div className="max-w-3xl md:col-span-12">
                 <label className="block text-slate-700 font-semibold mb-1">Course</label>
-                <div className={`flex ${courseId === 'other' ? 'flex-col' : 'flex-col md:flex-row'} gap-3 items-start w-full`}>
-                  <select
-                    className={`flex-1 min-w-0 px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
-                    value={courseId}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      if (raw === 'other') {
-                        setCourseId('other');
-                      } else {
-                        const value = raw ? Number(raw) : '';
-                        setCourseId(value);
-                        if (value !== '' ) setCourseInput('');
-                      }
-                    }}
-                    disabled={!universityId}
-                    title={!universityId ? 'Select a university first' : undefined}
-                  >
+                <select
+                  className={`w-full px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
+                  value={courseId}
+                  onChange={(e) => {
+                    setCourseId(e.target.value || '');
+                  }}
+                  disabled={!universityId}
+                  title={!universityId ? 'Select a university first' : undefined}
+                >
                   <option value="">Select Course</option>
                   {filteredCourses.map(c => (
                     <option key={c.course_id} value={String(c.course_id)}>{c.course_name}</option>
                   ))}
-                    <option value="other">Other</option>
-                  </select>
-                  {courseId === 'other' && (
-                    <div className="flex-1 min-w-0 md:flex-[1.2] max-w-full md:max-w-lg">
-                      <label htmlFor="course-input" className="block text-slate-600 text-sm mb-1 sm:sr-only">Custom course</label>
-                      <input
-                        id="course-input"
-                        type="text"
-                        value={courseInput}
-                        onChange={(e) => setCourseInput(e.target.value)}
-                        placeholder="e.g., BS Astrophysics"
-                        className="w-full px-4 py-2 border rounded-lg border-slate-300"
-                      />
-                    </div>
-                  )}
-                </div>
-                {(courseId !== 'other' && courseId !== '') && universityId && (
-                  <p className="text-xs text-slate-500 mt-1">Choose "Other" to enter a custom course.</p>
-                )}
+                </select>
                 {!courseId && !universityId && (
-                  <p className="text-xs text-slate-500 mt-1">Select a university to enable course selection or manual input.</p>
+                  <p className="text-xs text-slate-500 mt-1">Select a university to enable course selection.</p>
                 )}
               </div>
           </div>
@@ -1540,7 +1716,16 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           {/* Bio */}
           <div className="mb-6 max-w-4xl p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
             <label className="block text-slate-700 font-semibold mb-1">Your Bio (why you'd be a great tutor)</label>
-            <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500" placeholder="Share your peer-to-peer tutoring style, subjects you can help with, relevant study experience, and how you support fellow students." />
+            <textarea 
+              value={bio} 
+              onChange={(e) => {
+                const filtered = e.target.value.replace(/[^A-Za-z\s]/g, '');
+                setBio(filtered);
+              }} 
+              rows={4} 
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500" 
+              placeholder="Share your peer-to-peer tutoring style, subjects you can help with, relevant study experience, and how you support fellow students." 
+            />
           </div>
           {/* Subjects of Expertise */}
           <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
@@ -1569,47 +1754,64 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               <div className="space-y-4 mb-6">
                 {Array.from(selectedSubjects as Set<string>).map((subject: string) => (
                   <div key={`files-${subject}`} className="border rounded-lg p-3 bg-slate-50/50">
-                    <label className="block text-slate-700 font-semibold mb-1">Supporting documents for: <span className="text-indigo-700">{subject}</span></label>
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      Supporting documents for: <span className="text-indigo-700">{subject}</span>
+                      {(subjectFilesMap[subject] || []).length > 0 && (
+                        <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full">
+                          {(subjectFilesMap[subject] || []).length} file{(subjectFilesMap[subject] || []).length !== 1 ? 's' : ''} selected
+                        </span>
+                      )}
+                    </label>
                     <p className="text-xs text-slate-500 mb-2">Upload proofs (PDF, PNG, JPG, JPEG). At least one file required.</p>
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,image/jpg"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (files.length === 0) return;
-                        setSubjectFilesMap((prev) => ({
-                          ...prev,
-                          [subject]: [...(prev[subject] || []), ...files],
-                        }));
-                        e.currentTarget.value = '';
-                      }}
-                      className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                    />
-                    {(subjectFilesMap[subject] || []).length > 0 && (
-                      <ul className="mt-2 list-disc list-inside text-xs text-slate-600 space-y-1">
-                        {(subjectFilesMap[subject] || []).map((f, idx) => (
-                          <li key={`${subject}-f-${idx}`} className="flex items-center justify-between">
-                            <span className="truncate mr-2">{f.name}</span>
-                            <button
-                              type="button"
-                              className="text-red-600 hover:underline"
-                              onClick={() => {
-                                setSubjectFilesMap((prev) => {
-                                  const next = { ...prev };
-                                  const arr = [...(next[subject] || [])];
-                                  arr.splice(idx, 1);
-                                  next[subject] = arr;
-                                  return next;
-                                });
-                              }}
-                            >
-                              remove
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <div className="relative">
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,image/jpg"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length === 0) return;
+                          setSubjectFilesMap((prev) => ({
+                            ...prev,
+                            [subject]: [...(prev[subject] || []), ...files],
+                          }));
+                          e.currentTarget.value = '';
+                        }}
+                        className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                        id={`file-input-${subject}`}
+                      />
+                      {(subjectFilesMap[subject] || []).length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-slate-600 font-medium mb-1">
+                            Selected files:
+                          </p>
+                          <ul className="list-none text-xs text-slate-600 space-y-1">
+                            {(subjectFilesMap[subject] || []).map((f, idx) => (
+                              <li key={`${subject}-f-${idx}`} className="flex items-center justify-between bg-slate-50 px-2 py-1 rounded">
+                                <span className="truncate mr-2 flex-1" title={f.name}>{f.name}</span>
+                                <span className="text-xs text-slate-400 mr-2">({(f.size / 1024).toFixed(1)} KB)</span>
+                                <button
+                                  type="button"
+                                  className="text-red-600 hover:text-red-700 hover:underline flex-shrink-0"
+                                  onClick={() => {
+                                    setSubjectFilesMap((prev) => {
+                                      const next = { ...prev };
+                                      const arr = [...(next[subject] || [])];
+                                      arr.splice(idx, 1);
+                                      next[subject] = arr;
+                                      return next;
+                                    });
+                                  }}
+                                  aria-label={`Remove ${f.name}`}
+                                >
+                                  remove
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1619,10 +1821,20 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               <select
                 value={subjectToAdd}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSubjectToAdd(e.target.value)}
-                className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 ${!universityId ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
+                className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 ${
+                  !universityId || !courseId
+                    ? 'border-slate-500 bg-slate-600/70 text-white/60 cursor-not-allowed' 
+                    : 'border-slate-600 bg-slate-700 text-white'
+                }`}
                 aria-label="Select a subject to add"
-                disabled={!universityId}
-                title={!universityId ? 'Select a university first' : undefined}
+                disabled={!universityId || !courseId}
+                title={
+                  !universityId 
+                    ? 'Select a university first' 
+                    : !courseId
+                    ? 'Select a course first to view subjects'
+                    : undefined
+                }
               >
                 <option value="">Select a subject...</option>
                 {availableSubjects
@@ -1633,14 +1845,37 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               <button
                 type="button"
                 onClick={handleAddSubject}
-                disabled={!universityId || !subjectToAdd || subjectToAdd === 'other' || normalizedSelected.has(subjectToAdd.toLowerCase())}
+                disabled={
+                  !universityId || 
+                  !courseId || 
+                  !subjectToAdd || 
+                  subjectToAdd === 'other' || 
+                  normalizedSelected.has(subjectToAdd.toLowerCase())
+                }
                 className="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
+                title={
+                  !universityId 
+                    ? 'Select a university first' 
+                    : !courseId
+                    ? 'Select a course first'
+                    : !subjectToAdd || subjectToAdd === 'other'
+                    ? 'Select a subject to add'
+                    : undefined
+                }
               >
                 Add
               </button>
             </div>
             {!universityId && (
               <p className="text-xs text-slate-500 mb-4">Select a university to view and add subjects.</p>
+            )}
+            {universityId && !courseId && (
+              <p className="text-xs text-amber-600 mb-4 flex items-center">
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                Please select a course to view and add subjects specific to that course.
+              </p>
             )}
             {subjectToAdd === 'other' && (
               <div className="max-w-3xl">
@@ -1652,21 +1887,49 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     value={otherSubject}
                     onChange={(e) => setOtherSubject(e.target.value)}
                     placeholder="e.g., Astrophysics"
-                    className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder-slate-400 ${!universityId ? 'border-slate-500 bg-slate-700/60 text-white/60 cursor-not-allowed' : 'border-slate-600 bg-slate-700 text-white'}`}
-                    disabled={!universityId}
-                    title={!universityId ? 'Select a university first' : undefined}
+                    className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder-slate-400 ${
+                      !universityId || !courseId
+                        ? 'border-slate-500 bg-slate-700/60 text-white/60 cursor-not-allowed' 
+                        : 'border-slate-600 bg-slate-700 text-white'
+                    }`}
+                    disabled={!universityId || !courseId}
+                    title={
+                      !universityId 
+                        ? 'Select a university first' 
+                        : !courseId
+                        ? 'Select a course first to add a custom subject'
+                        : undefined
+                    }
                   />
                   <button
                     type="button"
                     onClick={handleAddOtherSubject}
-                    disabled={!universityId || subjectToAdd !== 'other' || !otherSubject.trim() || otherSubjectExistsInDropdown}
+                    disabled={
+                      !universityId || 
+                      !courseId || 
+                      subjectToAdd !== 'other' || 
+                      !otherSubject.trim() || 
+                      otherSubjectExistsInDropdown
+                    }
                     className="bg-slate-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-slate-600 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                    title={
+                      !universityId || !courseId
+                        ? 'Select a university and course first'
+                        : !otherSubject.trim()
+                        ? 'Enter a subject name'
+                        : otherSubjectExistsInDropdown
+                        ? 'Subject already exists in the list'
+                        : undefined
+                    }
                   >
                     Add
                   </button>
                 </div>
                 {otherSubjectExistsInDropdown && (
                   <p className="mt-1 text-xs text-red-300">Subject already exists. Please select it from the dropdown above.</p>
+                )}
+                {!courseId && (
+                  <p className="mt-1 text-xs text-amber-600">Please select a course first to add a custom subject for that course.</p>
                 )}
               </div>
             )}
@@ -1835,23 +2098,54 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 type="checkbox"
                 checked={acceptedTerms}
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                disabled={!termsViewed}
+                className={`mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 ${
+                  !termsViewed ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               />
               <label htmlFor="accept-terms" className="leading-5">
-                I have read and agree to the Tutor Terms and Conditions.
-                <button type="button" className="ml-2 text-indigo-600 hover:text-indigo-700 underline" onClick={() => setShowTermsModal(true)}>Read Terms</button>
+                {termsViewed 
+                  ? 'I have read and agree to the Tutor Terms and Conditions.'
+                  : 'I agree to the Tutor Terms and Conditions (please read the terms first).'
+                }
+                <button 
+                  type="button" 
+                  className="ml-2 text-indigo-600 hover:text-indigo-700 underline" 
+                  onClick={() => {
+                    setShowTermsModal(true);
+                    setTermsScrollProgress(0); // Reset progress when opening modal
+                  }}
+                >
+                  {termsViewed ? 'Review Terms' : 'Read Terms'}
+                </button>
               </label>
             </div>
+            {!termsViewed && (
+              <p className="text-xs text-amber-600 mt-1 ml-6 flex items-center">
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                Please open and read the Terms and Conditions before accepting.
+              </p>
+            )}
             <div className="sticky bottom-0 mt-3 bg-gradient-to-t from-white/80 to-transparent pt-3">
               <button 
                 type="submit" 
                 className={`w-full font-bold py-3 px-6 rounded-lg transition-colors ${
-                  isEmailVerified && acceptedTerms
+                  isEmailVerified && acceptedTerms && termsViewed
                     ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
                     : 'bg-gray-400 text-gray-600 cursor-not-allowed'
                 }`}
-                disabled={!isEmailVerified || !acceptedTerms}
-                title={!isEmailVerified ? 'Please verify your email first' : (!acceptedTerms ? 'Please read and accept the Terms and Conditions' : 'Submit your tutor application')}
+                disabled={!isEmailVerified || !acceptedTerms || !termsViewed}
+                title={
+                  !isEmailVerified 
+                    ? 'Please verify your email first' 
+                    : !termsViewed 
+                    ? 'Please read the Terms and Conditions first' 
+                    : !acceptedTerms 
+                    ? 'Please accept the Terms and Conditions' 
+                    : 'Submit your tutor application'
+                }
               >
                 {isEmailVerified ? 'Submit Application' : 'Verify Email to Submit'}
               </button>
@@ -1860,10 +2154,37 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         </form>
         
       </div>
-      )}
       </div>
         </div>
       </div>
+
+      {/* Success Submission Modal */}
+      {isSubmitted && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 max-w-md w-full relative overflow-hidden">
+            <div className="p-8 text-center">
+              <div className="flex items-center justify-center mb-4">
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircleIcon className="w-10 h-10 text-green-600" />
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-800 mb-3">Application Submitted!</h2>
+              <p className="text-slate-600 mb-6">
+                Thank you for your application. Our team will review your submitted documents. You will be notified once approved.
+              </p>
+              <button 
+                onClick={() => {
+                  setIsSubmitted(false);
+                  if (onClose) onClose();
+                }} 
+                className="w-full bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Email Verification Modal */}
       {showVerificationModal && (
@@ -1991,12 +2312,40 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 max-w-3xl w-full relative overflow-hidden">
             <div className="relative z-10 p-6">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-800">Tutor Terms and Conditions</h2>
-                <button type="button" onClick={handleCloseTermsModal} className="p-2 text-slate-400 hover:text-slate-600">
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-slate-800">Tutor Terms and Conditions</h2>
+                  {termsScrollProgress > 0 && (
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <div className="flex-1 bg-slate-200 rounded-full h-2 overflow-hidden">
+                          <div 
+                            className="bg-indigo-600 h-full transition-all duration-300 ease-out"
+                            style={{ width: `${Math.min(termsScrollProgress, 100)}%` }}
+                          />
+                        </div>
+                        <span className="min-w-[3rem] text-right">
+                          {Math.round(termsScrollProgress)}%
+                        </span>
+                      </div>
+                      {termsScrollProgress >= 80 && (
+                        <p className="text-xs text-green-600 mt-1 flex items-center">
+                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          You can now accept the terms
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button type="button" onClick={handleCloseTermsModal} className="p-2 text-slate-400 hover:text-slate-600 ml-4">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
               </div>
-              <div className="max-h-[65vh] overflow-y-auto pr-1 text-slate-700 space-y-4">
+              <div 
+                className="max-h-[65vh] overflow-y-auto pr-1 text-slate-700 space-y-4"
+                onScroll={handleTermsModalScroll}
+              >
                 <p><strong>Effective Date:</strong> October 31, 2025</p>
                 <p><strong>Platform Name:</strong> TutorLink (“the Platform”)</p>
                 <h3 className="font-semibold">1. Overview</h3>

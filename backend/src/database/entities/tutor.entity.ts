@@ -38,6 +38,9 @@ export class Tutor {
   @Column({ nullable: true })
   year_level: number; // Changed to number
 
+  @Column({ nullable: true, type: 'decimal', precision: 10, scale: 2 })
+  session_rate_per_hour: number;
+
   @ManyToOne(() => University, (university) => university.tutors)
   @JoinColumn({ name: 'university_id' })
   university: University;

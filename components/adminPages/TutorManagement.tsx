@@ -171,15 +171,20 @@ const TutorManagement: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                       <div className="flex items-center gap-3">
                         {tutor.user?.profile_image_url ? (
-                          <img src={getFileUrl(tutor.user.profile_image_url)} alt="Tutor" className="h-8 w-8 rounded-full object-cover border" />
+                          <img 
+                            src={getFileUrl(tutor.user.profile_image_url)} 
+                            alt="Tutor" 
+                            className="h-8 w-8 rounded-full object-cover border flex-shrink-0"
+                            style={{ aspectRatio: '1 / 1' }}
+                          />
                         ) : (
-                          <div className="h-8 w-8 rounded-full bg-slate-200 border" />
+                          <div className="h-8 w-8 rounded-full bg-slate-200 border flex-shrink-0" />
                         )}
                         <span className="truncate max-w-[200px]">{tutor.user?.name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tutor.user?.university?.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tutor.user?.course?.course_name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(tutor as any).university?.name || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(tutor as any).course?.course_name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <Button onClick={() => handleViewDetails(tutor)}>View Details</Button>
                     </td>
@@ -218,9 +223,14 @@ const TutorManagement: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <div className="flex items-center gap-3">
                           {(tutorSubject.tutor.user as any)?.profile_image_url ? (
-                            <img src={getFileUrl((tutorSubject.tutor.user as any).profile_image_url)} alt="Tutor" className="h-8 w-8 rounded-full object-cover border" />
+                            <img 
+                              src={getFileUrl((tutorSubject.tutor.user as any).profile_image_url)} 
+                              alt="Tutor" 
+                              className="h-8 w-8 rounded-full object-cover border flex-shrink-0"
+                              style={{ aspectRatio: '1 / 1' }}
+                            />
                           ) : (
-                            <div className="h-8 w-8 rounded-full bg-slate-200 border" />
+                            <div className="h-8 w-8 rounded-full bg-slate-200 border flex-shrink-0" />
                           )}
                           <span className="truncate max-w-[200px]">{(tutorSubject.tutor as any)?.user?.name}</span>
                         </div>
@@ -266,8 +276,8 @@ const TutorManagement: React.FC = () => {
                 <p className="text-sm text-slate-500">{selectedTutor.user?.email}</p>
               </div>
               <div className="text-right text-sm text-slate-600">
-                <div className="font-medium">{selectedTutor.user?.university?.name || 'No university'}</div>
-                <div className="mt-0.5">Course: {selectedTutor.user?.course?.course_name || 'No course'}</div>
+                <div className="font-medium">{(selectedTutor as any).university?.name || 'No university'}</div>
+                <div className="mt-0.5">Course: {(selectedTutor as any).course?.course_name || 'No course'}</div>
               </div>
             </div>
 
@@ -284,6 +294,19 @@ const TutorManagement: React.FC = () => {
                     </div>
                   </div>
                 )}
+                <div>
+                  <h4 className="font-semibold">University & Course</h4>
+                  <div className="mt-2 space-y-1">
+                    <div className="bg-gray-50 p-2 rounded-md">
+                      <span className="text-xs text-gray-500">University:</span>
+                      <p className="text-gray-700 font-medium">{(selectedTutor as any).university?.name || 'Not specified'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-2 rounded-md">
+                      <span className="text-xs text-gray-500">Course:</span>
+                      <p className="text-gray-700 font-medium">{(selectedTutor as any).course?.course_name || 'Not specified'}</p>
+                    </div>
+                  </div>
+                </div>
                 <div>
                   <h4 className="font-semibold">Bio</h4>
                   <p className="text-gray-700 bg-gray-50 p-3 rounded-md mt-1 min-h-[72px]">{selectedTutor.bio || 'No bio provided.'}</p>

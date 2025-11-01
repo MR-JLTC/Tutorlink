@@ -442,14 +442,25 @@ export class TutorsService {
     return { success: true };
   }
 
-  async saveSubjects(tutorId: number, subjectNames: string[]) {
+  async saveSubjects(tutorId: number, subjectNames: string[], providedCourseId?: number) {
     const tutor = await this.tutorsRepository.findOne({ where: { tutor_id: tutorId }, relations: ['user'] });
     if (!tutor) throw new Error('Tutor not found');
-    const userCourseId: number | undefined = tutor.course_id;
+    const tutorCourseId: number | undefined = tutor.course_id;
+
+    // Validate that provided course_id matches tutor's course_id if both exist
+    if (providedCourseId && tutorCourseId && providedCourseId !== tutorCourseId) {
+      throw new Error(`Course ID mismatch: Provided course_id (${providedCourseId}) does not match tutor's course_id (${tutorCourseId}).`);
+    }
+
+    // Use provided course_id if available and validated, otherwise use tutor's course_id
+    const effectiveCourseId = providedCourseId || tutorCourseId;
 
     let courseEntity: Course | undefined;
-    if (userCourseId) {
-      courseEntity = await this.coursesRepository.findOne({ where: { course_id: userCourseId as any } });
+    if (effectiveCourseId) {
+      courseEntity = await this.coursesRepository.findOne({ where: { course_id: effectiveCourseId as any } });
+      if (!courseEntity) {
+        throw new Error(`Course with ID ${effectiveCourseId} not found.`);
+      }
     }
 
     const toCreate: Array<Partial<TutorSubject>> = [];
@@ -459,24 +470,88 @@ export class TutorsService {
       let subject: Subject | null = null;
       if (courseEntity) {
         // Look up subject by name within the same course only
-        subject = await this.subjectRepository.findOne({ where: { subject_name: name, course: { course_id: courseEntity.course_id } as any }, relations: ['course'] });
+        subject = await this.subjectRepository.findOne({ 
+          where: { 
+            subject_name: name, 
+            course: { course_id: courseEntity.course_id } as any 
+          }, 
+          relations: ['course'] 
+        });
+        
         if (!subject) {
-          // If a subject with the same name exists without a course, attach it to this course; otherwise create new
-          const existingNoCourse = await this.subjectRepository.findOne({ where: { subject_name: name }, relations: ['course'] });
-          if (existingNoCourse && !(existingNoCourse as any).course) {
-            (existingNoCourse as any).course = courseEntity;
-            subject = await this.subjectRepository.save(existingNoCourse as any);
+          // Check if a subject with this name exists in a different course or without a course
+          const existingWithDifferentCourse = await this.subjectRepository.findOne({ 
+            where: { subject_name: name }, 
+            relations: ['course'] 
+          });
+          
+          if (existingWithDifferentCourse) {
+            const existingCourseId = (existingWithDifferentCourse as any).course?.course_id;
+            // If it exists in a different course, create a NEW subject for this course
+            // Subjects with the same name can exist in different courses (e.g., "Ethical Hacking" in CS and IT)
+            if (existingCourseId && existingCourseId !== courseEntity.course_id) {
+              console.log(`Subject "${name}" exists in course_id ${existingCourseId}, creating new subject for course_id ${courseEntity.course_id}`);
+              // Create new subject for this course - same name but different course_id
+              const created = this.subjectRepository.create({ 
+                subject_name: name, 
+                course: courseEntity 
+              });
+              subject = await this.subjectRepository.save(created);
+              // Reload with relations to ensure course relationship is properly set
+              subject = await this.subjectRepository.findOne({ 
+                where: { subject_id: subject.subject_id }, 
+                relations: ['course'] 
+              }) || subject;
+              console.log(`Created new subject "${name}" with course_id ${subject?.course?.course_id || courseEntity.course_id}, subject_id: ${subject.subject_id} (duplicate name allowed for different course)`);
+            } else if (!existingCourseId) {
+              // If it exists without a course, attach it to this course
+              existingWithDifferentCourse.course = courseEntity;
+              subject = await this.subjectRepository.save(existingWithDifferentCourse);
+              // Reload with relations to ensure course relationship is properly set
+              subject = await this.subjectRepository.findOne({ 
+                where: { subject_id: subject.subject_id }, 
+                relations: ['course'] 
+              }) || subject;
+              console.log(`Updated existing subject "${name}" to have course_id ${subject?.course?.course_id || courseEntity.course_id}, subject_id: ${subject.subject_id}`);
+            }
           } else {
-            const created = this.subjectRepository.create({ subject_name: name, course: courseEntity } as any);
-            subject = (await this.subjectRepository.save(created as any)) as Subject;
+            // No existing subject found, create new subject for this course
+            const created = this.subjectRepository.create({ 
+              subject_name: name, 
+              course: courseEntity 
+            });
+            subject = await this.subjectRepository.save(created);
+            // Reload with relations to ensure course relationship is properly set
+            subject = await this.subjectRepository.findOne({ 
+              where: { subject_id: subject.subject_id }, 
+              relations: ['course'] 
+            }) || subject;
+            console.log(`Created new subject "${name}" with course_id ${subject?.course?.course_id || courseEntity.course_id}, subject_id: ${subject.subject_id}`);
           }
         }
       } else {
         // No course available; fall back to global by-name subject
         subject = await this.subjectRepository.findOne({ where: { subject_name: name } });
         if (!subject) {
-          const created = this.subjectRepository.create({ subject_name: name } as any);
-          subject = (await this.subjectRepository.save(created as any)) as Subject;
+          const created = this.subjectRepository.create({ subject_name: name });
+          subject = await this.subjectRepository.save(created);
+          console.log(`Created new subject "${name}" without course, subject_id: ${subject.subject_id}`);
+        } else {
+          // Reload with relations for consistency
+          subject = await this.subjectRepository.findOne({ 
+            where: { subject_id: subject.subject_id }, 
+            relations: ['course'] 
+          }) || subject;
+          console.log(`Found existing subject "${name}" without course, subject_id: ${subject.subject_id}`);
+        }
+      }
+
+      // Final validation: Ensure subject belongs to the correct course
+      if (effectiveCourseId && subject) {
+        const subjectCourseId = (subject as any).course?.course_id;
+        // If subject has a course, it must match the tutor's course
+        if (subjectCourseId && subjectCourseId !== effectiveCourseId) {
+          throw new Error(`Subject "${name}" belongs to course ID ${subjectCourseId}, but tutor is registered with course ID ${effectiveCourseId}. Cannot associate subject from different course.`);
         }
       }
 
@@ -484,13 +559,27 @@ export class TutorsService {
         tutor, 
         subject, 
         status: 'pending' 
-      } as any);
-      toCreate.push(link as Partial<TutorSubject>);
+      });
+      toCreate.push(link);
+      console.log(`Created TutorSubject link for tutor_id ${tutorId}, subject_id ${subject.subject_id}, subject_name "${name}"`);
     }
 
-    await this.tutorSubjectRepository.delete({ tutor: { tutor_id: tutorId } as any });
-    await this.tutorSubjectRepository.save(toCreate as any);
-    return { success: true };
+    // Delete existing tutor subjects for this tutor
+    const deleteResult = await this.tutorSubjectRepository.delete({ tutor: { tutor_id: tutorId } as any });
+    console.log(`Deleted ${deleteResult.affected || 0} existing TutorSubject entries for tutor_id ${tutorId}`);
+    
+    // Save new tutor subjects
+    const savedTutorSubjects = await this.tutorSubjectRepository.save(toCreate);
+    console.log(`Saved ${savedTutorSubjects.length} TutorSubject entries for tutor_id ${tutorId}`);
+    savedTutorSubjects.forEach((ts, idx) => {
+      console.log(`  TutorSubject[${idx}]: tutor_subject_id=${ts.tutor_subject_id}, subject_id=${(ts.subject as any)?.subject_id || 'N/A'}, subject_name="${subjectNames[idx]}"`);
+    });
+    
+    return { 
+      success: true, 
+      subjects_saved: savedTutorSubjects.length,
+      tutor_subject_ids: savedTutorSubjects.map(ts => ts.tutor_subject_id)
+    };
   }
 
   // New methods for tutor dashboard functionality
@@ -773,25 +862,122 @@ export class TutorsService {
       
       const tutor = await this.tutorsRepository.findOne({ 
         where: { tutor_id: tutorId },
-        relations: ['user']
+        relations: ['user', 'course']
       });
       if (!tutor) throw new NotFoundException('Tutor not found');
       console.log('Tutor found:', tutor.tutor_id);
-
-      // Find or create the subject
-      let subject = await this.subjectRepository.findOne({ 
-        where: { subject_name: subjectName } 
-      });
       
-      if (!subject) {
-        console.log('Creating new subject:', subjectName);
-        subject = this.subjectRepository.create({
-          subject_name: subjectName
-        });
-        subject = await this.subjectRepository.save(subject);
-        console.log('Subject created:', subject.subject_id);
+      const tutorCourseId: number | undefined = tutor.course_id;
+      let courseEntity: Course | undefined;
+      
+      if (tutorCourseId) {
+        courseEntity = await this.coursesRepository.findOne({ where: { course_id: tutorCourseId } });
+        if (!courseEntity) {
+          throw new Error(`Tutor's course with ID ${tutorCourseId} not found.`);
+        }
+        console.log('Tutor course found:', courseEntity.course_id, courseEntity.course_name);
       } else {
-        console.log('Subject found:', subject.subject_id);
+        console.log('Tutor has no course_id assigned');
+      }
+
+      // Find or create the subject, ensuring it belongs to the tutor's course
+      const trimmedName = (subjectName || '').trim();
+      if (!trimmedName) {
+        throw new Error('Subject name cannot be empty');
+      }
+      
+      let subject: Subject | null = null;
+      
+      if (courseEntity) {
+        // Look up subject by name within the same course only
+        subject = await this.subjectRepository.findOne({ 
+          where: { 
+            subject_name: trimmedName, 
+            course: { course_id: courseEntity.course_id } as any 
+          }, 
+          relations: ['course'] 
+        });
+        
+        if (!subject) {
+          // Check if a subject with this name exists in a different course or without a course
+          const existingWithDifferentCourse = await this.subjectRepository.findOne({ 
+            where: { subject_name: trimmedName }, 
+            relations: ['course'] 
+          });
+          
+          if (existingWithDifferentCourse) {
+            const existingCourseId = (existingWithDifferentCourse as any).course?.course_id;
+            // If it exists in a different course, create a NEW subject for this course
+            // Subjects with the same name can exist in different courses (e.g., "Ethical Hacking" in CS and IT)
+            if (existingCourseId && existingCourseId !== courseEntity.course_id) {
+              console.log(`Subject "${trimmedName}" exists in course_id ${existingCourseId}, creating new subject for course_id ${courseEntity.course_id}`);
+              // Create new subject for this course - same name but different course_id
+              const created = this.subjectRepository.create({ 
+                subject_name: trimmedName, 
+                course: courseEntity 
+              });
+              subject = await this.subjectRepository.save(created);
+              // Reload with relations to ensure course relationship is properly set
+              subject = await this.subjectRepository.findOne({ 
+                where: { subject_id: subject.subject_id }, 
+                relations: ['course'] 
+              }) || subject;
+              console.log(`Created new subject "${trimmedName}" with course_id ${subject?.course?.course_id || courseEntity.course_id}, subject_id: ${subject.subject_id} (duplicate name allowed for different course)`);
+            } else if (!existingCourseId) {
+              // If it exists without a course, attach it to this course
+              existingWithDifferentCourse.course = courseEntity;
+              subject = await this.subjectRepository.save(existingWithDifferentCourse);
+              // Reload with relations to ensure course relationship is properly set
+              subject = await this.subjectRepository.findOne({ 
+                where: { subject_id: subject.subject_id }, 
+                relations: ['course'] 
+              }) || subject;
+              console.log(`Updated existing subject "${trimmedName}" to have course_id ${subject?.course?.course_id || courseEntity.course_id}, subject_id: ${subject.subject_id}`);
+            }
+          } else {
+            // No existing subject found, create new subject for this course
+            const created = this.subjectRepository.create({ 
+              subject_name: trimmedName, 
+              course: courseEntity 
+            });
+            subject = await this.subjectRepository.save(created);
+            // Reload with relations to ensure course relationship is properly set
+            subject = await this.subjectRepository.findOne({ 
+              where: { subject_id: subject.subject_id }, 
+              relations: ['course'] 
+            }) || subject;
+            console.log(`Created new subject "${trimmedName}" with course_id ${subject?.course?.course_id || courseEntity.course_id}, subject_id: ${subject.subject_id}`);
+          }
+        } else {
+          console.log('Subject found in course:', subject.subject_id);
+        }
+      } else {
+        // No course available; fall back to global by-name subject
+        subject = await this.subjectRepository.findOne({ 
+          where: { subject_name: trimmedName },
+          relations: ['course']
+        });
+        if (!subject) {
+          const created = this.subjectRepository.create({ subject_name: trimmedName });
+          subject = await this.subjectRepository.save(created);
+          console.log(`Created new subject "${trimmedName}" without course, subject_id: ${subject.subject_id}`);
+        } else {
+          // Reload with relations for consistency
+          subject = await this.subjectRepository.findOne({ 
+            where: { subject_id: subject.subject_id }, 
+            relations: ['course'] 
+          }) || subject;
+          console.log(`Found existing subject "${trimmedName}" without course, subject_id: ${subject.subject_id}`);
+        }
+      }
+
+      // Final validation: Ensure subject belongs to the correct course
+      if (tutorCourseId && subject) {
+        const subjectCourseId = (subject as any).course?.course_id;
+        // If subject has a course, it must match the tutor's course
+        if (subjectCourseId && subjectCourseId !== tutorCourseId) {
+          throw new Error(`Subject "${trimmedName}" belongs to course ID ${subjectCourseId}, but tutor is registered with course ID ${tutorCourseId}. Cannot associate subject from different course.`);
+        }
       }
 
     // Check if tutor already has this subject (approved or pending)
@@ -799,24 +985,31 @@ export class TutorsService {
       where: { 
         tutor: { tutor_id: tutor.tutor_id },
         subject: { subject_id: subject.subject_id }
-      }
+      },
+      relations: ['documents']
     });
 
+    let savedTutorSubject;
+    
     if (existingTutorSubject) {
       if (existingTutorSubject.status === 'approved') {
         throw new Error('You have already been approved for this subject expertise');
       } else if (existingTutorSubject.status === 'pending') {
-        throw new Error('You have already applied for this subject expertise and it is pending review');
+        // If there are files to upload, allow attaching documents to existing pending application
+        // This handles the case where saveSubjects was called first, then submitSubjectApplication is called
+        if (files && files.length > 0) {
+          console.log('Found existing pending TutorSubject, attaching documents to it');
+          savedTutorSubject = existingTutorSubject;
+        } else {
+          // If no files, throw error as before (prevents duplicate applications without documents)
+          throw new Error('You have already applied for this subject expertise and it is pending review');
+        }
+      } else if (existingTutorSubject.status === 'rejected') {
+        // If status is 'rejected', allow reapplication
+        existingTutorSubject.status = 'pending';
+        existingTutorSubject.admin_notes = null; // Clear previous admin notes
+        savedTutorSubject = await this.tutorSubjectRepository.save(existingTutorSubject);
       }
-      // If status is 'rejected', we allow reapplication
-    }
-
-    // If there's a rejected application, update it to pending instead of creating new one
-    let savedTutorSubject;
-    if (existingTutorSubject && existingTutorSubject.status === 'rejected') {
-      existingTutorSubject.status = 'pending';
-      existingTutorSubject.admin_notes = null; // Clear previous admin notes
-      savedTutorSubject = await this.tutorSubjectRepository.save(existingTutorSubject);
     } else {
       // Create new tutor subject with pending status
       const tutorSubject = this.tutorSubjectRepository.create({
@@ -831,6 +1024,18 @@ export class TutorsService {
     if (files && files.length > 0) {
       try {
         console.log('Creating documents for tutor subject:', savedTutorSubject.tutor_subject_id);
+        console.log('Subject name:', trimmedName, 'Files count:', files.length);
+        
+        // Clear existing documents for this tutor subject if any (to avoid duplicates during registration)
+        // This ensures clean document association when attaching to existing pending TutorSubject
+        const existingDocs = await this.tutorSubjectDocumentRepository.find({
+          where: { tutorSubject: { tutor_subject_id: savedTutorSubject.tutor_subject_id } as any }
+        });
+        if (existingDocs.length > 0) {
+          console.log(`Clearing ${existingDocs.length} existing documents for tutor subject ${savedTutorSubject.tutor_subject_id}`);
+          await this.tutorSubjectDocumentRepository.remove(existingDocs);
+        }
+        
         const documents = files.map(file => {
           console.log('Processing file:', file.filename, file.mimetype);
           return this.tutorSubjectDocumentRepository.create({
@@ -841,14 +1046,20 @@ export class TutorsService {
           });
         });
         console.log('Saving documents:', documents.length);
-        await this.tutorSubjectDocumentRepository.save(documents);
-        console.log('Documents saved successfully');
+        const savedDocuments = await this.tutorSubjectDocumentRepository.save(documents);
+        console.log(`Successfully saved ${savedDocuments.length} document(s) for tutor subject:`, savedTutorSubject.tutor_subject_id);
+        
+        // Verify documents were saved
+        if (!savedDocuments || savedDocuments.length === 0) {
+          throw new Error('Failed to save documents - no documents were saved');
+        }
       } catch (error) {
         console.error('Error saving documents:', error);
-        // Don't throw error - just log it and continue
-        // The tutor subject application should still be created even if documents fail
-        console.log('Continuing without documents due to error');
+        // Throw error so frontend knows documents weren't saved
+        throw new Error(`Failed to save documents for subject "${trimmedName}": ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
+    } else {
+      console.log('No files provided for tutor subject:', savedTutorSubject.tutor_subject_id);
     }
 
     return { success: true, tutorSubjectId: savedTutorSubject.tutor_subject_id };

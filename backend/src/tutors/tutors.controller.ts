@@ -118,8 +118,8 @@ export class TutorsController {
   }
 
   @Post(':tutorId/subjects')
-  async saveSubjects(@Param('tutorId') tutorId: string, @Body() body: { subjects: string[] }) {
-    return this.tutorsService.saveSubjects(+tutorId, body.subjects);
+  async saveSubjects(@Param('tutorId') tutorId: string, @Body() body: { subjects: string[]; course_id?: number }) {
+    return this.tutorsService.saveSubjects(+tutorId, body.subjects, body.course_id);
   }
 
   // New endpoints for tutor dashboard functionality
@@ -177,7 +177,7 @@ export class TutorsController {
   }
 
   @Post(':tutorId/subject-application')
-  @UseGuards(JwtAuthGuard)
+  // JWT guard removed to allow registration flow, can be called during registration before full auth
   @UseInterceptors(FilesInterceptor('files', 10, {
     storage: diskStorage({
       destination: (req, file, cb) => {
@@ -189,12 +189,26 @@ export class TutorsController {
         const tutorId = req.params.tutorId;
         const originalExt = path.extname(file.originalname) || '';
         const timestamp = Date.now();
-        cb(null, `subjectApp_${tutorId}_${timestamp}${originalExt}`);
+        // Use a counter or random to avoid filename collisions
+        const random = Math.random().toString(36).substring(2, 8);
+        cb(null, `subjectApp_${tutorId}_${timestamp}_${random}${originalExt}`);
       }
     })
   }))
-  async submitSubjectApplication(@Param('tutorId') tutorId: string, @Body() body: { subject_name: string }, @UploadedFiles() files: any[]) {
-    return this.tutorsService.submitSubjectApplication(+tutorId, body.subject_name, files);
+  async submitSubjectApplication(@Param('tutorId') tutorId: string, @Body() body: any, @UploadedFiles() files: any[]) {
+    // FormData fields are available in req.body when using multer
+    const subjectName = body?.subject_name || body?.subjectName || '';
+    console.log('Received subject application:', { tutorId, subjectName, filesCount: files?.length || 0, bodyKeys: Object.keys(body || {}) });
+    
+    if (!subjectName || !subjectName.trim()) {
+      throw new Error('Subject name is required');
+    }
+    
+    if (!files || files.length === 0) {
+      throw new Error('At least one file is required for subject application');
+    }
+    
+    return this.tutorsService.submitSubjectApplication(+tutorId, subjectName, files);
   }
 
   // Availability change request endpoints removed as redundant

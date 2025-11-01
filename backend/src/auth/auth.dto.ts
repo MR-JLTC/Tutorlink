@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsInt, IsOptional } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsInt, IsOptional, IsNumber } from 'class-validator';
 
 export class RegisterDto {
   @IsNotEmpty()
@@ -41,6 +41,10 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   gcash_number?: string;
+
+  @IsOptional()
+  @IsNumber()
+  SessionRatePerHour?: number;
 }
 
 export class LoginDto {

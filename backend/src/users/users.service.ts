@@ -231,6 +231,7 @@ export class UsersService {
       bio: body.bio,
       year_level: body.year_level,
       gcash_number: body.gcash_number,
+      session_rate_per_hour: body.SessionRatePerHour ? Number(body.SessionRatePerHour) : null,
       ...(university && { university: university, university_id: university.university_id }),
       ...(course && { course: course, course_id: course.course_id }),
     });

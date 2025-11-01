@@ -216,14 +216,15 @@ const UserManagement: React.FC = () => {
                         <img 
                           src={getFileUrl(user.profile_image_url)} 
                           alt={user.name}
-                          className="h-10 w-10 rounded-full mr-3 object-cover"
+                          className="h-10 w-10 rounded-full mr-3 object-cover flex-shrink-0"
+                          style={{ aspectRatio: '1 / 1' }}
                           onError={(e) => {
                             const imgElement = e.target as HTMLImageElement;
                             imgElement.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name) + '&background=random';
                           }}
                         />
                       ) : (
-                        <div className="h-10 w-10 rounded-full mr-3 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold">
+                        <div className="h-10 w-10 rounded-full mr-3 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
                           {user.name.charAt(0).toUpperCase()}
                         </div>
                       )}
