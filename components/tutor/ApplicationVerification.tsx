@@ -35,7 +35,7 @@ interface SubjectApplication {
 
 const ApplicationVerification: React.FC = () => {
   const { user } = useAuth();
-  const { isVerified, applicationStatus, refreshStatus } = useVerification();
+  const { isVerified, applicationStatus, adminNotes, refreshStatus } = useVerification();
   const [tutorId, setTutorId] = useState<number | null>(null);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [availableSubjects, setAvailableSubjects] = useState<Subject[]>([]);
@@ -57,12 +57,38 @@ const ApplicationVerification: React.FC = () => {
   const [gcashQR, setGcashQR] = useState<File | null>(null);
   const [existingGcashQRUrl, setExistingGcashQRUrl] = useState<string>('');
   const [tutorIdError, setTutorIdError] = useState<string>('');
+  const [tutorCourseId, setTutorCourseId] = useState<number | null>(null);
+
+  // Reapplication form state
+  const [fullName, setFullName] = useState<string>('');
+  const [yearLevel, setYearLevel] = useState<string>('');
+  const [sessionRate, setSessionRate] = useState<string>('');
+  const [bio, setBio] = useState<string>('');
+  const [reapplicationSubjects, setReapplicationSubjects] = useState<Set<string>>(new Set());
+  const [subjectFilesMap, setSubjectFilesMap] = useState<Record<string, File[]>>({});
+  const [reapplicationDocuments, setReapplicationDocuments] = useState<File[]>([]);
+  const [reapplicationAvailability, setReapplicationAvailability] = useState<Record<string, DayAvailability>>({});
+  const [showReapplicationForm, setShowReapplicationForm] = useState(false);
+  const [isSubmittingReapplication, setIsSubmittingReapplication] = useState(false);
+  const [dayToAdd, setDayToAdd] = useState<string>('');
+
+  interface DayAvailability {
+    slots: Array<{ startTime: string; endTime: string }>;
+  }
 
   useEffect(() => {
+    // Refresh application status when component mounts
     if (user?.user_id) {
+      refreshStatus();
       fetchTutorId();
     }
   }, [user]);
+
+  // Debug: log application status when it changes
+  useEffect(() => {
+    console.log('Application Status changed:', applicationStatus);
+    console.log('Is Verified:', isVerified);
+  }, [applicationStatus, isVerified]);
 
   const fetchTutorId = async () => {
     if (!user?.user_id) return;
@@ -91,18 +117,57 @@ const ApplicationVerification: React.FC = () => {
     if (tutorId) {
       fetchSubjectApplications();
       fetchTutorProfile();
+      fetchTutorCourseId(); // Fetch course_id to filter subjects
+      // Refresh application status when tutorId is available
+      refreshStatus();
     }
   }, [tutorId]);
 
+  // Fetch full data when status becomes rejected
   useEffect(() => {
-    fetchAvailableSubjects();
-  }, []);
+    if (tutorId && applicationStatus === 'rejected' && !showReapplicationForm) {
+      fetchFullTutorDataForReapplication();
+    }
+  }, [applicationStatus, tutorId]);
+
+  // Fetch profile image when reapplication form is shown
+  useEffect(() => {
+    if (showReapplicationForm && tutorId && !profilePhoto) {
+      // Fetch profile to ensure we have the latest image
+      apiClient.get(`/tutors/${tutorId}/profile`)
+        .then((response) => {
+          const profilePhotoUrl = response.data.profile_photo || user?.profile_image_url || '';
+          console.log('Fetching profile image for reapplication form:', profilePhotoUrl);
+          if (profilePhotoUrl) {
+            setExistingProfilePhotoUrl(profilePhotoUrl);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to fetch profile for reapplication form:', error);
+        });
+    }
+  }, [showReapplicationForm, tutorId, profilePhoto]);
+
+  useEffect(() => {
+    // Fetch subjects when course_id is available
+    if (tutorCourseId) {
+      fetchAvailableSubjects();
+    }
+  }, [tutorCourseId]);
 
 
   const fetchAvailableSubjects = async () => {
     try {
-      const response = await apiClient.get('/subjects');
-      setAvailableSubjects(response.data);
+      // Only fetch subjects if tutor course_id is available (for approved tutors)
+      if (tutorCourseId) {
+        const response = await apiClient.get('/subjects', {
+          params: { course_id: tutorCourseId }
+        });
+        setAvailableSubjects(response.data);
+      } else {
+        // If no course_id yet, wait for it
+        setAvailableSubjects([]);
+      }
     } catch (error) {
       console.error('Failed to fetch subjects:', error);
     }
@@ -127,8 +192,130 @@ const ApplicationVerification: React.FC = () => {
       setExistingProfilePhotoUrl(response.data.profile_photo || '');
       setGcashNumber(response.data.gcash_number || '');
       setExistingGcashQRUrl(response.data.gcash_qr || '');
+      
+      // Get course_id from profile to filter subjects
+      if (response.data.course_id) {
+        setTutorCourseId(response.data.course_id);
+      }
+      
+      // If rejected, fetch full data for reapplication
+      if (applicationStatus === 'rejected') {
+        await fetchFullTutorDataForReapplication();
+      }
     } catch (error) {
       console.error('Failed to fetch tutor profile:', error);
+    }
+  };
+
+  const fetchTutorCourseId = async () => {
+    if (!tutorId) return;
+    try {
+      // Approach 1: Fetch from tutor applications endpoint (includes course relation)
+      // This works for all tutor statuses (pending, approved, rejected)
+      try {
+        const applicationsResponse = await apiClient.get('/tutors/applications').catch(() => ({ data: [] }));
+        const currentTutor = (applicationsResponse.data || []).find((t: any) => t.tutor_id === tutorId);
+        if (currentTutor?.course_id) {
+          setTutorCourseId(currentTutor.course_id);
+          return;
+        } else if (currentTutor?.course?.course_id) {
+          setTutorCourseId(currentTutor.course.course_id);
+          return;
+        }
+      } catch (e) {
+        console.log('Could not fetch course_id from applications endpoint:', e);
+      }
+      
+      // Approach 2: Try from user's tutor_profile if available in context
+      if (user?.tutor_profile?.course_id) {
+        setTutorCourseId(user.tutor_profile.course_id);
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to fetch tutor course_id:', error);
+    }
+  };
+
+  const fetchFullTutorDataForReapplication = async () => {
+    if (!tutorId) return;
+    try {
+      // Reset profile photo state to ensure we show existing image
+      setProfilePhoto(null);
+      
+      // First, fetch subject applications to ensure we have the latest data
+      await fetchSubjectApplications();
+      
+      // Fetch tutor data with all needed fields
+      // Note: Documents endpoint doesn't exist (only POST for uploading)
+      // Documents will be uploaded fresh during reapplication
+      const [profileRes, availabilityRes] = await Promise.all([
+        apiClient.get(`/tutors/${tutorId}/profile`),
+        apiClient.get(`/tutors/${tutorId}/availability`)
+      ]);
+      
+      console.log('Profile response data:', profileRes.data);
+      console.log('Profile photo URL from API:', profileRes.data.profile_photo);
+      console.log('User profile_image_url:', user?.profile_image_url);
+      
+      // Populate form fields
+      if (user?.name) setFullName(user.name);
+      setBio(profileRes.data.bio || '');
+      setGcashNumber(profileRes.data.gcash_number || '');
+      setSessionRate(profileRes.data.session_rate_per_hour?.toString() || '');
+      
+      // Fetch year level from tutor application endpoint (since it's not in profile)
+      try {
+        const applicationsRes = await apiClient.get('/tutors/applications').catch(() => ({ data: [] }));
+        const currentTutor = (applicationsRes.data || []).find((t: any) => t.tutor_id === tutorId);
+        if (currentTutor && currentTutor.year_level !== undefined && currentTutor.year_level !== null) {
+          setYearLevel(currentTutor.year_level.toString());
+        }
+      } catch (e) {
+        console.error('Failed to fetch year level:', e);
+      }
+      
+      // Set subjects from subject applications - include ALL subjects (approved, pending, rejected)
+      // This allows users to see all their subjects and manage them
+      // Wait for subjectApplications to be updated (will use the state that was just fetched)
+      const currentSubjectApps = await apiClient.get(`/tutors/${tutorId}/subject-applications`);
+      const subjectsSet = new Set<string>();
+      (currentSubjectApps.data || []).forEach((app: any) => {
+        subjectsSet.add(app.subject_name);
+      });
+      setReapplicationSubjects(subjectsSet);
+      
+      // Initialize subject files map with empty arrays for all subjects
+      const initialSubjectFilesMap: Record<string, File[]> = {};
+      subjectsSet.forEach(subject => {
+        initialSubjectFilesMap[subject] = [];
+      });
+      setSubjectFilesMap(initialSubjectFilesMap);
+      
+      // Set availability
+      if (availabilityRes.data && Array.isArray(availabilityRes.data)) {
+        const availabilityMap: Record<string, DayAvailability> = {};
+        availabilityRes.data.forEach((avail: any) => {
+          const day = avail.day_of_week;
+          if (!availabilityMap[day]) {
+            availabilityMap[day] = { slots: [] };
+          }
+          availabilityMap[day].slots.push({
+            startTime: avail.start_time,
+            endTime: avail.end_time
+          });
+        });
+        setReapplicationAvailability(availabilityMap);
+      }
+      
+      // Fetch profile image - prioritize profile_photo from API, then user profile_image_url
+      const profilePhotoUrl = profileRes.data.profile_photo || user?.profile_image_url || '';
+      console.log('Setting profile photo URL to:', profilePhotoUrl);
+      setExistingProfilePhotoUrl(profilePhotoUrl);
+      setExistingGcashQRUrl(profileRes.data.gcash_qr || '');
+      
+      console.log('Profile image state updated. existingProfilePhotoUrl:', profilePhotoUrl);
+    } catch (error) {
+      console.error('Failed to fetch full tutor data:', error);
     }
   };
 
@@ -208,6 +395,118 @@ const ApplicationVerification: React.FC = () => {
 
   const handleNewSubjectDocsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) setNewSubjectDocuments(Array.from(e.target.files));
+  };
+
+  // Reapplication form handlers
+  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
+  const addReapplicationSubject = (subjectName: string) => {
+    if (!subjectName) return;
+    setReapplicationSubjects(prev => new Set(prev).add(subjectName));
+    if (!subjectFilesMap[subjectName]) {
+      setSubjectFilesMap(prev => ({ ...prev, [subjectName]: [] }));
+    }
+  };
+
+  const removeReapplicationSubject = (subjectName: string) => {
+    setReapplicationSubjects(prev => {
+      const next = new Set(prev);
+      next.delete(subjectName);
+      return next;
+    });
+    setSubjectFilesMap(prev => {
+      const next = { ...prev };
+      delete next[subjectName];
+      return next;
+    });
+  };
+
+  const handleSubjectFileChange = (subjectName: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setSubjectFilesMap(prev => ({
+        ...prev,
+        [subjectName]: [...(prev[subjectName] || []), ...files]
+      }));
+    }
+  };
+
+  const removeSubjectFile = (subjectName: string, fileIndex: number) => {
+    setSubjectFilesMap(prev => {
+      const next = { ...prev };
+      if (next[subjectName]) {
+        next[subjectName] = next[subjectName].filter((_, i) => i !== fileIndex);
+      }
+      return next;
+    });
+  };
+
+  // Availability handlers for reapplication
+  const normalizeTime = (raw: string) => {
+    if (!raw) return raw;
+    const trimmed = raw.trim();
+    const parts = trimmed.split(':').map(p => p.replace(/\D/g, ''));
+    const hh = parts[0] ? String(Number(parts[0])).padStart(2, '0') : '00';
+    const mm = parts[1] ? String(Math.min(59, Number(parts[1]))).padStart(2, '0') : '00';
+    return `${hh}:${mm}`;
+  };
+
+  const addReapplicationDay = (day: string) => {
+    if (!day) return;
+    setReapplicationAvailability(prev => ({
+      ...prev,
+      [day]: { slots: [{ startTime: '09:00', endTime: '17:00' }] }
+    }));
+  };
+
+  const removeReapplicationDay = (day: string) => {
+    setReapplicationAvailability(prev => {
+      const next = { ...prev };
+      delete next[day];
+      return next;
+    });
+  };
+
+  const addReapplicationTimeSlot = (day: string) => {
+    setReapplicationAvailability(prev => {
+      const next = { ...prev };
+      if (!next[day]) {
+        next[day] = { slots: [] };
+      }
+      const slots = next[day].slots;
+      // Add a default 1-hour slot (find non-overlapping time)
+      const lastSlot = slots.length > 0 ? slots[slots.length - 1] : null;
+      const startTime = lastSlot ? lastSlot.endTime : '09:00';
+      const [h, m] = startTime.split(':').map(Number);
+      const endMinutes = (h * 60 + m + 60) % (24 * 60);
+      const endTime = `${Math.floor(endMinutes / 60).toString().padStart(2, '0')}:${(endMinutes % 60).toString().padStart(2, '0')}`;
+      next[day].slots.push({ startTime, endTime });
+      return next;
+    });
+  };
+
+  const removeReapplicationTimeSlot = (day: string, index: number) => {
+    setReapplicationAvailability(prev => {
+      const next = { ...prev };
+      if (next[day]) {
+        next[day].slots = next[day].slots.filter((_, i) => i !== index);
+        if (next[day].slots.length === 0) {
+          delete next[day];
+        }
+      }
+      return next;
+    });
+  };
+
+  const updateReapplicationSlotTime = (day: string, index: number, type: 'startTime' | 'endTime', value: string) => {
+    const normalized = normalizeTime(value);
+    setReapplicationAvailability(prev => {
+      const next = { ...prev };
+      if (next[day] && next[day].slots[index]) {
+        next[day].slots[index][type] = normalized;
+      }
+      return next;
+    });
   };
 
   const submitApplication = async () => {
@@ -314,15 +613,28 @@ const ApplicationVerification: React.FC = () => {
   };
 
   const getFileUrl = (url: string) => {
+    if (!url) return '';
     console.log('Getting file URL for:', url);
+    
     if (url.startsWith('http://') || url.startsWith('https://')) {
       console.log('URL is already absolute:', url);
       return url;
     }
     
+    // Profile images are served directly at /user_profile_images/ without /api prefix
+    if (url.startsWith('/user_profile_images/') || url.startsWith('user_profile_images/')) {
+      const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+      const baseUrl = apiClient.defaults.baseURL.replace('/api', '');
+      const fullUrl = `${baseUrl}${cleanUrl}`;
+      console.log('Constructed profile image URL:', fullUrl);
+      return fullUrl;
+    }
+    
     // Files are served directly at /tutor_documents/ without /api/files/ prefix
-    if (url.startsWith('/tutor_documents/')) {
-      const fullUrl = `${apiClient.defaults.baseURL.replace('/api', '')}${url}`;
+    if (url.startsWith('/tutor_documents/') || url.startsWith('tutor_documents/')) {
+      const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+      const baseUrl = apiClient.defaults.baseURL.replace('/api', '');
+      const fullUrl = `${baseUrl}${cleanUrl}`;
       console.log('Constructed tutor document URL:', fullUrl);
       return fullUrl;
     }
@@ -415,13 +727,46 @@ const ApplicationVerification: React.FC = () => {
           </h2>
         </div>
         
-        {isVerified ? (
+        {applicationStatus?.toLowerCase() === 'approved' ? (
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center">
               <CheckCircle className="h-6 w-6 text-green-600 mr-3" />
               <div>
-                <p className="font-medium text-green-800">✓ Your application has been approved!</p>
+                <p className="font-medium text-green-800">Your application has been approved!</p>
                 <p className="text-sm text-green-600 mt-1">You can now start accepting tutoring sessions.</p>
+              </div>
+            </div>
+          </div>
+        ) : applicationStatus?.toLowerCase() === 'rejected' ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <X className="h-6 w-6 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium text-red-800">Your application has been rejected</p>
+                <p className="text-sm text-red-600 mt-1">Your application did not meet the requirements. Please review the feedback below and resubmit if needed.</p>
+                
+                {/* Admin Rejection Reason - Always show this section when rejected */}
+                <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-md">
+                  <p className="text-sm font-medium text-red-800 mb-1">Rejection Reason:</p>
+                  {adminNotes ? (
+                    <p className="text-sm text-red-700 leading-relaxed whitespace-pre-wrap">{adminNotes}</p>
+                  ) : (
+                    <p className="text-sm text-red-600 italic">No specific rejection reason was provided. Please review your application and ensure all requirements are met before resubmitting.</p>
+                  )}
+                </div>
+                
+                <div className="mt-4">
+                  <Button 
+                    onClick={async () => {
+                      // Fetch fresh data before showing form
+                      await fetchFullTutorDataForReapplication();
+                      setShowReapplicationForm(true);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Reapply - Update Application
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -498,7 +843,7 @@ const ApplicationVerification: React.FC = () => {
                 Select Subject
               </label>
               <p className="text-xs text-slate-500 mb-2">
-                You can only reapply for subjects that have been previously rejected.
+                Subjects are filtered based on your course. You can apply for new subjects or reapply for previously rejected subjects.
               </p>
               <select
                 className="w-full border border-slate-300 rounded-lg px-3 py-2"
@@ -741,12 +1086,147 @@ const ApplicationVerification: React.FC = () => {
         </Card>
       )}
 
-      {/* Initial Application Form (only show if not verified) */}
-      {!isVerified && (
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Complete Your Application</h2>
-          <div className="space-y-4">
-            {/* Profile Photo Upload */}
+      {/* Reapplication Form (only show if rejected and user wants to reapply) */}
+      {applicationStatus === 'rejected' && showReapplicationForm && (
+        <Card className="p-6 border-2 border-blue-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-blue-800 whitespace-nowrap">
+              Update & Resubmit Your Application
+            </h2>
+            <Button
+              variant="secondary"
+              onClick={() => setShowReapplicationForm(false)}
+              className="flex items-center"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+          </div>
+
+          
+          <div className="space-y-6">
+            {/* Full Name */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Full Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                value={fullName}
+                onChange={(e) => {
+                  // Only allow letters, spaces, hyphens, and apostrophes
+                  const filtered = e.target.value.replace(/[^A-Za-z\s\-']/g, '').slice(0, 60);
+                  setFullName(filtered);
+                }}
+                required
+              />
+            </div>
+
+            {/* Year Level */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Year Level <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                value={yearLevel}
+                onChange={(e) => setYearLevel(e.target.value)}
+                required
+              >
+                <option value="">Select year level</option>
+                <option value="1">1st Year</option>
+                <option value="2">2nd Year</option>
+                <option value="3">3rd Year</option>
+                <option value="4">4th Year</option>
+                <option value="5">5th Year</option>
+              </select>
+            </div>
+
+            {/* GCash Number */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                GCash Number <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                placeholder="09XX XXX XXXX"
+                value={gcashNumber}
+                onChange={(e) => {
+                  // Only allow numbers, must start with 09, max 11 characters
+                  const value = e.target.value.replace(/[^0-9]/g, '');
+                  
+                  // Empty input
+                  if (value.length === 0) {
+                    setGcashNumber('');
+                  }
+                  // Valid: starts with 09
+                  else if (value.startsWith('09')) {
+                    setGcashNumber(value.slice(0, 11));
+                  }
+                  // Allow typing '0' while user starts typing
+                  else if (value === '0') {
+                    setGcashNumber('0');
+                  }
+                  // If starts with 0 but second digit is not 9, only allow '0'
+                  else if (value.startsWith('0') && value[1] !== '9') {
+                    setGcashNumber('0');
+                  }
+                  // If doesn't start with 0, don't allow - reset to empty or keep valid previous value
+                  else {
+                    if (gcashNumber && gcashNumber.startsWith('09')) {
+                      // Keep previous valid value
+                      return;
+                    } else {
+                      setGcashNumber('');
+                    }
+                  }
+                }}
+                maxLength={11}
+                required
+              />
+              {gcashNumber && (!gcashNumber.startsWith('09') || gcashNumber.length !== 11) && (
+                <p className="text-xs text-red-600 mt-1">GCash number must be 11 digits starting with 09</p>
+              )}
+            </div>
+
+            {/* Session Rate */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Session Rate Per Hour (PHP) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                placeholder="e.g., 300"
+                value={sessionRate}
+                onChange={(e) => setSessionRate(e.target.value)}
+                min="0"
+                step="0.01"
+                required
+              />
+            </div>
+
+            {/* Bio */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Bio <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[100px]"
+                value={bio}
+                onChange={(e) => {
+                  // Only allow letters and spaces
+                  const filtered = e.target.value.replace(/[^A-Za-z\s]/g, '');
+                  setBio(filtered);
+                }}
+                placeholder="Tell us about yourself and your tutoring experience..."
+                required
+              />
+            </div>
+
+            {/* Profile Photo */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Profile Photo
@@ -756,18 +1236,24 @@ const ApplicationVerification: React.FC = () => {
                   {profilePhoto ? (
                     <img src={URL.createObjectURL(profilePhoto)} alt="Profile Preview" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
                   ) : existingProfilePhotoUrl ? (
-                    <img src={getFileUrl(existingProfilePhotoUrl)} alt="Profile" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
+                    <img 
+                      src={getFileUrl(existingProfilePhotoUrl)} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover" 
+                      style={{aspectRatio: '1/1'}}
+                      onError={(e) => {
+                        console.error('Failed to load profile image. Original URL:', existingProfilePhotoUrl);
+                        console.error('Constructed URL:', getFileUrl(existingProfilePhotoUrl));
+                        console.error('API Base URL:', apiClient.defaults.baseURL);
+                        // Hide broken image
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                      onLoad={() => {
+                        console.log('Profile image loaded successfully:', getFileUrl(existingProfilePhotoUrl));
+                      }}
+                    />
                   ) : (
                     <User className="h-12 w-12 text-slate-400" />
-                  )}
-                  {applicationStatus === 'approved' ? (
-                    <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
-                      ✓
-                    </div>
-                  ) : (
-                    <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
-                      <X className="h-4 w-4" />
-                    </div>
                   )}
                 </div>
                 <label className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors">
@@ -779,29 +1265,26 @@ const ApplicationVerification: React.FC = () => {
                   <button
                     onClick={() => setProfilePhoto(null)}
                     className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                    title="Remove selected image"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
             </div>
-            
+
+            {/* Subjects of Expertise with Files */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Subjects of Expertise
+                Subjects of Expertise <span className="text-red-500">*</span>
               </label>
               <p className="text-xs text-slate-500 mb-2">
-                You can reapply for subjects that have been previously rejected.
-                {isCustomInputDisabled && (
-                  <span className="text-blue-600 font-medium ml-1">
-                    ✓ Subject found in dropdown and auto-selected!
-                  </span>
-                )}
+                You can add new subjects or reapply for previously rejected subjects. Each subject requires supporting documents.
               </p>
-              <div className="flex items-center gap-2">
+              
+              {/* Subject selector */}
+              <div className="mb-4">
                 <select
-                  className="flex-grow border border-slate-300 rounded-lg px-3 py-2"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-2"
                   value={subjectToAdd}
                   onChange={handleSubjectDropdownChange}
                 >
@@ -809,144 +1292,364 @@ const ApplicationVerification: React.FC = () => {
                   {availableSubjects
                     .filter(s => {
                       const normalizedName = s.subject_name.toLowerCase();
-                      // Check if there's an existing application for this subject
-                      const existingApp = subjectApplications.find(app => 
-                        app.subject_name.toLowerCase() === normalizedName
-                      );
-                      
-                      // Allow selection if:
-                      // 1. Not already selected in current form AND no existing application, OR
-                      // 2. Existing application is rejected (can reapply)
-                      if (!existingApp) {
-                        return !normalizedSelected.has(normalizedName); // Not selected in current form
-                      }
-                      
-                      // Only allow if rejected - this allows reapplying for rejected subjects
-                      return existingApp.status === 'rejected';
+                      return !Array.from(reapplicationSubjects).some(existing => existing.toLowerCase() === normalizedName);
                     })
-                    .map(s => {
-                      const isRejected = subjectApplications.find(app => 
-                        app.subject_name.toLowerCase() === s.subject_name.toLowerCase() && app.status === 'rejected'
-                      );
-                      return (
-                        <option key={s.subject_id} value={s.subject_name}>
-                          {s.subject_name} {isRejected ? '(Reapply)' : ''}
-                        </option>
-                      );
-                    })}
+                    .map(s => (
+                      <option key={s.subject_id} value={s.subject_name}>
+                        {s.subject_name}
+                      </option>
+                    ))}
                 </select>
-                <Button onClick={addSelectedSubject} disabled={!subjectToAdd}>
-                  Add
-                </Button>
-              </div>
-              
-              <div className="flex items-center gap-2 mt-2">
-                <input
-                  className={`flex-grow border rounded-lg px-3 py-2 ${
-                    isCustomInputDisabled 
-                      ? 'border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed' 
-                      : 'border-slate-300 bg-white'
-                  }`}
-                  placeholder={
-                    isCustomInputDisabled 
-                      ? "Custom input disabled - subject found in dropdown" 
-                      : "Not in the list? Type a custom subject name"
-                  }
-                  value={otherSubject}
-                  onChange={handleCustomSubjectChange}
-                  disabled={isCustomInputDisabled}
-                />
                 <Button 
-                  variant="secondary" 
-                  onClick={addOtherSubject} 
-                  disabled={!otherSubject.trim() || isCustomInputDisabled}
+                  onClick={() => {
+                    if (subjectToAdd) {
+                      addReapplicationSubject(subjectToAdd);
+                      setSubjectToAdd('');
+                    }
+                  }}
+                  disabled={!subjectToAdd}
+                  className="w-full"
                 >
-                  Add Custom
+                  Add Subject
                 </Button>
-              </div>
-            </div>
-            
-            {/* Payment Information */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                GCash Number
-              </label>
-              <input
-                type="text"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="09XX XXX XXXX"
-                value={gcashNumber}
-                onChange={handleGcashNumberChange}
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                GCash QR Code
-              </label>
-              <div>
-                <div className="flex items-center space-x-2">
+                
+                <div className="mt-2">
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleGcashQRChange}
-                    className="flex-1 border border-slate-300 rounded-lg px-3 py-2"
+                    type="text"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                    placeholder="Or enter a custom subject name"
+                    value={otherSubject}
+                    onChange={(e) => {
+                      // Only allow letters, spaces, hyphens, and parentheses for subject names
+                      const filtered = e.target.value.replace(/[^A-Za-z\s\-()]/g, '');
+                      setOtherSubject(filtered);
+                      // Check if filtered value matches any available subject
+                      const matchingSubject = availableSubjects.find(subject => 
+                        subject.subject_name.toLowerCase() === filtered.toLowerCase()
+                      );
+                      if (matchingSubject) {
+                        // If match found, select it in dropdown and disable custom input
+                        setSubjectToAdd(matchingSubject.subject_name);
+                        setIsCustomInputDisabled(true);
+                      } else {
+                        // If no match, clear dropdown selection and enable custom input
+                        if (subjectToAdd) {
+                          setSubjectToAdd('');
+                        }
+                        setIsCustomInputDisabled(false);
+                      }
+                    }}
                   />
-                  {gcashQR && (
-                    <button
-                      onClick={() => setGcashQR(null)}
-                      className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                      title="Remove selected QR code"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+                  <Button
+                    onClick={() => {
+                      const trimmed = otherSubject.trim();
+                      if (trimmed && !Array.from(reapplicationSubjects).some(s => s.toLowerCase() === trimmed.toLowerCase())) {
+                        addReapplicationSubject(trimmed);
+                        setOtherSubject('');
+                      }
+                    }}
+                    disabled={!otherSubject.trim()}
+                    variant="secondary"
+                    className="w-full mt-2"
+                  >
+                    Add Custom Subject
+                  </Button>
                 </div>
-                {gcashQR ? (
-                  <p className="text-sm text-slate-600 mt-1">Selected: {gcashQR.name}</p>
-                ) : existingGcashQRUrl ? (
-                  <div className="mt-2 p-2 bg-slate-50 rounded-lg">
-                    <img src={getFileUrl(existingGcashQRUrl)} alt="Existing GCash QR" className="w-32 h-32 object-contain" />
-                    <p className="text-sm text-slate-600 mt-1">Existing QR code uploaded.</p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-600 mt-1">No GCash QR code selected.</p>
-                )}
               </div>
+
+              {/* Selected subjects with files */}
+              {Array.from(reapplicationSubjects).length > 0 && (
+                <div className="space-y-4 mt-4">
+                  {Array.from(reapplicationSubjects).map(subject => (
+                    <div key={subject} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-slate-800">{subject}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeReapplicationSubject(subject)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                          Supporting Documents for {subject}
+                        </label>
+                        <input
+                          type="file"
+                          multiple
+                          accept=".pdf,.png,.jpg,.jpeg"
+                          onChange={(e) => handleSubjectFileChange(subject, e)}
+                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                        />
+                        {(subjectFilesMap[subject] || []).length > 0 && (
+                          <ul className="mt-2 space-y-1">
+                            {(subjectFilesMap[subject] || []).map((file, idx) => (
+                              <li key={idx} className="flex items-center justify-between text-sm text-slate-600 bg-white p-2 rounded">
+                                <span>{file.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeSubjectFile(subject, idx)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            
+
+            {/* Documents */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Proof Documents
+                Proof Documents <span className="text-red-500">*</span>
               </label>
               <input
                 type="file"
                 multiple
                 accept=".pdf,.png,.jpg,.jpeg"
-                onChange={handleDocsChange}
+                onChange={(e) => {
+                  if (e.target.files) {
+                    setReapplicationDocuments(Array.from(e.target.files));
+                  }
+                }}
                 className="w-full border border-slate-300 rounded-lg px-3 py-2"
               />
-              {documents.length > 0 && (
+              {reapplicationDocuments.length > 0 && (
                 <ul className="list-disc list-inside text-sm text-slate-600 mt-2">
-                  {documents.map((f, i) => (
+                  {reapplicationDocuments.map((f, i) => (
                     <li key={i}>{f.name}</li>
                   ))}
                 </ul>
               )}
             </div>
-            
-            <div className="flex justify-end">
+
+            {/* Weekly Availability */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Weekly Availability
+              </label>
+              <p className="text-xs text-slate-500 mb-2">
+                Select the days and time slots when you're available for tutoring sessions.
+              </p>
+              
+              {/* Day selector */}
+              <div className="mb-4">
+                <select
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                  value={dayToAdd}
+                  onChange={(e) => setDayToAdd(e.target.value)}
+                >
+                  <option value="">Select a day to add...</option>
+                  {daysOfWeek
+                    .filter(day => !reapplicationAvailability[day])
+                    .map(day => (
+                      <option key={day} value={day}>{day}</option>
+                    ))}
+                </select>
+                {dayToAdd && (
+                  <Button
+                    onClick={() => {
+                      addReapplicationDay(dayToAdd);
+                      setDayToAdd('');
+                    }}
+                    className="w-full mt-2"
+                  >
+                    Add Day
+                  </Button>
+                )}
+              </div>
+
+              {/* Availability display */}
+              {Object.keys(reapplicationAvailability).length > 0 && (
+                <div className="space-y-4 mt-4">
+                  {Object.entries(reapplicationAvailability).map(([day, dayAvail]) => (
+                    <div key={day} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-slate-800">{day}</h4>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => addReapplicationTimeSlot(day)}
+                            className="text-sm px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md"
+                          >
+                            Add Time Slot
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeReapplicationDay(day)}
+                            className="text-sm px-3 py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-md"
+                          >
+                            Remove Day
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {dayAvail.slots.map((slot, idx) => (
+                          <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded">
+                            <input
+                              type="time"
+                              value={slot.startTime}
+                              onChange={(e) => updateReapplicationSlotTime(day, idx, 'startTime', e.target.value)}
+                              className="border border-slate-300 rounded px-2 py-1 text-sm"
+                            />
+                            <span className="text-slate-500">-</span>
+                            <input
+                              type="time"
+                              value={slot.endTime}
+                              onChange={(e) => updateReapplicationSlotTime(day, idx, 'endTime', e.target.value)}
+                              className="border border-slate-300 rounded px-2 py-1 text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeReapplicationTimeSlot(day, idx)}
+                              className="ml-2 text-sm text-red-600 hover:text-red-800"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-4 border-t">
               <Button 
-                onClick={submitApplication}
-                disabled={subjects.length === 0 || documents.length === 0}
-                className="px-8"
+                variant="secondary" 
+                onClick={() => setShowReapplicationForm(false)}
               >
-                Submit Application
+                Cancel
+              </Button>
+              <Button 
+                onClick={async () => {
+                  if (!tutorId) {
+                    alert('Tutor not found');
+                    return;
+                  }
+                  // Validation
+                  if (!fullName || !yearLevel || !gcashNumber || !sessionRate || !bio) {
+                    alert('Please fill in all required fields');
+                    return;
+                  }
+                  // Validate GCash number format
+                  if (!gcashNumber.startsWith('09') || gcashNumber.length !== 11) {
+                    alert('Please enter a valid GCash number (11 digits starting with 09)');
+                    return;
+                  }
+                  if (Array.from(reapplicationSubjects).length === 0) {
+                    alert('Please add at least one subject of expertise');
+                    return;
+                  }
+                  // Check if all subjects have files
+                  const subjectsWithoutFiles = Array.from(reapplicationSubjects).filter(
+                    subject => !subjectFilesMap[subject] || subjectFilesMap[subject].length === 0
+                  );
+                  if (subjectsWithoutFiles.length > 0) {
+                    alert(`Please add supporting documents for: ${subjectsWithoutFiles.join(', ')}`);
+                    return;
+                  }
+                  
+                  setIsSubmittingReapplication(true);
+                  try {
+                    // Update tutor basic info
+                    await apiClient.put(`/tutors/${tutorId}`, {
+                      full_name: fullName,
+                      year_level: Number(yearLevel),
+                      gcash_number: gcashNumber,
+                      session_rate_per_hour: Number(sessionRate),
+                      bio: bio
+                    });
+
+                    // Update user name if changed
+                    if (user?.name !== fullName) {
+                      await apiClient.put(`/users/${user?.user_id}`, { name: fullName });
+                    }
+
+                    // Upload profile image if changed
+                    if (profilePhoto) {
+                      const formData = new FormData();
+                      formData.append('file', profilePhoto);
+                      await apiClient.post(`/tutors/${tutorId}/profile-image`, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                      });
+                    }
+
+                    // Upload GCash QR if changed
+                    if (gcashQR) {
+                      const formData = new FormData();
+                      formData.append('file', gcashQR);
+                      await apiClient.post(`/tutors/${tutorId}/gcash-qr`, formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                      });
+                    }
+
+                    // Submit subjects with files
+                    for (const subject of Array.from(reapplicationSubjects)) {
+                      const files = subjectFilesMap[subject] || [];
+                      if (files.length > 0) {
+                        const form = new FormData();
+                        form.append('subject_name', subject);
+                        files.forEach(f => form.append('files', f));
+                        await apiClient.post(`/tutors/${tutorId}/subject-application`, form, {
+                          headers: { 'Content-Type': 'multipart/form-data' }
+                        });
+                      }
+                    }
+
+                    // Upload new documents if any
+                    if (reapplicationDocuments.length > 0) {
+                      const form = new FormData();
+                      reapplicationDocuments.forEach(f => form.append('files', f));
+                      await apiClient.post(`/tutors/${tutorId}/documents`, form, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                      });
+                    }
+
+                    // Update availability
+                    const availabilitySlots = Object.entries(reapplicationAvailability).flatMap(([day, dayAvail]) =>
+                      dayAvail.slots.map(slot => ({
+                        day_of_week: day,
+                        start_time: slot.startTime,
+                        end_time: slot.endTime
+                      }))
+                    );
+                    if (availabilitySlots.length > 0) {
+                      await apiClient.post(`/tutors/${tutorId}/availability`, { slots: availabilitySlots });
+                    }
+
+                    // Reset status to pending
+                    await apiClient.patch(`/tutors/${tutorId}/status`, { status: 'pending' });
+
+                    alert('Application updated and resubmitted successfully! Your application is now pending review.');
+                    setShowReapplicationForm(false);
+                    refreshStatus();
+                    fetchSubjectApplications(); // Refresh subject applications
+                  } catch (error: any) {
+                    console.error('Failed to resubmit application:', error);
+                    alert('Failed to resubmit application. Please try again.');
+                  } finally {
+                    setIsSubmittingReapplication(false);
+                  }
+                }}
+                disabled={isSubmittingReapplication}
+              >
+                {isSubmittingReapplication ? 'Submitting...' : 'Submit Reapplication'}
               </Button>
             </div>
           </div>
         </Card>
       )}
+
 
       {/* File Preview Modal */}
       <Modal

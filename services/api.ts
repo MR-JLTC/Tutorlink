@@ -68,6 +68,20 @@ export default apiClient;
 export const getFileUrl = (path: string | undefined | null): string => {
   if (!path) return '';
   if (/^https?:\/\//i.test(path)) return path;
+  
+  // Profile images are served directly at /user_profile_images/ without /api prefix
+  if (path.startsWith('/user_profile_images/') || path.startsWith('user_profile_images/')) {
+    const normalized = path.startsWith('/') ? path : `/${path}`;
+    return `${API_ORIGIN}${normalized}`;
+  }
+  
+  // Files are served directly at /tutor_documents/ without /api prefix
+  if (path.startsWith('/tutor_documents/') || path.startsWith('tutor_documents/')) {
+    const normalized = path.startsWith('/') ? path : `/${path}`;
+    return `${API_ORIGIN}${normalized}`;
+  }
+  
+  // For other files, use the standard path
   const normalized = path.startsWith('/') ? path : `/${path}`;
   return `${API_ORIGIN}${normalized}`;
 };

@@ -25,6 +25,9 @@ const TutorManagement: React.FC = () => {
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
   const [isSubjectUpdating, setIsSubjectUpdating] = useState(false);
   const [adminNotes, setAdminNotes] = useState<string>('');
+  const [tutorRejectionNotes, setTutorRejectionNotes] = useState<string>('');
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [pendingRejectionAction, setPendingRejectionAction] = useState<(() => void) | null>(null);
 
   const fetchTutors = async () => {
     try {
@@ -67,14 +70,94 @@ const TutorManagement: React.FC = () => {
 
   const handleStatusUpdate = async (status: 'approved' | 'rejected') => {
     if (!selectedTutor) return;
+    
+    // If rejecting, show modal to collect rejection reason
+    if (status === 'rejected') {
+      setTutorRejectionNotes('');
+      // Create action that will read tutorRejectionNotes from state when executed
+      setPendingRejectionAction(() => async () => {
+        // Read current state value when button is clicked, not when closure is created
+        await performStatusUpdate(status);
+      });
+      setShowRejectionModal(true);
+      return;
+    }
+    
+    // For approval, proceed directly
+    await performStatusUpdate(status);
+  };
+
+  const performStatusUpdate = async (status: 'approved' | 'rejected', rejectionNotes?: string) => {
+    if (!selectedTutor) return;
     setIsUpdating(true);
     try {
-      await apiClient.patch(`/tutors/${selectedTutor.tutor_id}/status`, { status });
+      // Prepare adminNotes: For rejected status, this will be saved to tutors.admin_notes database column
+      let adminNotes: string | undefined = undefined;
+      if (status === 'rejected') {
+        // Use rejectionNotes parameter if provided, otherwise fall back to state
+        const notesToUse = rejectionNotes !== undefined ? rejectionNotes : tutorRejectionNotes.trim();
+        if (notesToUse.length > 0) {
+          adminNotes = notesToUse;
+          console.log(`[Frontend] Admin rejection reason entered: "${adminNotes}"`);
+          console.log(`[Frontend] This will be stored in tutors.admin_notes database column`);
+        } else {
+          console.error(`[Frontend] ERROR: Rejecting without admin notes - modal validation should prevent this!`);
+          alert('Please provide a rejection reason before confirming.');
+          setIsUpdating(false);
+          return;
+        }
+      }
+      
+      console.log(`[Frontend] Sending PATCH request to update tutor ${selectedTutor.tutor_id} status to '${status}'`);
+      console.log(`[Frontend] Admin notes being sent to backend (will be saved to tutors.admin_notes):`, adminNotes || 'undefined');
+      
+      // Send request to backend - adminNotes will be saved to tutors.admin_notes database column
+      await apiClient.patch(`/tutors/${selectedTutor.tutor_id}/status`, { 
+        status,
+        adminNotes: adminNotes // This will be saved to tutors.admin_notes column in database
+      });
+
+      // If rejecting, automatically reject all pending subject applications
+      if (status === 'rejected') {
+        try {
+          // Fetch all subject applications for this tutor
+          const subjectAppsResponse = await apiClient.get(`/tutors/${selectedTutor.tutor_id}/subject-applications`);
+          const subjectApplications = subjectAppsResponse.data || [];
+          
+          // Filter for pending applications and reject them
+          const pendingSubjects = subjectApplications.filter((app: any) => app.status === 'pending');
+          
+          if (pendingSubjects.length > 0) {
+            // Create rejection note that explains the main application was rejected
+            const mainRejectionReason = adminNotes ? adminNotes : 'No specific reason provided';
+            const rejectionNote = `Automatically rejected: Main tutor application was rejected. Reason: ${mainRejectionReason}`;
+            
+            // Reject each pending subject application
+            const rejectionPromises = pendingSubjects.map((subjectApp: any) =>
+              apiClient.patch(`/tutors/tutor-subjects/${subjectApp.id}/status`, {
+                status: 'rejected',
+                adminNotes: rejectionNote
+              })
+            );
+            
+            await Promise.all(rejectionPromises);
+            console.log(`Automatically rejected ${pendingSubjects.length} pending subject application(s) for tutor ${selectedTutor.tutor_id}`);
+          }
+        } catch (subjectError) {
+          console.error('Failed to auto-reject subject applications:', subjectError);
+          // Don't fail the whole operation if subject rejection fails
+          // Log it but continue with the main rejection
+        }
+      }
+
       setIsModalOpen(false);
-      // Refetch tutors to update the list
+      setShowRejectionModal(false);
+      setTutorRejectionNotes('');
+      // Refetch tutors and tutor subjects to update the lists
       await fetchTutors();
+      await fetchTutorSubjects();
       const notify = (window as any).__notify as ((msg: string, type?: 'success' | 'error' | 'info') => void) | undefined;
-      if (notify) notify(`Application ${status === 'approved' ? 'approved' : 'rejected'} successfully.`, 'success');
+      if (notify) notify(`Application ${status === 'approved' ? 'approved' : 'rejected'} successfully.${status === 'rejected' ? ' All pending subject applications have also been rejected.' : ''}`, 'success');
     } catch (err) {
       console.error("Failed to update status", err);
       const notify = (window as any).__notify as ((msg: string, type?: 'success' | 'error' | 'info') => void) | undefined;
@@ -157,7 +240,7 @@ const TutorManagement: React.FC = () => {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">University</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -185,8 +268,10 @@ const TutorManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(tutor as any).university?.name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(tutor as any).course?.course_name || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Button onClick={() => handleViewDetails(tutor)}>View Details</Button>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                      <div className="flex justify-center">
+                        <Button onClick={() => handleViewDetails(tutor)}>View Details</Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -209,7 +294,7 @@ const TutorManagement: React.FC = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutor</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Applied Date</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -243,8 +328,10 @@ const TutorManagement: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(tutorSubject.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Button onClick={() => handleViewSubjectDetails(tutorSubject)}>View Details</Button>
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        <div className="flex justify-center">
+                          <Button onClick={() => handleViewSubjectDetails(tutorSubject)}>View Details</Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -258,27 +345,33 @@ const TutorManagement: React.FC = () => {
       {selectedTutor && (
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Application Details`}
           footer={
-            <>
-              <Button onClick={() => handleStatusUpdate('rejected')} variant="danger" disabled={isUpdating}>
-                <X className="mr-2 h-4 w-4" /> {isUpdating ? 'Rejecting...' : 'Reject'}
+            <div className="flex flex-row items-center justify-end gap-2 flex-wrap sm:flex-nowrap">
+              <Button
+                onClick={() => handleStatusUpdate('rejected')}
+                variant="danger"
+                disabled={isUpdating}
+                className="flex items-center"
+              >
+                <X className="mr-2 h-4 w-4" />
+                {isUpdating ? 'Rejecting...' : 'Reject'}
               </Button>
-              <Button onClick={() => handleStatusUpdate('approved')} variant="primary" disabled={isUpdating}>
-                <Check className="mr-2 h-4 w-4" /> {isUpdating ? 'Approving...' : 'Approve'}
+              <Button
+                onClick={() => handleStatusUpdate('approved')}
+                variant="primary"
+                disabled={isUpdating}
+                className="flex items-center"
+              >
+                <Check className="mr-2 h-4 w-4" />
+                {isUpdating ? 'Approving...' : 'Approve'}
               </Button>
-            </>
+            </div>
           }
         >
           <div className="space-y-6 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 hover:scrollbar-thumb-slate-400 pr-2">
             {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-slate-800">{selectedTutor.user?.name}</h3>
-                <p className="text-sm text-slate-500">{selectedTutor.user?.email}</p>
-              </div>
-              <div className="text-right text-sm text-slate-600">
-                <div className="font-medium">{(selectedTutor as any).university?.name || 'No university'}</div>
-                <div className="mt-0.5">Course: {(selectedTutor as any).course?.course_name || 'No course'}</div>
-              </div>
+            <div>
+              <h3 className="text-xl font-semibold text-slate-800">{selectedTutor.user?.name}</h3>
+              <p className="text-sm text-slate-500">{selectedTutor.user?.email}</p>
             </div>
 
             {/* Content grid */}
@@ -371,24 +464,38 @@ const TutorManagement: React.FC = () => {
 
       {/* Tutor Subject Modal */}
       {selectedTutorSubject && (
-        <Modal 
-          isOpen={isSubjectModalOpen} 
-          onClose={() => {
-            setIsSubjectModalOpen(false);
-            setAdminNotes('');
-          }} 
-          title={`Subject Expertise Details`}
-          footer={
-            <>
-              <Button onClick={() => handleSubjectStatusUpdate('rejected')} variant="danger" disabled={isSubjectUpdating}>
-                <X className="mr-2 h-4 w-4" /> {isSubjectUpdating ? 'Rejecting...' : 'Reject'}
-              </Button>
-              <Button onClick={() => handleSubjectStatusUpdate('approved')} variant="primary" disabled={isSubjectUpdating}>
-                <Check className="mr-2 h-4 w-4" /> {isSubjectUpdating ? 'Approving...' : 'Approve'}
-              </Button>
-            </>
-          }
-        >
+          <Modal 
+            isOpen={isSubjectModalOpen} 
+            onClose={() => {
+              setIsSubjectModalOpen(false);
+              setAdminNotes('');
+            }} 
+            title="Subject Expertise Details"
+            footer={
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  onClick={() => handleSubjectStatusUpdate('rejected')}
+                  variant="danger"
+                  disabled={isSubjectUpdating}
+                  className="flex items-center"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  {isSubjectUpdating ? 'Rejecting...' : 'Reject'}
+                </Button>
+          
+                <Button
+                  onClick={() => handleSubjectStatusUpdate('approved')}
+                  variant="primary"
+                  disabled={isSubjectUpdating}
+                  className="flex items-center"
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  {isSubjectUpdating ? 'Approving...' : 'Approve'}
+                </Button>
+              </div>
+            }
+          >
+      
           <div className="space-y-6 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 hover:scrollbar-thumb-slate-400 pr-2">
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -461,6 +568,73 @@ const TutorManagement: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Rejection Reason Modal */}
+      <Modal
+        isOpen={showRejectionModal}
+        onClose={() => {
+          setShowRejectionModal(false);
+          setTutorRejectionNotes('');
+          setPendingRejectionAction(null);
+        }}
+        title="Rejection Reason"
+        footer={
+          <>
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                setShowRejectionModal(false);
+                setTutorRejectionNotes('');
+                setPendingRejectionAction(null);
+              }}
+              disabled={isUpdating}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="danger" 
+              onClick={async () => {
+                // Read the rejection notes directly from state when button is clicked
+                const rejectionReason = tutorRejectionNotes.trim();
+                
+                if (!rejectionReason) {
+                  alert('Please provide a rejection reason before confirming.');
+                  return;
+                }
+                
+                console.log(`[Frontend] Modal Confirm clicked - Rejection reason from state: "${rejectionReason}"`);
+                
+                // Call performStatusUpdate directly with the rejection notes
+                if (pendingRejectionAction) {
+                  // Pass the rejection reason directly to avoid closure issues
+                  await performStatusUpdate('rejected', rejectionReason);
+                }
+              }}
+              disabled={isUpdating || !tutorRejectionNotes.trim()}
+            >
+              {isUpdating ? 'Rejecting...' : 'Confirm Rejection'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Please provide a reason for rejecting this tutor application. This feedback will be shared with the tutor.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Rejection Reason <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={tutorRejectionNotes}
+              onChange={(e) => setTutorRejectionNotes(e.target.value)}
+              placeholder="Enter the reason for rejection (e.g., incomplete documents, insufficient qualifications, etc.)..."
+              className="w-full p-3 border border-gray-300 rounded-md mt-1 min-h-[120px] resize-none"
+              required
+            />
+          </div>
+        </div>
+      </Modal>
 
       {/* File Preview Modal */}
       <Modal

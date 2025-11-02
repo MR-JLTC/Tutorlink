@@ -28,8 +28,11 @@ export class TutorsController {
 
   @Patch(':id/status')
   @UseGuards(JwtAuthGuard)
-  updateStatus(@Param('id') id: string, @Body() updateTutorStatusDto: UpdateTutorStatusDto) {
-    return this.tutorsService.updateStatus(+id, updateTutorStatusDto.status);
+  updateStatus(@Param('id') id: string, @Body() body: { status: 'approved' | 'rejected'; adminNotes?: string }) {
+    console.log(`[TutorController] Received PATCH request for tutor ${id} - Status: ${body.status}`);
+    console.log(`[TutorController] Admin notes in request body:`, body.adminNotes ? `"${body.adminNotes.substring(0, 50)}${body.adminNotes.length > 50 ? '...' : ''}"` : 'none');
+    console.log(`[TutorController] Passing adminNotes to service - will be saved to tutors.admin_notes column`);
+    return this.tutorsService.updateStatus(+id, body.status, body.adminNotes);
   }
 
   @Patch('tutor-subjects/:tutorSubjectId/status')
@@ -137,7 +140,7 @@ export class TutorsController {
   }
 
   @Put(':tutorId')
-  async updateTutor(@Param('tutorId') tutorId: string, @Body() body: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string }) {
+  async updateTutor(@Param('tutorId') tutorId: string, @Body() body: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: string; gcash_number?: string; session_rate_per_hour?: number }) {
     return this.tutorsService.updateTutor(+tutorId, { ...body, year_level: body.year_level ? Number(body.year_level) : undefined });
   }
 

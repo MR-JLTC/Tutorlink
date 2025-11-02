@@ -56,6 +56,9 @@ export class Tutor {
   })
   status: 'pending' | 'approved' | 'rejected';
 
+  @Column({ name: 'admin_notes', type: 'text', nullable: true })
+  admin_notes: string;
+
   @OneToMany(() => TutorDocument, (doc) => doc.tutor)
   documents: TutorDocument[];
 

@@ -36,7 +36,20 @@ const ProfileSetup: React.FC = () => {
 
   useEffect(() => {
     if (user?.user_id) {
-      setTutorId(user.user_id);
+      // Fetch the actual tutor_id instead of using user_id
+      const fetchTutorId = async () => {
+        try {
+          const response = await apiClient.get(`/tutors/by-user/${user.user_id}/tutor-id`);
+          const actualTutorId = response.data.tutor_id;
+          console.log('Fetched tutor_id:', actualTutorId, 'for user_id:', user.user_id);
+          setTutorId(actualTutorId);
+        } catch (error: any) {
+          console.error('Failed to fetch tutor ID:', error);
+          // Fallback to user_id if the endpoint fails (some endpoints accept user_id)
+          setTutorId(user.user_id);
+        }
+      };
+      fetchTutorId();
     }
   }, [user]);
 
@@ -50,7 +63,15 @@ const ProfileSetup: React.FC = () => {
     if (!tutorId) return;
     try {
       const response = await apiClient.get(`/tutors/${tutorId}/profile`);
-      setProfile(prev => ({ ...prev, ...response.data, profile_photo: response.data.profile_photo || user?.profile_image_url || '' }));
+      console.log('Profile response data:', response.data);
+      console.log('Profile photo URL from API:', response.data.profile_photo);
+      console.log('User profile_image_url:', user?.profile_image_url);
+      
+      // Prioritize profile_photo from API, then fall back to user profile_image_url
+      const profilePhotoUrl = response.data.profile_photo || user?.profile_image_url || '';
+      console.log('Setting profile photo URL to:', profilePhotoUrl);
+      
+      setProfile(prev => ({ ...prev, ...response.data, profile_photo: profilePhotoUrl }));
     } catch (error) {
       console.error('Failed to fetch profile:', error);
     }
@@ -86,13 +107,34 @@ const ProfileSetup: React.FC = () => {
 
       // Upload profile image if changed
       if (profileImage) {
-        const formData = new FormData();
-        formData.append('file', profileImage);
-        const profileResponse = await apiClient.post(`/tutors/${tutorId}/profile-image`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        // Update the profile photo URL immediately
-        setProfile(prev => ({ ...prev, profile_photo: profileResponse.data.profile_image_url }));
+        try {
+          console.log('Uploading profile image for tutor:', tutorId);
+          const formData = new FormData();
+          formData.append('file', profileImage);
+          const profileResponse = await apiClient.post(`/tutors/${tutorId}/profile-image`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          console.log('Profile image upload response:', profileResponse.data);
+          
+          // The backend returns { success: true, profile_image_url: fileUrl }
+          const profilePhotoUrl = profileResponse.data.profile_image_url || profileResponse.data?.data?.profile_image_url;
+          if (profilePhotoUrl) {
+            console.log('Setting profile photo URL to:', profilePhotoUrl);
+            setProfile(prev => ({ ...prev, profile_photo: profilePhotoUrl }));
+            
+            // Also update user context if available
+            if (user) {
+              const updatedUser = { ...user, profile_image_url: profilePhotoUrl };
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+            }
+          } else {
+            console.warn('Profile image URL not found in response:', profileResponse.data);
+          }
+        } catch (profileError: any) {
+          console.error('Failed to upload profile image:', profileError);
+          console.error('Error details:', profileError.response?.data);
+          throw new Error(`Failed to upload profile image: ${profileError.response?.data?.message || profileError.message}`);
+        }
       } else if (user?.profile_image_url && !profileImage) {
         // If no new image is selected and user already has one, keep it
         setProfile(prev => ({ ...prev, profile_photo: user.profile_image_url }));
@@ -100,23 +142,42 @@ const ProfileSetup: React.FC = () => {
 
       // Upload GCash QR if changed
       if (gcashQR) {
-        const formData = new FormData();
-        formData.append('file', gcashQR);
-        const gcashResponse = await apiClient.post(`/tutors/${tutorId}/gcash-qr`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        // Update the GCash QR URL immediately
-        setProfile(prev => ({ ...prev, gcash_qr: gcashResponse.data.gcash_qr_url }));
+        try {
+          console.log('Uploading GCash QR for tutor:', tutorId);
+          const formData = new FormData();
+          formData.append('file', gcashQR);
+          const gcashResponse = await apiClient.post(`/tutors/${tutorId}/gcash-qr`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          console.log('GCash QR upload response:', gcashResponse.data);
+          
+          // The backend returns { success: true, gcash_qr_url: fileUrl }
+          const gcashQRUrl = gcashResponse.data.gcash_qr_url || gcashResponse.data?.data?.gcash_qr_url;
+          if (gcashQRUrl) {
+            console.log('Setting GCash QR URL to:', gcashQRUrl);
+            setProfile(prev => ({ ...prev, gcash_qr: gcashQRUrl }));
+          } else {
+            console.warn('GCash QR URL not found in response:', gcashResponse.data);
+          }
+        } catch (gcashError: any) {
+          console.error('Failed to upload GCash QR:', gcashError);
+          console.error('Error details:', gcashError.response?.data);
+          throw new Error(`Failed to upload GCash QR: ${gcashError.response?.data?.message || gcashError.message}`);
+        }
       }
 
       setIsEditing(false);
       setProfileImage(null);
       setGcashQR(null);
-      fetchProfile();
+      
+      // Refresh profile to get updated data
+      await fetchProfile();
+      
       alert('Profile updated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save profile:', error);
-      alert('Failed to save profile. Please try again.');
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save profile. Please try again.';
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -221,10 +282,19 @@ const ProfileSetup: React.FC = () => {
             <div className="relative">
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
                 <img
-                  src={profile.profile_photo ? getFileUrl(profile.profile_photo) : undefined}
+                  src={getFileUrl(profile.profile_photo)}
                   alt="Profile"
                   className="w-full h-full object-cover"
                   style={{aspectRatio: '1/1'}}
+                  onError={(e) => {
+                    console.error('Failed to load profile image. Original URL:', profile.profile_photo);
+                    console.error('Constructed URL:', getFileUrl(profile.profile_photo));
+                    // Hide broken image
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                  onLoad={() => {
+                    console.log('Profile image loaded successfully:', getFileUrl(profile.profile_photo));
+                  }}
                 />
               </div>
               {applicationStatus === 'approved' ? (

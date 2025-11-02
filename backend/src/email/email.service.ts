@@ -227,6 +227,13 @@ export class EmailService {
     adminNotes?: string;
   }): Promise<boolean> {
     try {
+      // Log the admin notes being sent
+      console.log(`[Email Service] Sending rejection email to ${tutorData.email}`);
+      console.log(`[Email Service] Admin notes provided:`, tutorData.adminNotes ? `"${tutorData.adminNotes.substring(0, 50)}${tutorData.adminNotes.length > 50 ? '...' : ''}"` : 'none');
+      
+      const hasAdminNotes = tutorData.adminNotes && tutorData.adminNotes.trim().length > 0;
+      console.log(`[Email Service] Will include rejection reason in email:`, hasAdminNotes);
+      
       const mailOptions = {
         from: `"TutorLink" <${this.gmailUser}>`,
         to: tutorData.email,
@@ -245,15 +252,18 @@ export class EmailService {
               <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ef4444;">
                 <h3 style="color: #ef4444; margin-top: 0;">Application Not Approved</h3>
                 <p style="color: #475569; line-height: 1.6;">
-                  After careful review, we have decided not to approve your tutor application. 
-                  This decision was based on our current requirements and standards.
+                  After careful review, we have decided not to approve your tutor application.
                 </p>
-                ${tutorData.adminNotes ? `
-                  <div style="background-color: #fef7f7; padding: 15px; border-radius: 6px; margin: 15px 0;">
-                    <h4 style="color: #991b1b; margin-top: 0;">Admin Notes:</h4>
-                    <p style="color: #7f1d1d; line-height: 1.5;">${tutorData.adminNotes}</p>
+                ${tutorData.adminNotes && tutorData.adminNotes.trim().length > 0 ? `
+                  <div style="background-color: #fee2e2; padding: 20px; border-radius: 6px; margin: 20px 0; border: 2px solid #ef4444;">
+                    <h4 style="color: #991b1b; margin-top: 0; margin-bottom: 10px; font-size: 18px; font-weight: bold;">Rejection Reason:</h4>
+                    <p style="color: #7f1d1d; line-height: 1.6; font-size: 15px; white-space: pre-wrap; margin: 0;">${tutorData.adminNotes.trim()}</p>
                   </div>
-                ` : ''}
+                ` : `
+                  <p style="color: #475569; line-height: 1.6; margin-top: 15px;">
+                    This decision was based on our current requirements and standards.
+                  </p>
+                `}
               </div>
               <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #0ea5e9;">
                 <h3 style="color: #0ea5e9; margin-top: 0;">What's Next?</h3>

@@ -53,7 +53,7 @@ export class TutorsService {
     });
   }
 
-  async updateStatus(id: number, status: 'approved' | 'rejected'): Promise<Tutor> {
+  async updateStatus(id: number, status: 'approved' | 'rejected', adminNotes?: string): Promise<Tutor> {
     const tutor = await this.tutorsRepository.findOne({ 
       where: { tutor_id: id },
       relations: ['user']
@@ -63,6 +63,90 @@ export class TutorsService {
     }
 
     tutor.status = status;
+    
+    // CRITICAL: For rejected status, ALWAYS save admin notes to tutors.admin_notes database column
+    // This MUST happen - the admin rejection reason MUST be stored in the database
+    let adminNotesToSave: string | null = null;
+    
+    if (status === 'rejected') {
+      // For rejected status, we MUST save admin notes if provided
+      if (adminNotes !== undefined && adminNotes !== null && adminNotes.trim().length > 0) {
+        // Trim whitespace - this will be saved to tutors.admin_notes column
+        const trimmedNotes = adminNotes.trim();
+        adminNotesToSave = trimmedNotes; // Save the trimmed notes (always non-empty at this point)
+        // Explicitly set on tutor entity - this maps to tutors.admin_notes database column
+        tutor.admin_notes = adminNotesToSave;
+        console.log(`[TutorService] REJECTION - Admin notes received: "${adminNotes}"`);
+        console.log(`[TutorService] REJECTION - Trimmed admin notes to save: "${adminNotesToSave}"`);
+        console.log(`[TutorService] REJECTION - Setting tutor.admin_notes property = "${adminNotesToSave}"`);
+        console.log(`[TutorService] REJECTION - This MUST be saved to tutors.admin_notes column in database`);
+      } else {
+        console.error(`[TutorService] ERROR: Rejecting tutor ${id} but adminNotes is missing or empty!`);
+        console.error(`[TutorService] Received adminNotes:`, adminNotes);
+        console.error(`[TutorService] This should not happen - modal should require rejection reason.`);
+        // Still save status as rejected, but log error
+      }
+    } else if (adminNotes !== undefined && adminNotes !== null) {
+      // For approved status, save if provided (typically not used)
+      const trimmedNotes = adminNotes.trim();
+      adminNotesToSave = trimmedNotes.length > 0 ? trimmedNotes : null;
+      tutor.admin_notes = adminNotesToSave;
+      console.log(`[TutorService] Admin notes provided for ${status}: "${adminNotesToSave || 'null'}"`);
+    }
+    
+    // CRITICAL: Save tutor entity to database FIRST - this MUST persist tutor.admin_notes to tutors.admin_notes column
+    console.log(`[TutorService] BEFORE SAVE - tutor.admin_notes = "${tutor.admin_notes || 'null'}"`);
+    let savedTutor = await this.tutorsRepository.save(tutor);
+    console.log(`[TutorService] AFTER SAVE - savedTutor.admin_notes = "${savedTutor.admin_notes || 'null'}"`);
+    
+    // CRITICAL: For rejected status, ALWAYS explicitly update the admin_notes column using update() method
+    // This is a double-check to ensure the column is definitely updated in the database
+    if (status === 'rejected') {
+      if (adminNotesToSave !== null) {
+        // Explicitly update the admin_notes column in the tutors table
+        const updateResult = await this.tutorsRepository.update(
+          { tutor_id: id },
+          { admin_notes: adminNotesToSave }
+        );
+        console.log(`[TutorService] Explicitly updated tutors.admin_notes column using update() method`);
+        console.log(`[TutorService] Update result affected rows:`, updateResult.affected);
+        console.log(`[TutorService] Value saved: "${adminNotesToSave}"`);
+        
+        // Reload tutor from database to verify admin_notes were saved
+        const reloadedTutor = await this.tutorsRepository.findOne({
+          where: { tutor_id: id },
+          relations: ['user']
+        });
+        
+        if (reloadedTutor) {
+          console.log(`[TutorService] VERIFICATION - Reloaded tutor ${id} from database after explicit update:`);
+          console.log(`[TutorService]   - Status: ${reloadedTutor.status}`);
+          console.log(`[TutorService]   - Admin Notes from tutors.admin_notes column:`, reloadedTutor.admin_notes ? `"${reloadedTutor.admin_notes}"` : 'NULL');
+          
+          if (!reloadedTutor.admin_notes || reloadedTutor.admin_notes !== adminNotesToSave) {
+            console.error(`[TutorService] ERROR: Admin notes NOT saved correctly!`);
+            console.error(`[TutorService] Expected: "${adminNotesToSave}"`);
+            console.error(`[TutorService] Actual from DB: "${reloadedTutor.admin_notes || 'NULL'}"`);
+          } else {
+            console.log(`[TutorService] SUCCESS: Admin notes verified in database!`);
+          }
+          
+          // Use the reloaded tutor for consistency
+          savedTutor = reloadedTutor;
+        }
+      } else {
+        console.error(`[TutorService] ERROR: Cannot update admin_notes - adminNotesToSave is null for rejected status!`);
+      }
+    }
+    
+    // Final verification - log what was saved to database
+    console.log(`[TutorService] FINAL VERIFICATION - Tutor ${id} in database:`);
+    console.log(`[TutorService]   - Status: '${savedTutor.status}'`);
+    console.log(`[TutorService]   - Admin Notes (tutors.admin_notes column):`, 
+      savedTutor.admin_notes 
+        ? `"${savedTutor.admin_notes.substring(0, 100)}${savedTutor.admin_notes.length > 100 ? '...' : ''}"` 
+        : 'NULL'
+    );
     
     if (status === 'approved') {
       const user = tutor.user;
@@ -82,19 +166,29 @@ export class TutorsService {
         // Don't throw error to avoid breaking the approval process
       }
     } else if (status === 'rejected') {
-      // Send rejection email to tutor
+      // Send rejection email to tutor with the admin notes from database
+      // Use savedTutor.admin_notes which was just saved to the database admin_notes column
+      const notesForEmail = savedTutor.admin_notes && savedTutor.admin_notes.trim().length > 0 
+        ? savedTutor.admin_notes.trim() 
+        : undefined;
+      
+      console.log(`[TutorService] Sending rejection email to ${(tutor.user as any)?.email}`);
+      console.log(`[TutorService] Admin notes from database (admin_notes column):`, notesForEmail ? `"${notesForEmail.substring(0, 50)}${notesForEmail.length > 50 ? '...' : ''}"` : 'none');
+      
       try {
         await this.emailService.sendTutorApplicationRejectionEmail({
           name: (tutor.user as any)?.name || 'Tutor',
           email: (tutor.user as any)?.email || '',
+          adminNotes: notesForEmail, // Use notes from database admin_notes column
         });
+        console.log(`[TutorService] Rejection email sent successfully to ${(tutor.user as any)?.email}`);
       } catch (error) {
-        console.error('Failed to send tutor application rejection email:', error);
+        console.error('[TutorService] Failed to send tutor application rejection email:', error);
         // Don't throw error to avoid breaking the rejection process
       }
     }
 
-    return this.tutorsRepository.save(tutor);
+    return savedTutor;
   }
 
   async getTutorByEmail(email: string): Promise<{ tutor_id: number; user_id: number; user_type: string }> {
@@ -198,7 +292,7 @@ export class TutorsService {
     return { success: true, tutor_id: savedTutor.tutor_id };
   }
 
-  async updateTutor(tutorId: number, data: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: number; gcash_number?: string }): Promise<{ success: true }> {
+  async updateTutor(tutorId: number, data: { full_name?: string; university_id?: number; course_id?: number; course_name?: string; bio?: string; year_level?: number; gcash_number?: string; session_rate_per_hour?: number }): Promise<{ success: true }> {
     const tutor = await this.tutorsRepository.findOne({ 
       where: { tutor_id: tutorId },
       relations: ['user', 'university', 'course']
@@ -256,6 +350,9 @@ export class TutorsService {
     }
     if (data.gcash_number !== undefined) {
       tutor.gcash_number = data.gcash_number;
+    }
+    if (data.session_rate_per_hour !== undefined) {
+      tutor.session_rate_per_hour = data.session_rate_per_hour;
     }
 
     await this.tutorsRepository.save(tutor);
@@ -679,7 +776,8 @@ export class TutorsService {
     
     return {
       is_verified: tutor.status === 'approved',
-      status: tutor.status
+      status: tutor.status,
+      admin_notes: tutor.admin_notes || null
     };
   }
 
@@ -721,6 +819,8 @@ export class TutorsService {
       profile_photo: tutor.user.profile_image_url,
       gcash_number: tutor.gcash_number || '',
       gcash_qr: tutor.gcash_qr_url || '',
+      session_rate_per_hour: tutor.session_rate_per_hour || null,
+      course_id: tutor.course_id || null, // Include course_id for filtering subjects
       subjects: approvedSubjects.map(ts => ts.subject?.subject_name || ''),
       rating: 0, // Calculate from ratings table
       total_reviews: 0 // Calculate from ratings table
