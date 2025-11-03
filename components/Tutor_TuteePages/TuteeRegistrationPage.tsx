@@ -27,6 +27,10 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
   const [showPassword, setShowPassword] = useState(false);
   const [courses, setCourses] = useState<{ course_id: number; course_name: string; university_id: number | null }[]>([]);
   const [courseId, setCourseId] = useState<number | ''>('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsViewed, setTermsViewed] = useState(false);
+  const [termsScrollProgress, setTermsScrollProgress] = useState(0);
   
   // Email verification states
   const [isEmailVerified, setIsEmailVerified] = useState(false);
@@ -167,6 +171,25 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
     setShowVerificationModal(false);
     setVerificationCode('');
     setVerificationError('');
+  };
+
+  const handleCloseTermsModal = () => {
+    if (termsScrollProgress >= 80) {
+      setTermsViewed(true);
+    }
+    setShowTermsModal(false);
+  };
+
+  const handleTermsModalScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollTop = target.scrollTop;
+    const scrollHeight = target.scrollHeight;
+    const clientHeight = target.clientHeight;
+    const scrollPercentage = (scrollTop / (scrollHeight - clientHeight)) * 100;
+    setTermsScrollProgress(scrollPercentage);
+    if (scrollPercentage >= 80) {
+      setTermsViewed(true);
+    }
   };
 
   const handleProfileImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -383,7 +406,13 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
         }
       }
       
-      setIsSubmitted(true);
+      notify('Registration successful!', 'success');
+      if (onClose) {
+        onClose();
+      } else {
+        navigate('/LandingPage');
+      }
+      return;
     } catch (err: any) {
       console.error('Registration error:', err);
       console.error('Error response:', err?.response?.data);
@@ -431,14 +460,24 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
     try { window.history.back(); } catch {}
   };
 
+  // Reset success state and gating when modal opens again
+  useEffect(() => {
+    if (isModalOpen) {
+      setIsSubmitted(false);
+      setAcceptedTerms(false);
+      setTermsViewed(false);
+      setShowVerificationModal(false);
+    }
+  }, [isModalOpen]);
+
   if (!isModalOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" role="dialog" aria-modal="true">
       <div className="w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
-          <div className="flex items-center gap-3">
-            <Logo className="h-14 w-14" />
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center gap-2.5">
+            <Logo className="h-12 w-12" />
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Student Registration</h1>
               <p className="text-slate-600 text-xs sm:text-sm">Create your account to find a tutor.</p>
@@ -448,11 +487,11 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
-        <div className="max-h-[85vh] overflow-y-auto px-4 sm:px-5 py-5 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
-          <div className="w-full bg-white/80 backdrop-blur-lg p-4 sm:p-5 rounded-2xl shadow-xl border border-white/50">
-            <form onSubmit={handleSubmit} noValidate>
+        <div className="max-h-[85vh] overflow-y-auto px-3 sm:px-4 py-4 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
+          <div className="w-full bg-white/80 backdrop-blur-lg p-4 rounded-2xl shadow-xl border border-white/50">
+            <form onSubmit={handleSubmit} noValidate className="max-w-5xl mx-auto">
           {/* Email Verification Section */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 mb-6">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200 mb-4">
             <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
               <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -460,11 +499,11 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
               Email Verification
             </h3>
             
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div className="md:col-span-6">
                 <label className="block text-slate-700 font-semibold mb-2">University</label>
               <select
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                  className="w-full min-w-[40ch] px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
                 value={universityId}
                 onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')}
                 required
@@ -475,8 +514,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                 ))}
               </select>
             </div>
-              
-             <div>
+             <div className="md:col-span-6">
                 <label className="block text-slate-700 font-semibold mb-2">Email Address</label>
                 <input 
                   type="email" 
@@ -510,7 +548,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
             </div>
 
             {/* Verification Status and Button */}
-            <div className="mt-4 flex items-center justify-between">
+            <div className="mt-3 flex items-center justify-between">
               <div className="flex items-center">
                 {isEmailVerified ? (
                   <div className="flex items-center text-green-700">
@@ -580,8 +618,8 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Other Account Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="md:col-span-2 max-w-lg">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-5 items-start">
+            <div className="md:col-span-8 max-w-lg">
               <label className="block text-slate-700 font-semibold mb-1" htmlFor="name">Full Name</label>
               <input 
                 type="text" 
@@ -598,7 +636,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                 required 
               />
             </div>
-            <div className="md:col-span-2">
+            <div className="md:col-span-4">
               <label className="block text-slate-700 font-semibold mb-1" htmlFor="password">Password</label>
               <div className="relative w-fit">
                 <input 
@@ -673,10 +711,10 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                 </button>
               </div>
             </div>
-            <div>
+            <div className="md:col-span-8 max-w-3xl">
               <label className="block text-slate-700 font-semibold mb-1">Course</label>
               <select
-                className={`w-full px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
+                className={`w-full min-w-[40ch] px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
                 value={courseId}
                 onChange={(e) => {
                   const value = e.target.value ? Number(e.target.value) : '';
@@ -693,27 +731,8 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                   <option key={c.course_id} value={c.course_id}>{c.course_name}</option>
                 ))}
               </select>
-              <div className="mt-2">
-                <label htmlFor="course" className="block text-slate-600 text-sm mb-1">Not in the list? Input your course:</label>
-                <input
-                  type="text"
-                  id="course"
-                  name="course"
-                  placeholder="e.g., Computer Science"
-                  value={formData.course}
-                  onChange={handleInputChange}
-                  disabled={!universityId || courseId !== ''}
-                  className={`w-full px-4 py-2 border rounded-lg ${(!universityId || courseId !== '') ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
-                />
-                {courseId !== '' && (
-                  <p className="text-xs text-slate-500 mt-1">Select "Select Course" above to enable manual input.</p>
-                )}
-                {courseId === '' && !universityId && (
-                  <p className="text-xs text-slate-500 mt-1">Select a university to enable course selection or manual input.</p>
-                )}
-              </div>
             </div>
-            <div>
+            <div className="md:col-span-4 max-w-[18ch]">
               <label className="block text-slate-700 font-semibold mb-1" htmlFor="yearLevel">Year Level</label>
               <select 
                 id="yearLevel" 
@@ -746,18 +765,63 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
             <p className="text-xs text-slate-500 mt-1">Upload a photo of yourself (JPG, PNG, or other image formats)</p>
           </div>
           
-          <button  
-            type="submit" 
-            className={`mt-6 w-full font-bold py-3 px-6 rounded-lg transition-colors ${
-              isEmailVerified 
-                ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
-                : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-            }`}
-            disabled={!isEmailVerified}
-            title={!isEmailVerified ? 'Please verify your email first' : 'Create your account'}
-          >
-            {isEmailVerified ? 'Create Account' : 'Verify Email to Submit'}
-          </button>
+          <div className="pt-2">
+            <div className="flex items-start gap-2 text-sm text-slate-700">
+              <input
+                id="accept-terms-tutee"
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                disabled={!termsViewed}
+                className={`mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 ${
+                  !termsViewed ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              />
+              <label htmlFor="accept-terms-tutee" className="leading-5">
+                {termsViewed
+                  ? 'I have read and agree to the Student Terms and Conditions.'
+                  : 'I agree to the Student Terms and Conditions (please read the terms first).'}
+                <button
+                  type="button"
+                  className="ml-2 text-indigo-600 hover:text-indigo-700 underline"
+                  onClick={() => {
+                    setShowTermsModal(true);
+                    setTermsScrollProgress(0);
+                  }}
+                >
+                  {termsViewed ? 'Review Terms' : 'Read Terms'}
+                </button>
+              </label>
+            </div>
+            {!termsViewed && (
+              <p className="text-xs text-amber-600 mt-1 ml-6 flex items-center">
+                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                Please open and read the Terms and Conditions before accepting.
+              </p>
+            )}
+            <button  
+              type="submit" 
+              className={`mt-4 w-full font-bold py-3 px-6 rounded-lg transition-colors ${
+                isEmailVerified && acceptedTerms && termsViewed
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                  : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+              }`}
+              disabled={!isEmailVerified || !acceptedTerms || !termsViewed}
+              title={
+                !isEmailVerified
+                  ? 'Please verify your email first'
+                  : !termsViewed
+                  ? 'Please read the Terms and Conditions first'
+                  : !acceptedTerms
+                  ? 'Please accept the Terms and Conditions'
+                  : 'Create your account'
+              }
+            >
+              {isEmailVerified ? 'Create Account' : 'Verify Email to Submit'}
+            </button>
+          </div>
             </form>
           </div>
         </div>
@@ -877,6 +941,89 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+        </div>
+      )}
+      {/* Terms and Conditions Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 max-w-3xl w-full relative overflow-hidden">
+            <div className="relative z-10 p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-slate-800">Student Terms and Conditions</h2>
+                  {termsScrollProgress > 0 && (
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <div className="flex-1 bg-slate-200 rounded-full h-2 overflow-hidden">
+                          <div 
+                            className="bg-indigo-600 h-full transition-all duration-300 ease-out"
+                            style={{ width: `${Math.min(termsScrollProgress, 100)}%` }}
+                          />
+                        </div>
+                        <span className="min-w-[3rem] text-right">
+                          {Math.round(termsScrollProgress)}%
+                        </span>
+                      </div>
+                      {termsScrollProgress >= 80 && (
+                        <p className="text-xs text-green-600 mt-1 flex items-center">
+                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          You can now accept the terms
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button type="button" onClick={handleCloseTermsModal} className="p-2 text-slate-400 hover:text-slate-600 ml-4">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+              <div 
+                className="max-h-[65vh] overflow-y-auto pr-1 text-slate-700 space-y-4"
+                onScroll={handleTermsModalScroll}
+              >
+                <p><strong>Effective Date:</strong> October 31, 2025</p>
+                <p><strong>Platform Name:</strong> TutorLink (“the Platform”)</p>
+                <h3 className="font-semibold">1. Overview</h3>
+                <p>These Terms govern your participation as a Student (Tutee) on TutorLink. By registering and using the Platform, you agree to follow these rules and use the services responsibly.</p>
+                <h3 className="font-semibold">2. Account and Verification</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Provide accurate personal and academic information.</li>
+                  <li>Use your official university email for verification.</li>
+                  <li>Do not share your account with others.</li>
+                </ul>
+                <h3 className="font-semibold">3. Session Bookings</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Book sessions only when you intend to attend.</li>
+                  <li>Communicate clearly with tutors about your subject needs.</li>
+                  <li>Confirm completed sessions promptly.</li>
+                </ul>
+                <h3 className="font-semibold">4. Payments</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Payments are handled securely via the Platform.</li>
+                  <li>Do not pay tutors outside the Platform.</li>
+                </ul>
+                <h3 className="font-semibold">5. Conduct</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Be respectful and professional during sessions.</li>
+                  <li>Do not request inappropriate content or behavior.</li>
+                </ul>
+                <h3 className="font-semibold">6. Ratings and Feedback</h3>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Provide fair and honest feedback after sessions.</li>
+                  <li>Do not abuse the review system.</li>
+                </ul>
+                <h3 className="font-semibold">7. Privacy</h3>
+                <p>Your information is handled in accordance with the Data Privacy Act of 2012. We use your data to operate and improve the Platform.</p>
+                <h3 className="font-semibold">8. Modifications</h3>
+                <p>TutorLink may update these Terms anytime. Continued use means you accept the revised version.</p>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button type="button" onClick={handleCloseTermsModal} className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50">Close</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

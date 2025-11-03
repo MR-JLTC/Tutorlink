@@ -15,6 +15,10 @@ export class CreateUniversityDto {
 
   @IsIn(['active', 'inactive'])
   status: 'active' | 'inactive';
+
+  @IsString()
+  @IsOptional()
+  logo_url?: string;
 }
 
 export class UpdateUniversityDto {
@@ -35,4 +39,8 @@ export class UpdateUniversityDto {
   @IsIn(['active', 'inactive'])
   @IsOptional()
   status?: 'active' | 'inactive';
+
+  @IsString()
+  @IsOptional()
+  logo_url?: string;
 }

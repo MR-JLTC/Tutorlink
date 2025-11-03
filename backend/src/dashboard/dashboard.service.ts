@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { User, Tutor, Payment } from '../database/entities';
 import { Session } from '../database/entities/session.entity';
 import { Subject } from '../database/entities/subject.entity';
+import { Student } from '../database/entities/student.entity';
+import { University } from '../database/entities/university.entity';
+import { Course } from '../database/entities/course.entity';
 
 @Injectable()
 export class DashboardService {
@@ -18,6 +21,12 @@ export class DashboardService {
     private sessionsRepository: Repository<Session>,
     @InjectRepository(Subject)
     private subjectsRepository: Repository<Subject>,
+    @InjectRepository(Student)
+    private studentsRepository: Repository<Student>,
+    @InjectRepository(University)
+    private universitiesRepository: Repository<University>,
+    @InjectRepository(Course)
+    private coursesRepository: Repository<Course>,
   ) {}
 
   async getStats() {
@@ -93,6 +102,118 @@ export class DashboardService {
 
     const recentConfirmedRevenue = parseFloat(recentPaymentsSumRaw.sum) || 0;
 
+    // University distribution: tutors vs tutees per university
+    const tutorUniRaw = await this.tutorsRepository
+      .createQueryBuilder('tutor')
+      .select('tutor.university_id', 'university_id')
+      .addSelect('COUNT(tutor.tutor_id)', 'tutors')
+      .where('tutor.university_id IS NOT NULL')
+      .andWhere('tutor.status = :status', { status: 'approved' })
+      .groupBy('tutor.university_id')
+      .getRawMany();
+
+    const tuteeUniRaw = await this.studentsRepository
+      .createQueryBuilder('student')
+      .select('student.university_id', 'university_id')
+      .addSelect('COUNT(student.student_id)', 'tutees')
+      .where('student.university_id IS NOT NULL')
+      .groupBy('student.university_id')
+      .getRawMany();
+
+    const uniIds = Array.from(new Set([
+      ...tutorUniRaw.map((r: any) => Number(r.university_id)),
+      ...tuteeUniRaw.map((r: any) => Number(r.university_id)),
+    ].filter(Boolean)));
+    const uniMap: Record<number, string> = {};
+    if (uniIds.length) {
+      const universities = await this.universitiesRepository.findByIds(uniIds);
+      universities.forEach(u => { (uniMap as any)[(u as any).university_id] = (u as any).name; });
+    }
+    const uniAgg: Record<number, { university: string; tutors: number; tutees: number }> = {};
+    tutorUniRaw.forEach((r: any) => {
+      const id = Number(r.university_id);
+      if (!id) return;
+      uniAgg[id] = uniAgg[id] || { university: uniMap[id] || 'Unknown', tutors: 0, tutees: 0 };
+      uniAgg[id].tutors = Number(r.tutors) || 0;
+    });
+    tuteeUniRaw.forEach((r: any) => {
+      const id = Number(r.university_id);
+      if (!id) return;
+      uniAgg[id] = uniAgg[id] || { university: uniMap[id] || 'Unknown', tutors: 0, tutees: 0 };
+      uniAgg[id].tutees = Number(r.tutees) || 0;
+    });
+    const universityDistribution = Object.values(uniAgg).sort((a, b) => (b.tutors + b.tutees) - (a.tutors + a.tutees));
+
+    // Overall users by type (approved tutors only)
+    const tutorsTotal = await this.tutorsRepository.count({ where: { status: 'approved' as any } });
+    // Prefer counting active tutee users; fallback to students table if needed
+    let tuteesTotal = await this.usersRepository.count({ where: { user_type: 'tutee' as any } });
+    if (!tuteesTotal) {
+      tuteesTotal = await this.studentsRepository.count();
+    }
+    const userTypeTotals = { tutors: tutorsTotal, tutees: tuteesTotal };
+
+    // Course distribution: tutors vs tutees per course
+    const tutorCourseRaw = await this.tutorsRepository
+      .createQueryBuilder('tutor')
+      .select('tutor.course_id', 'course_id')
+      .addSelect('COUNT(tutor.tutor_id)', 'tutors')
+      .where('tutor.course_id IS NOT NULL')
+      .andWhere('tutor.status = :status', { status: 'approved' })
+      .groupBy('tutor.course_id')
+      .getRawMany();
+    const tuteeCourseRaw = await this.studentsRepository
+      .createQueryBuilder('student')
+      .select('student.course_id', 'course_id')
+      .addSelect('COUNT(student.student_id)', 'tutees')
+      .where('student.course_id IS NOT NULL')
+      .groupBy('student.course_id')
+      .getRawMany();
+    const courseIds = Array.from(new Set([
+      ...tutorCourseRaw.map((r: any) => Number(r.course_id)),
+      ...tuteeCourseRaw.map((r: any) => Number(r.course_id)),
+    ].filter(Boolean)));
+    const courseMap: Record<number, string> = {};
+    if (courseIds.length) {
+      const courses = await this.coursesRepository.findByIds(courseIds);
+      courses.forEach(c => { (courseMap as any)[(c as any).course_id] = (c as any).course_name || (c as any).name; });
+    }
+    const courseAgg: Record<number, { courseName: string; tutors: number; tutees: number }> = {};
+    tutorCourseRaw.forEach((r: any) => {
+      const id = Number(r.course_id);
+      if (!id) return;
+      courseAgg[id] = courseAgg[id] || { courseName: courseMap[id] || 'Unknown', tutors: 0, tutees: 0 };
+      courseAgg[id].tutors = Number(r.tutors) || 0;
+    });
+    tuteeCourseRaw.forEach((r: any) => {
+      const id = Number(r.course_id);
+      if (!id) return;
+      courseAgg[id] = courseAgg[id] || { courseName: courseMap[id] || 'Unknown', tutors: 0, tutees: 0 };
+      courseAgg[id].tutees = Number(r.tutees) || 0;
+    });
+    const courseDistribution = Object.values(courseAgg).sort((a, b) => (b.tutors + b.tutees) - (a.tutors + a.tutees));
+
+    // Sessions per subject (completed)
+    const subjectSessionsRaw = await this.sessionsRepository
+      .createQueryBuilder('session')
+      .select('session.subject_id', 'subject_id')
+      .addSelect('COUNT(session.session_id)', 'sessions')
+      .where('session.status = :status', { status: 'completed' })
+      .groupBy('session.subject_id')
+      .orderBy('sessions', 'DESC')
+      .getRawMany();
+    const subjIdsAll = subjectSessionsRaw.map((r) => Number(r.subject_id)).filter(Boolean);
+    const subjMapAll: Record<number, string> = {};
+    if (subjIdsAll.length) {
+      const subjectsAll = await this.subjectsRepository.findByIds(subjIdsAll);
+      subjectsAll.forEach(s => { (subjMapAll as any)[(s as any).subject_id] = (s as any).name; });
+    }
+    const subjectSessions = subjectSessionsRaw.map((r: any) => ({
+      subjectId: Number(r.subject_id),
+      subjectName: subjMapAll[Number(r.subject_id)] || 'Unknown',
+      sessions: Number(r.sessions) || 0,
+    }));
+
     return {
       totalUsers,
       totalTutors,
@@ -104,6 +225,10 @@ export class DashboardService {
         byStatus: paymentStatusCounts,
         recentConfirmedRevenue,
       },
+      universityDistribution,
+      userTypeTotals,
+      courseDistribution,
+      subjectSessions,
     };
   }
 }

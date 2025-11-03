@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { University } from '../../types';
-import apiClient from '../../services/api';
+import apiClient, { getFileUrl } from '../../services/api';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
@@ -14,6 +14,7 @@ const UniversityManagement: React.FC = () => {
   const [currentUniversity, setCurrentUniversity] = useState<Partial<University> | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [logoFile, setLogoFile] = useState<File | null>(null);
 
   const fetchUniversities = useCallback(async () => {
     setIsLoading(true);
@@ -32,6 +33,7 @@ const UniversityManagement: React.FC = () => {
   const handleOpenModal = (university: Partial<University> | null = null) => {
     setCurrentUniversity(university ? { ...university } : { name: '', acronym: '', email_domain: '', status: 'active' });
     setIsModalOpen(true);
+    setLogoFile(null);
   };
 
   const handleCloseModal = () => {
@@ -47,9 +49,29 @@ const UniversityManagement: React.FC = () => {
     setIsSaving(true);
     try {
       if (currentUniversity.university_id) {
-        await apiClient.patch(`/universities/${currentUniversity.university_id}`, currentUniversity);
+        const res = await apiClient.patch(`/universities/${currentUniversity.university_id}`, currentUniversity);
+        if (logoFile) {
+          const form = new FormData();
+          form.append('file', logoFile);
+          try {
+            await apiClient.post(`/universities/${currentUniversity.university_id}/logo`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+          } catch (e: any) {
+            // Fallback path variant if proxy rewrites: /universities/logo/:id
+            await apiClient.post(`/universities/logo/${currentUniversity.university_id}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+          }
+        }
       } else {
-        await apiClient.post('/universities', currentUniversity);
+        const created = await apiClient.post('/universities', currentUniversity);
+        const newId = created?.data?.university_id;
+        if (newId && logoFile) {
+          const form = new FormData();
+          form.append('file', logoFile);
+          try {
+            await apiClient.post(`/universities/${newId}/logo`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+          } catch (e: any) {
+            await apiClient.post(`/universities/logo/${newId}`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+          }
+        }
       }
       handleCloseModal();
       fetchUniversities();
@@ -139,7 +161,20 @@ const UniversityManagement: React.FC = () => {
                   })
                   .map((uni) => (
                     <tr key={uni.university_id} className="hover:bg-slate-50 transition-colors odd:bg-white even:bg-slate-50/40">
-                      <td className="py-4 px-6 font-medium text-slate-800">{uni.name}</td>
+                      <td className="py-4 px-6 font-medium text-slate-800">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {((uni as any).logo_url) ? (
+                            <img
+                              src={getFileUrl((uni as any).logo_url)}
+                              alt={(uni as any).acronym || uni.name}
+                              className="h-8 w-8 rounded-full object-cover bg-slate-100 border border-slate-200 flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="h-8 w-8 rounded-full bg-slate-100 border border-slate-200 flex-shrink-0" />
+                          )}
+                          <span className="truncate" title={uni.name}>{uni.name}</span>
+                        </div>
+                      </td>
                       <td className="py-4 px-6">{(uni as any).acronym || '-'}</td>
                       <td className="py-4 px-6">
                         <span className="inline-flex items-center gap-2">
@@ -209,6 +244,16 @@ const UniversityManagement: React.FC = () => {
                 <label htmlFor="email_domain" className="block text-sm font-medium text-slate-700">Email Domain</label>
                 <input type="text" name="email_domain" id="email_domain" value={(currentUniversity as any).email_domain || ''} onChange={handleChange} className={inputStyles} placeholder="e.g., dlsu.edu.ph" />
                 <p className="mt-1 text-xs text-slate-500">The domain used for student/tutor verification.</p>
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">Logo (optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setLogoFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                  className="mt-1 block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-slate-200 file:text-slate-800 hover:file:bg-slate-300"
+                />
+                {logoFile && <p className="text-xs text-slate-500 mt-1">Selected: {logoFile.name}</p>}
               </div>
               <div>
                 <label htmlFor="status" className="block text-sm font-medium text-slate-700">Status</label>

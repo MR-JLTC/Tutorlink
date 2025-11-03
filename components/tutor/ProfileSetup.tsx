@@ -55,7 +55,7 @@ const ProfileSetup: React.FC = () => {
           const raw = response?.data ?? {};
           const extracted = raw.tutor_id ?? raw.tutorId ?? raw.id ?? raw.data?.tutor_id ?? raw.data?.tutorId;
           const actualTutorId = extracted != null ? Number(extracted) : null;
-          console.log('Fetched tutor_id candidates:', raw, 'resolved:', actualTutorId, 'for uid:', uid);
+          console.log('Fetched tutor_id via by-user:', raw, 'resolved:', actualTutorId, 'for uid:', uid);
           if (actualTutorId) {
             setTutorId(actualTutorId);
             return;
@@ -63,24 +63,6 @@ const ProfileSetup: React.FC = () => {
           throw new Error('Tutor ID not present in response');
         } catch (error: any) {
           console.error('Failed to fetch tutor ID via by-user endpoint:', error?.response?.data || error?.message);
-          // Fallback strategy: try to infer tutor_id from applications listing
-          try {
-            const applicationsResponse = await apiClient.get('/tutors/applications').catch(() => ({ data: [] }));
-            const list = applicationsResponse?.data || [];
-            const uidStr = String(uid);
-            const currentTutor = list.find((t: any) =>
-              String(t?.user_id) === uidStr || String(t?.user?.user_id) === uidStr || String(t?.user?.id) === uidStr
-            );
-            const extracted = currentTutor?.tutor_id ?? currentTutor?.tutorId ?? currentTutor?.id;
-            const inferredId = extracted != null ? Number(extracted) : null;
-            if (inferredId) {
-              console.log('Resolved tutor_id from applications list:', inferredId);
-              setTutorId(inferredId);
-              return;
-            }
-          } catch (e) {
-            console.warn('Could not resolve tutor_id from applications list.');
-          }
           setTutorId(null);
         }
       };
@@ -134,8 +116,10 @@ const ProfileSetup: React.FC = () => {
 
   const saveProfile = async () => {
     // Basic client-side validation
-    const bioValid = !profile.bio || /^[A-Za-z\s]+$/.test(profile.bio);
-    const gcashValid = !profile.gcash_number || /^09\d{9}$/.test(profile.gcash_number);
+    const bioToSave = (profile.bio || '').trim();
+    const gcashToSave = (profile.gcash_number || '').trim();
+    const bioValid = !bioToSave || /^[A-Za-z\s]+$/.test(bioToSave);
+    const gcashValid = !gcashToSave || /^09\d{9}$/.test(gcashToSave);
     if (!bioValid) {
       alert('Bio can contain letters and spaces only.');
       return;
@@ -169,22 +153,7 @@ const ProfileSetup: React.FC = () => {
           }
         }
       } catch (e) {
-        // Try applications list as a secondary source
-        try {
-          const applicationsResponse = await apiClient.get('/tutors/applications').catch(() => ({ data: [] }));
-          const list = applicationsResponse?.data || [];
-          const uid = (user as any)?.id ?? (user as any)?.user_id;
-          const uidStr = String(uid);
-          const currentTutor = list.find((t: any) => String(t?.user_id) === uidStr || String(t?.user?.user_id) === uidStr || String(t?.user?.id) === uidStr);
-          const extracted = currentTutor?.tutor_id ?? currentTutor?.tutorId ?? currentTutor?.id;
-          const inferredId = extracted != null ? Number(extracted) : null;
-          if (inferredId) {
-            setTutorId(inferredId);
-            return inferredId;
-          }
-        } catch (_) {
-          /* noop */
-        }
+        /* keep null if cannot resolve authoritatively */
       }
       return null; // Require real tutor_id
     };
@@ -226,23 +195,26 @@ const ProfileSetup: React.FC = () => {
     setLoading(true);
     try {
       console.log('Saving profile with tutorId:', id, 'user:', user);
-      // Update basic profile info first (independent of image uploads)
+      // Update basic profile info with authoritative endpoint first
+      let updatedBasics = false;
       try {
-        await apiClient.put(`/tutors/${id}/profile`, {
-          bio: profile.bio,
-          gcash_number: profile.gcash_number
-        });
-        // Optimistically update local state so UI reflects immediately
-        setProfile(prev => ({ ...prev, bio: profile.bio, gcash_number: profile.gcash_number }));
-      } catch (primaryErr: any) {
-        console.warn('PUT /tutors/:id/profile failed, attempting fallback PUT /tutors/:id', primaryErr?.response?.data || primaryErr?.message);
-        // Fallback to general tutor update endpoint
         await apiClient.put(`/tutors/${id}`, {
-          bio: profile.bio,
-          gcash_number: profile.gcash_number
+          bio: bioToSave,
+          gcash_number: gcashToSave
         });
-        // Optimistically update local state so UI reflects immediately
-        setProfile(prev => ({ ...prev, bio: profile.bio, gcash_number: profile.gcash_number }));
+        updatedBasics = true;
+      } catch (ePrimary: any) {
+        console.warn('PUT /tutors/:id failed', ePrimary?.response?.data || ePrimary?.message);
+        // Fallback endpoint
+        try {
+          await apiClient.put(`/tutors/${id}/profile`, {
+            bio: bioToSave,
+            gcash_number: gcashToSave
+          });
+          updatedBasics = true;
+        } catch (eFallback: any) {
+          console.error('Fallback update failed', eFallback?.response?.data || eFallback?.message);
+        }
       }
 
       // Upload profile image using USER ID (not tutor id)
@@ -319,9 +291,8 @@ const ProfileSetup: React.FC = () => {
       setProfileImage(null);
       setGcashQR(null);
       
-      // Refresh profile to get updated data, then re-apply edited values to avoid brief stale override
+      // Refresh profile from server to ensure accurate persisted values
       await fetchProfile();
-      setProfile(prev => ({ ...prev, bio: profile.bio, gcash_number: profile.gcash_number }));
       
       alert('Profile updated successfully!');
     } catch (error: any) {

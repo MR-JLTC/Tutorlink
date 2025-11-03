@@ -19,6 +19,9 @@ export class University {
   @Column()
   email_domain: string;
 
+  @Column({ nullable: true })
+  logo_url: string;
+
   @Column({
     type: 'enum',
     enum: ['active', 'inactive'],

@@ -1396,8 +1396,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       }
       console.log('Step 7: Subject supporting documents upload completed');
 
-      setIsSubmitted(true);
       notify('Application submitted successfully!', 'success');
+      if (onClose) {
+        onClose();
+      }
+      return;
     } catch (err: any) {
       console.error('Submission error:', err);
       console.error('Error response:', err?.response?.data);

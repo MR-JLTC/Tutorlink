@@ -4,6 +4,7 @@ import Logo from '../../components/Logo';
 import Modal from '../../components/ui/Modal';
 import * as TutorRegistrationModule from './TutorRegistrationPage';
 import * as TuteeRegistrationModule from './TuteeRegistrationPage';
+import apiClient, { getFileUrl } from '../../services/api';
 
 // New icons for "How it works" section
 const MagnifyingGlassIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -197,15 +198,20 @@ const LandingPage: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isTutorModalOpen, setIsTutorModalOpen] = useState(false);
   const [isTuteeModalOpen, setIsTuteeModalOpen] = useState(false);
+  const [tutorModalKey, setTutorModalKey] = useState(0);
+  const [tuteeModalKey, setTuteeModalKey] = useState(0);
+  const [partnerUniversities, setPartnerUniversities] = useState<Array<{ university_id: number; name: string; logo_url?: string; status?: string }>>([]);
 
   const handleNavigate = (path: string) => {
     if (path === '/TutorRegistrationPage') {
       setIsModalOpen(false);
+      setTutorModalKey((k) => k + 1);
       setIsTutorModalOpen(true);
       return;
     }
     if (path === '/TuteeRegistrationPage') {
       setIsModalOpen(false);
+      setTuteeModalKey((k) => k + 1);
       setIsTuteeModalOpen(true);
       return;
     }
@@ -220,6 +226,17 @@ const LandingPage: React.FC = () => {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiClient.get('/universities');
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const active = rows.filter((u: any) => (u.status || 'active') === 'active');
+        setPartnerUniversities(active);
+      } catch {}
+    })();
   }, []);
 
   return (
@@ -389,7 +406,10 @@ const LandingPage: React.FC = () => {
 
       <main>
         {/* Hero Section */}
-        <section className="px-3 sm:px-5 md:px-8 lg:px-16 py-3 md:py-5 xl:py-8 grid md:grid-cols-2 gap-8 md:gap-14 items-center min-h-[80vh] max-w-7xl mx-auto w-full">
+        <section className="relative overflow-hidden">
+          <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-sky-100 blur-3xl"></div>
+          <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-indigo-100 blur-3xl"></div>
+          <div className="px-3 sm:px-5 md:px-8 lg:px-16 py-6 md:py-10 xl:py-14 grid md:grid-cols-2 gap-8 md:gap-16 items-center min-h-[72vh] max-w-7xl mx-auto w-full">
           <div className="hero-text text-center md:text-left space-y-6">
             <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 leading-tight break-words">
               Connecting Students with <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-indigo-600">Tutors</span> <br className="hidden sm:inline" /> for Success.
@@ -399,27 +419,54 @@ const LandingPage: React.FC = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 md:gap-4 lg:gap-8 mt-7 md:mt-10">
               <button 
-                className="bg-sky-600 text-white font-bold py-3.5 px-10 rounded-lg shadow-xl hover:bg-sky-700 transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1 hover:shadow-2xl"
+                className="bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-bold py-3.5 px-10 rounded-xl shadow-lg hover:from-sky-700 hover:to-indigo-700 transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1 hover:shadow-2xl"
                 onClick={() => setIsModalOpen(true)}
               >
                 Get Started Today
               </button>
               <button 
-                className="border-2 border-sky-600 text-sky-600 font-bold py-3.5 px-10 rounded-lg hover:bg-sky-600 hover:text-white transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1"
+                className="border-2 border-sky-600 text-sky-600 font-bold py-3.5 px-10 rounded-xl hover:bg-sky-600 hover:text-white transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1"
                 onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 Learn More
               </button>
             </div>
           </div>
-          <div className="hero-image aspect-[1.4/1] h-56 xs:h-72 sm:h-80 md:h-96 lg:h-[500px] rounded-2xl overflow-hidden relative shadow-2xl border-4 border-white w-full max-w-[600px] mx-auto md:mx-0"> {/* Enhanced shadow and border */}
+          <div className="hero-image aspect-[1.3/1] h-56 xs:h-72 sm:h-80 md:h-96 lg:h-[520px] rounded-2xl overflow-hidden relative shadow-2xl border-4 border-white w-full max-w-[640px] mx-auto md:mx-0">
             <HeroImageSlider />
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+          </div>
+          </div>
+        </section>
+
+        {/* Partnered institutions */}
+        <section className="px-3 sm:px-8 md:px-16 py-10 md:py-14 w-full">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-6">Partnered institutions</h2>
+            {partnerUniversities.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
+                {partnerUniversities.map((u) => (
+                  <div key={u.university_id} className="flex flex-col items-center justify-between bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow min-h-[150px]">
+                    <div className="flex items-center justify-center h-20 w-20 rounded-full bg-white border border-slate-200 shadow-sm overflow-hidden mb-3">
+                      {u.logo_url ? (
+                        <img src={getFileUrl(u.logo_url)} alt={u.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full bg-slate-100" />
+                      )}
+                    </div>
+                    <span className="font-sans text-[13px] sm:text-sm text-slate-800 text-center leading-snug" style={{ wordBreak: 'break-word' }} title={u.name}>{u.name}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500">No partners yet.</p>
+            )}
           </div>
         </section>
 
         {/* Features Section (with live stats) */}
-        <section id="features" className="bg-gradient-to-br from-slate-50 to-blue-50 px-3 sm:px-8 md:px-12 lg:px-20 py-14 md:py-20 xl:py-28 w-full">
+        <section id="features" className="relative bg-gradient-to-br from-slate-50 to-blue-50 px-3 sm:px-8 md:px-12 lg:px-20 py-14 md:py-20 xl:py-28 w-full">
+          <div className="pointer-events-none absolute top-8 right-8 h-28 w-28 rounded-full bg-sky-100 blur-3xl"></div>
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-6">Powerful Features for Everyone</h2>
@@ -436,7 +483,7 @@ const LandingPage: React.FC = () => {
                 <p className="text-lg text-slate-600">Everything you need to find the perfect tutor and excel in your studies</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-200 hover:shadow-xl transition-all duration-300 group">
                   <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
                     <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -446,7 +493,7 @@ const LandingPage: React.FC = () => {
                   <p className="text-slate-600 leading-relaxed">Quick signup with university email verification. Enter your course and year level to get started.</p>
                 </div>
 
-                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-200 hover:shadow-xl transition-all duration-300 group">
                   <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
                     <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -456,7 +503,7 @@ const LandingPage: React.FC = () => {
                   <p className="text-slate-600 leading-relaxed">Browse tutors filtered by your course subjects. View profiles, ratings, and availability.</p>
                 </div>
 
-                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-200 hover:shadow-xl transition-all duration-300 group">
                   <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
                     <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -466,7 +513,7 @@ const LandingPage: React.FC = () => {
                   <p className="text-slate-600 leading-relaxed">Book sessions with your preferred tutors. Simple scheduling and session management.</p>
                 </div>
 
-                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-200 hover:shadow-xl transition-all duration-300 group">
                   <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
                     <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
@@ -476,7 +523,7 @@ const LandingPage: React.FC = () => {
                   <p className="text-slate-600 leading-relaxed">Pay via GCash with secure payment proof upload. Session confirmed after tutor approval.</p>
                 </div>
 
-                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-200 hover:shadow-xl transition-all duration-300 group">
                   <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
                     <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
@@ -486,7 +533,7 @@ const LandingPage: React.FC = () => {
                   <p className="text-slate-600 leading-relaxed">Leave feedback after sessions. Help other students find the best tutors.</p>
                 </div>
 
-                <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 hover:shadow-xl transition-all duration-300 group">
+                <div className="bg-white p-8 rounded-2xl shadow-md border border-slate-200 hover:shadow-xl transition-all duration-300 group">
                   <div className="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-6 group-hover:bg-sky-200 transition-colors">
                     <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -810,8 +857,8 @@ const LandingPage: React.FC = () => {
       
       <RoleSelectionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onNavigate={handleNavigate} />
       {/** Using default export to ensure compatibility */}
-      {React.createElement((TutorRegistrationModule as any).default, { isOpen: isTutorModalOpen, onClose: () => setIsTutorModalOpen(false) })}
-      {React.createElement((TuteeRegistrationModule as any).default, { isOpen: isTuteeModalOpen, onClose: () => setIsTuteeModalOpen(false) })}
+      {isTutorModalOpen && React.createElement((TutorRegistrationModule as any).default, { key: `tutor-${tutorModalKey}`, isOpen: true, onClose: () => { setIsTutorModalOpen(false); setTutorModalKey((k: number) => k + 1); } })}
+      {isTuteeModalOpen && React.createElement((TuteeRegistrationModule as any).default, { key: `tutee-${tuteeModalKey}`, isOpen: true, onClose: () => { setIsTuteeModalOpen(false); setTuteeModalKey((k: number) => k + 1); } })}
     </div>
   );
 };
