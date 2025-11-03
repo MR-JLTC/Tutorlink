@@ -35,7 +35,8 @@ apiClient.interceptors.response.use(
     const isAuthEndpoint = reqUrl?.includes('/auth/login') || reqUrl?.includes('/auth/register') || reqUrl?.includes('/auth/login-tutor-tutee');
     const isTutorIdEndpoint = reqUrl?.includes('/tutors/by-user/') && reqUrl?.includes('/tutor-id');
 
-    if (notify && !isAuthEndpoint && !isTutorIdEndpoint) {
+    const suppressByMessage = typeof rawMessage === 'string' && rawMessage.toLowerCase().includes('tutor not found');
+    if (notify && !isAuthEndpoint && !isTutorIdEndpoint && !suppressByMessage) {
       let display = Array.isArray(rawMessage) ? rawMessage.join(', ') : (rawMessage as string | undefined);
       if (typeof display === 'string' && display.toLowerCase().includes('email already registered')) {
         display = 'Email already registered';

@@ -3,7 +3,7 @@ import apiClient from '../../services/api';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { useAuth } from '../../hooks/useAuth';
-import { DollarSign, TrendingUp, Clock, CheckCircle, Star, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, CheckCircle, Star, Calendar, X } from 'lucide-react';
 
 interface Session {
   id: number;
@@ -136,63 +136,68 @@ const EarningsHistory: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Earnings & History</h1>
-          <p className="text-slate-600">Track your completed sessions and earnings</p>
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-1 flex items-center gap-3">
+              <DollarSign className="h-8 w-8" />
+              Earnings & History
+            </h1>
+            <p className="text-blue-100">Track your completed sessions and earnings</p>
+          </div>
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6">
+        <Card className="p-6 shadow">
           <div className="flex items-center">
             <div className="p-3 bg-green-100 rounded-full mr-4">
               <DollarSign className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Earnings</p>
-              <p className="text-2xl font-semibold text-gray-800">
+              <p className="text-sm font-medium text-slate-500">Total Earnings</p>
+              <p className="text-2xl font-bold text-slate-800">
                 ₱{stats.total_earnings.toLocaleString()}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 shadow">
           <div className="flex items-center">
             <div className="p-2 bg-yellow-100 rounded-full mr-4">
               <Clock className="h-6 w-6 text-yellow-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Pending Earnings</p>
-              <p className="text-2xl font-semibold text-gray-800">
+              <p className="text-sm font-medium text-slate-500">Pending Earnings</p>
+              <p className="text-2xl font-bold text-slate-800">
                 ₱{stats.pending_earnings.toLocaleString()}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 shadow">
           <div className="flex items-center">
             <div className="p-2 bg-blue-100 rounded-full mr-4">
               <CheckCircle className="h-6 w-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Completed Sessions</p>
-              <p className="text-2xl font-semibold text-gray-800">{stats.completed_sessions}</p>
+              <p className="text-sm font-medium text-slate-500">Completed Sessions</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.completed_sessions}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 shadow">
           <div className="flex items-center">
             <div className="p-2 bg-purple-100 rounded-full mr-4">
               <Star className="h-6 w-6 text-purple-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Average Rating</p>
-              <p className="text-2xl font-semibold text-gray-800">
+              <p className="text-sm font-medium text-slate-500">Average Rating</p>
+              <p className="text-2xl font-bold text-slate-800">
                 {stats.average_rating > 0 ? stats.average_rating.toFixed(1) : 'N/A'}
               </p>
             </div>

@@ -146,59 +146,64 @@ const SessionHandling: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Session Handling</h1>
-          <p className="text-slate-600">Manage booking requests and payment confirmations</p>
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-1 flex items-center gap-3">
+              <MessageSquare className="h-8 w-8" />
+              Session Handling
+            </h1>
+            <p className="text-blue-100">Manage booking requests and payment confirmations</p>
+          </div>
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4">
+        <Card className="p-5 shadow">
           <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg mr-3">
+            <div className="p-2.5 bg-blue-100 rounded-lg mr-3">
               <MessageSquare className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Requests</p>
-              <p className="text-2xl font-semibold text-gray-800">{stats.total}</p>
+              <p className="text-sm font-medium text-slate-500">Total Requests</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4">
+        <Card className="p-5 shadow">
           <div className="flex items-center">
-            <div className="p-2 bg-yellow-100 rounded-lg mr-3">
+            <div className="p-2.5 bg-yellow-100 rounded-lg mr-3">
               <Clock className="h-5 w-5 text-yellow-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Pending</p>
-              <p className="text-2xl font-semibold text-gray-800">{stats.pending}</p>
+              <p className="text-sm font-medium text-slate-500">Pending</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.pending}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4">
+        <Card className="p-5 shadow">
           <div className="flex items-center">
-            <div className="p-2 bg-orange-100 rounded-lg mr-3">
+            <div className="p-2.5 bg-orange-100 rounded-lg mr-3">
               <AlertCircle className="h-5 w-5 text-orange-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Awaiting Payment</p>
-              <p className="text-2xl font-semibold text-gray-800">{stats.awaiting_payment}</p>
+              <p className="text-sm font-medium text-slate-500">Awaiting Payment</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.awaiting_payment}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-4">
+        <Card className="p-5 shadow">
           <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg mr-3">
+            <div className="p-2.5 bg-green-100 rounded-lg mr-3">
               <CheckCircle className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Confirmed</p>
-              <p className="text-2xl font-semibold text-gray-800">{stats.confirmed}</p>
+              <p className="text-sm font-medium text-slate-500">Confirmed</p>
+              <p className="text-2xl font-bold text-slate-800">{stats.confirmed}</p>
             </div>
           </div>
         </Card>

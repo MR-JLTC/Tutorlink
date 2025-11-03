@@ -3,8 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { CheckCircleIcon } from '../../components/icons/CheckCircleIcon';
 import { useToast } from '../../components/ui/Toast';
+import Logo from '../../components/Logo';
 
-const TuteeRegistrationPage: React.FC = () => {
+interface TuteeRegistrationModalProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { notify } = useToast();
   const [formData, setFormData] = useState({
@@ -419,14 +425,32 @@ const TuteeRegistrationPage: React.FC = () => {
     );
   }
 
+  const isModalOpen = typeof isOpen === 'boolean' ? isOpen : true;
+  const handleCloseModal = () => {
+    if (onClose) return onClose();
+    try { window.history.back(); } catch {}
+  };
+
+  if (!isModalOpen) return null;
+
   return (
-    <div className="min-h-[calc(100vh-68px)] flex flex-col items-center justify-center bg-gradient-to-br from-indigo-200 to-sky-100 p-4">
-      <div className="max-w-4xl w-full bg-white/80 backdrop-blur-lg p-8 rounded-2xl shadow-xl border border-white/50">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Student Registration</h1>
-          <p className="text-slate-600 mb-6">Create your account to find a tutor.</p>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" role="dialog" aria-modal="true">
+      <div className="w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center gap-3">
+            <Logo className="h-14 w-14" />
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Student Registration</h1>
+              <p className="text-slate-600 text-xs sm:text-sm">Create your account to find a tutor.</p>
+            </div>
+          </div>
+          <button aria-label="Close" onClick={handleCloseModal} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
         </div>
-        <form onSubmit={handleSubmit} noValidate>
+        <div className="max-h-[85vh] overflow-y-auto px-4 sm:px-5 py-5 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
+          <div className="w-full bg-white/80 backdrop-blur-lg p-4 sm:p-5 rounded-2xl shadow-xl border border-white/50">
+            <form onSubmit={handleSubmit} noValidate>
           {/* Email Verification Section */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 mb-6">
             <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
@@ -557,13 +581,26 @@ const TuteeRegistrationPage: React.FC = () => {
 
           {/* Other Account Fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 max-w-lg">
               <label className="block text-slate-700 font-semibold mb-1" htmlFor="name">Full Name</label>
-              <input type="text" id="name" name="name" value={formData.name} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg" required />
+              <input 
+                type="text" 
+                id="name" 
+                name="name" 
+                value={formData.name} 
+                onChange={(e) => {
+                  const next = e.target.value.replace(/[^A-Za-z\-\s]/g, '').slice(0, 60);
+                  handleInputChange({ target: { name: 'name', value: next } } as any);
+                }} 
+                maxLength={60}
+                className="w-full py-2 pl-4 pr-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                placeholder="Enter your full name"
+                required 
+              />
             </div>
             <div className="md:col-span-2">
               <label className="block text-slate-700 font-semibold mb-1" htmlFor="password">Password</label>
-              <div className="relative">
+              <div className="relative w-fit">
                 <input 
                   type={showPassword ? "text" : "password"} 
                   id="password" 
@@ -572,7 +609,7 @@ const TuteeRegistrationPage: React.FC = () => {
                   onChange={handleInputChange} 
                   minLength={7} 
                   maxLength={21} 
-                  className="w-full px-4 py-2 pr-10 border border-slate-300 rounded-lg 
+                  className="w-[27ch] px-4 py-2 pr-10 border border-slate-300 rounded-lg 
                   [&::-ms-reveal]:hidden 
                   [&::-webkit-credentials-auto-fill-button]:!hidden 
                   [&::-webkit-strong-password-auto-fill-button]:!hidden 
@@ -683,7 +720,7 @@ const TuteeRegistrationPage: React.FC = () => {
                 name="yearLevel" 
                 value={formData.yearLevel} 
                 onChange={handleInputChange} 
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+                className="w-[18ch] px-3 py-2 border border-slate-300 rounded-lg"
                 required
               >
                 <option value="">Select Year Level</option>
@@ -721,7 +758,9 @@ const TuteeRegistrationPage: React.FC = () => {
           >
             {isEmailVerified ? 'Create Account' : 'Verify Email to Submit'}
           </button>
-        </form>
+            </form>
+          </div>
+        </div>
       </div>
 
       {/* Email Verification Modal */}
@@ -846,3 +885,4 @@ const TuteeRegistrationPage: React.FC = () => {
 };
 
 export default TuteeRegistrationPage;
+export const TuteeRegistrationModal = TuteeRegistrationPage;

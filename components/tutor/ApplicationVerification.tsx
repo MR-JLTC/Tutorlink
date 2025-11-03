@@ -681,15 +681,20 @@ const ApplicationVerification: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Application & Verification</h1>
-          <p className="text-slate-600">Manage your tutor application and subject expertise</p>
-        </div>
-        <div className={`px-4 py-2 rounded-full text-sm font-medium border ${getStatusColor(applicationStatus)}`}>
-          <div className="flex items-center space-x-2">
-            {getStatusIcon(applicationStatus)}
-            <span>{applicationStatus.charAt(0).toUpperCase() + applicationStatus.slice(1)}</span>
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-1 flex items-center gap-3">
+              <FileText className="h-8 w-8" />
+              Application & Verification
+            </h1>
+            <p className="text-blue-100">Manage your tutor application and subject expertise</p>
+          </div>
+          <div className={`px-4 py-2 rounded-full text-sm font-semibold bg-white text-slate-800 shadow ${getStatusColor(applicationStatus).replace('bg-', 'border-').replace(' text-', ' ')}`}>
+            <div className="flex items-center space-x-2">
+              {getStatusIcon(applicationStatus)}
+              <span>{applicationStatus.charAt(0).toUpperCase() + applicationStatus.slice(1)}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -708,7 +713,7 @@ const ApplicationVerification: React.FC = () => {
               <div className="mt-4">
                 <Button 
                   onClick={() => window.location.href = '/tutor-registration'}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-white text-blue-700 hover:bg-blue-50 border-2 border-blue-600 font-semibold"
                 >
                   Complete Tutor Registration
                 </Button>

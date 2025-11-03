@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Logo from '../../components/Logo';
 import Modal from '../../components/ui/Modal';
 import * as TutorRegistrationModule from './TutorRegistrationPage';
+import * as TuteeRegistrationModule from './TuteeRegistrationPage';
 
 // New icons for "How it works" section
 const MagnifyingGlassIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
@@ -195,11 +196,17 @@ const LandingPage: React.FC = () => {
   const [activeSection, setActiveSection] = useState<string>('');
   const [isScrolled, setIsScrolled] = useState(false);
   const [isTutorModalOpen, setIsTutorModalOpen] = useState(false);
+  const [isTuteeModalOpen, setIsTuteeModalOpen] = useState(false);
 
   const handleNavigate = (path: string) => {
     if (path === '/TutorRegistrationPage') {
       setIsModalOpen(false);
       setIsTutorModalOpen(true);
+      return;
+    }
+    if (path === '/TuteeRegistrationPage') {
+      setIsModalOpen(false);
+      setIsTuteeModalOpen(true);
       return;
     }
     navigate(path);
@@ -804,6 +811,7 @@ const LandingPage: React.FC = () => {
       <RoleSelectionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onNavigate={handleNavigate} />
       {/** Using default export to ensure compatibility */}
       {React.createElement((TutorRegistrationModule as any).default, { isOpen: isTutorModalOpen, onClose: () => setIsTutorModalOpen(false) })}
+      {React.createElement((TuteeRegistrationModule as any).default, { isOpen: isTuteeModalOpen, onClose: () => setIsTuteeModalOpen(false) })}
     </div>
   );
 };
