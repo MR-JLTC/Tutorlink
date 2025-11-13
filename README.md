@@ -23,3 +23,27 @@ View your app in AI Studio: https://ai.studio/apps/drive/10cZ6fMmCH1DAwYOOVdDems
 3. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 4. Run the app:
    `npm run dev`
+
+
+## 🤩 Contribution 
+
+<a href="https://github.com/MR-JLTC/Tutorlink/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=MR-JLTC/Tutorlink&preview=true&max=&columns=" />
+</a>
+<br /><br />
+
+## 📩 Disclaimer 
+
+This tool is only for learning and research purposes, and any consequences arising from the use of this tool are borne
+by the user.
+
+## ⭐ Star History 
+
+<div align="center">
+
+[![Star History Chart](https://api.star-history.com/svg?repos=MR-JLTC/Tutorlink&type=Date)](https://star-history.com/#MR-JLTC/Tutorlink&Date)
+
+</div>
+
+## 📝 License 
+Please refer to the [LICENSE](LICENSE.md) file for details.
