@@ -172,4 +172,83 @@ export class UsersController {
   async getBookingsForUser(@Param('id') id: string) {
     return this.tutorsService.getStudentBookingRequests(+id);
   }
+
+  // Notifications endpoints
+  @Get('notifications')
+  @UseGuards(JwtAuthGuard)
+  async getNotifications(@Req() req: any) {
+    const userId = req.user?.user_id;
+    return this.usersService.getNotifications(userId);
+  }
+
+  @Get('notifications/unread-count')
+  async getUnreadCount(@Req() req: any) {
+    const userId = req.user?.user_id;
+    return this.usersService.getUnreadNotificationCount(userId);
+  }
+
+  @Get('notifications/upcoming-sessions')
+  async getUpcomingSessions(@Req() req: any) {
+    const userId = req.user?.user_id;
+    return this.usersService.hasUpcomingSessions(userId);
+  }
+
+  @Get('upcoming-sessions/list')
+  async getUpcomingSessionsList(@Req() req: any) {
+    const userId = req.user?.user_id;
+    return this.usersService.getUpcomingSessionsList(userId);
+  }
+
+  @Patch('notifications/:id/read')
+  async markNotificationAsRead(@Param('id') id: string) {
+    return this.usersService.markNotificationAsRead(+id);
+  }
+
+  @Patch('notifications/mark-all-read')
+  async markAllNotificationsAsRead(@Req() req: any) {
+    const userId = req.user?.user_id;
+    return this.usersService.markAllNotificationsAsRead(userId);
+  }
+
+  @Delete('notifications/:id')
+  async deleteNotification(@Param('id') id: string) {
+    return { success: true };
+  }
+
+  @Get('admins-with-qr')
+  async getAdminsWithQr() {
+    return { success: true, data: await this.usersService.getAdminsWithQr() };
+  }
+
+  // Admin profile details
+  @Get(':id/admin-profile')
+  async getAdminProfile(@Param('id') id: string) {
+    return this.usersService.getAdminProfile(+id);
+  }
+
+  // Upload Admin QR code image
+  @Post(':id/admin-qr')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const dest = path.join(process.cwd(), 'admin_qr');
+        if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+        cb(null, dest);
+      },
+      filename: (req: any, file, cb) => {
+        const userId = req.params.id;
+        const ext = path.extname(file.originalname) || '.png';
+        const filename = `adminQR_${userId}${ext}`;
+        cb(null, filename);
+      }
+    })
+  }))
+  async uploadAdminQr(@Param('id') id: string, @UploadedFile() file: any) {
+    const userId = parseInt(id);
+    if (!file) {
+      return { success: false, message: 'No file uploaded' };
+    }
+    const dbUrl = `/admin_qr/${file.filename}`;
+    return this.usersService.updateAdminQr(userId, dbUrl);
+  }
 }

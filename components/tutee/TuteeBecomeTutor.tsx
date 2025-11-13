@@ -1,5 +1,6 @@
 import React from 'react';
 import { GraduationCap } from 'lucide-react';
+import TutorRegistrationPage from '../Tutor_TuteePages/TutorRegistrationPage';
 
 const TuteeBecomeTutor: React.FC = () => {
   return (
@@ -8,12 +9,13 @@ const TuteeBecomeTutor: React.FC = () => {
         <GraduationCap className="h-8 w-8 text-blue-600" />
         <h1 className="text-3xl font-bold text-slate-800">Become a Tutor</h1>
       </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-        <p className="text-slate-600">
-          This page will allow students to apply to become tutors by selecting subjects 
-          and uploading supporting documents like transcripts.
-        </p>
+      <p className="text-slate-600 text-lg">
+        Turn your knowledge into impact and income. Share your expertise, help fellow students excel, and build your portfolio — all in one place.
+      </p>
+
+      {/* Reuse the full Tutor Registration experience inside the tutee dashboard */}
+      <div className="bg-white rounded-lg shadow-sm border border-slate-200">
+        <TutorRegistrationPage />
       </div>
     </div>
   );

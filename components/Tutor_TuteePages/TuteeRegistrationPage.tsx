@@ -4,6 +4,7 @@ import apiClient from '../../services/api';
 import { CheckCircleIcon } from '../../components/icons/CheckCircleIcon';
 import { useToast } from '../../components/ui/Toast';
 import Logo from '../../components/Logo';
+import { mapRoleToStorageKey, setRoleAuth, updateRoleUser } from '../../utils/authRole';
 
 interface TuteeRegistrationModalProps {
   isOpen?: boolean;
@@ -13,6 +14,7 @@ interface TuteeRegistrationModalProps {
 const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const { notify } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -286,8 +288,10 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     
     if (!formData.name || !formData.email || !formData.password || !formData.yearLevel) {
+      setIsLoading(false);
       notify('Please fill all required fields.', 'error');
       return;
     }
@@ -344,6 +348,10 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
       const { user, accessToken } = registrationResponse.data;
       localStorage.setItem('token', accessToken);
       localStorage.setItem('user', JSON.stringify(user));
+      const storageRole = mapRoleToStorageKey(user?.role) ?? mapRoleToStorageKey(user?.user_type);
+      if (storageRole && user) {
+        setRoleAuth(storageRole, user, accessToken);
+      }
       
       console.log('Token stored:', accessToken);
       console.log('User stored:', user);
@@ -383,6 +391,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
           // Update user with new profile image URL
           const updatedUser = { ...user, profile_image_url: profileResponse.data.profile_image_url };
           localStorage.setItem('user', JSON.stringify(updatedUser));
+          updateRoleUser(updatedUser);
           notify('Profile image uploaded successfully!', 'success');
         } catch (imageErr) {
           console.error('Failed to upload profile image:', imageErr);
@@ -572,7 +581,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
               <button
                 type="button"
                 onClick={handleSendVerificationCode}
-                disabled={!formData.email || !universityId || emailDomainError || isSendingCode || isEmailVerified}
+                disabled={Boolean(!formData.email || !universityId || emailDomainError || isSendingCode || isEmailVerified)}
                 className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform ${
                   isEmailVerified
                     ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 
@@ -649,20 +658,13 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                   maxLength={21} 
                   className="w-[27ch] px-4 py-2 pr-10 border border-slate-300 rounded-lg 
                   [&::-ms-reveal]:hidden 
-                  [&::-webkit-credentials-auto-fill-button]:!hidden 
-                  [&::-webkit-strong-password-auto-fill-button]:!hidden 
-                  [&::-webkit-credentials-auto-fill-button]:!hidden
-                  [&::-webkit-strong-password-auto-fill-button]:!hidden" 
+                  [&::-webkit-credentials-auto-fill-button]:hidden 
+                  [&::-webkit-strong-password-auto-fill-button]:hidden" 
                   autoComplete="new-password"
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
                   data-bwignore="true"
-                  style={{
-                    WebkitTextSecurity: showPassword ? 'none' : 'disc',
-                    WebkitAppearance: 'none',
-                    MozAppearance: 'textfield'
-                  }}
                   required 
                 />
                 <button

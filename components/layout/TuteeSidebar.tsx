@@ -7,11 +7,16 @@ import {
   Star,
   User,
   Edit2,
+  Bell
 } from 'lucide-react';
 import { logoBase64 } from '../../assets/logo';
 import { useAuth } from '../../hooks/useAuth';
+import { User as UserType } from '../../types';
+import { useNotifications } from '../../context/NotificationContext';
+import NotificationBadge from '../ui/NotificationBadge';
 import apiClient, { getFileUrl } from '../../services/api';
 import { useToast } from '../ui/Toast';
+import { updateRoleUser } from '../../utils/authRole';
 
 const tuteeNavLinks = [
   { 
@@ -26,11 +31,25 @@ const tuteeNavLinks = [
     label: 'Find & Book Tutors',
     description: 'Browse tutors filtered by your course subjects, view their profiles, ratings, and availability to book a session.',
   },
+  {
+    to: '/tutee-dashboard/my-bookings',
+    icon: Bell,
+    label: 'My Bookings',
+    description: 'View and manage your tutoring session bookings.',
+  },
+  {
+    to: '/tutee-dashboard/upcoming-sessions',
+    icon: User, // reuse simple icon; consider replacing with Calendar where available
+    label: 'Upcoming Sessions',
+    description: 'See your scheduled sessions in the next 30 days.',
+    showUpcoming: true,
+  },
   { 
     to: '/tutee-dashboard/payment', 
     icon: CreditCard, 
     label: 'Payment',
     description: 'View tutor payment information, upload proof of payment via GCash, and wait for tutor approval.',
+    showNotification: true, // This will be used to conditionally show the notification dot
   },
   { 
     to: '/tutee-dashboard/after-session', 
@@ -43,6 +62,29 @@ const tuteeNavLinks = [
 const TuteeSidebar: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useToast();
+  const [hasPendingPayments, setHasPendingPayments] = useState(false);
+
+  useEffect(() => {
+    const checkPendingPayments = async () => {
+      try {
+        const response = await apiClient.get('/users/me/bookings');
+        const relevantBookings = (response.data || []).filter((booking: any) => 
+          booking.status === 'awaiting_payment' || 
+          booking.status === 'payment_pending' ||
+          booking.status === 'payment_rejected'
+        );
+        setHasPendingPayments(relevantBookings.length > 0);
+      } catch (error) {
+        console.error('Failed to check pending payments:', error);
+      }
+    };
+
+    checkPendingPayments();
+    // Check for pending payments every minute
+    const interval = setInterval(checkPendingPayments, 60000);
+    return () => clearInterval(interval);
+  }, []);
+  const { unreadCount, hasUpcomingSessions } = useNotifications();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
@@ -97,6 +139,7 @@ const TuteeSidebar: React.FC = () => {
       // Update local storage with new profile image URL
       const updatedUser = { ...user, profile_image_url: response.data.profile_image_url };
       localStorage.setItem('user', JSON.stringify(updatedUser));
+      updateRoleUser(updatedUser as any);
       
       // Trigger re-render by reloading the page
       window.location.reload();
@@ -114,17 +157,20 @@ const TuteeSidebar: React.FC = () => {
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
       <div className="px-4 py-4 border-b border-slate-200">
-        <div className="flex items-center space-x-3">
-          <img src={logoBase64} alt="TutorLink Logo" className="h-10 w-auto object-contain" />
-          <div>
-            <h1 className="text-lg font-bold text-slate-800">TutorLink</h1>
-            <p className="text-xs text-slate-600 font-medium">Student Dashboard</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <img src={logoBase64} alt="TutorLink Logo" className="h-10 w-auto object-contain" />
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">TutorLink</h1>
+              <p className="text-xs text-slate-600 font-medium">Student Dashboard</p>
+            </div>
           </div>
+          {/* Removed notification bell and badge from tutee sidebar as requested */}
         </div>
       </div>
       
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {tuteeNavLinks.map(({ to, icon: Icon, label, description }) => {
+  {tuteeNavLinks.map(({ to, icon: Icon, label, description, showNotification, showUpcoming }) => {
           return (
             <div key={to} className="relative">
               <NavLink
@@ -139,9 +185,17 @@ const TuteeSidebar: React.FC = () => {
                 onMouseEnter={() => handleMouseEnter(to)}
                 onMouseLeave={handleMouseLeave}
               >
-                <div className="flex items-center space-x-3">
-                  <Icon className={`h-5 w-5 ${hoveredItem === to ? 'text-blue-600' : 'text-slate-500'}`} />
-                  <span className="font-medium text-sm">{label}</span>
+                <div className="flex items-center">
+                  <div className="flex items-center space-x-3">
+                    <Icon className={`h-5 w-5 ${hoveredItem === to ? 'text-blue-600' : 'text-slate-500'}`} />
+                    <span className="font-medium text-sm">{label}</span>
+                  </div>
+                  {showNotification && hasPendingPayments && (
+                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-2" />
+                  )}
+                  {showUpcoming && hasUpcomingSessions && (
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse ml-2" />
+                  )}
                 </div>
               </NavLink>
             
@@ -161,7 +215,12 @@ const TuteeSidebar: React.FC = () => {
                           <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full shadow-sm"></div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-base font-semibold text-slate-800 mb-2 leading-tight">{label}</h4>
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-base font-semibold text-slate-800 mb-2 leading-tight">{label}</h4>
+                            {showNotification && hasPendingPayments && (
+                              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                            )}
+                          </div>
                           <p className="text-sm text-slate-600 leading-relaxed">{description}</p>
                         </div>
                       </div>
@@ -174,9 +233,9 @@ const TuteeSidebar: React.FC = () => {
         })}
       </nav>
       
-      {/* Profile Section */}
+      {/* Profile Section - clickable to open profile page for viewing/editing */}
       <div className="px-4 py-4 border-t border-slate-200">
-        <div className="flex items-center space-x-3 group">
+        <NavLink to="/tutee-dashboard/profile" className="flex items-center space-x-3 group hover:bg-slate-50 p-2 rounded-md">
           <div className="relative">
             {user?.profile_image_url ? (
               <img 
@@ -186,38 +245,19 @@ const TuteeSidebar: React.FC = () => {
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   target.style.display = 'none';
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) fallback.style.display = 'flex';
                 }}
               />
-            ) : null}
-            <div 
-              className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-lg border-2 border-slate-200"
-              style={{ display: user?.profile_image_url ? 'none' : 'flex' }}
-            >
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
-            </div>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleProfileImageChange}
-              disabled={isUploading}
-              className="hidden"
-              id="profile-image-input"
-            />
-            <label
-              htmlFor="profile-image-input"
-              className="absolute -bottom-1 -right-1 bg-blue-600 text-white p-1.5 rounded-full cursor-pointer hover:bg-blue-700 transition-colors opacity-0 group-hover:opacity-100"
-              title="Edit profile image"
-            >
-              <Edit2 className="h-3 w-3" />
-            </label>
+            ) : (
+              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-lg border-2 border-slate-200">
+                {user?.name?.charAt(0).toUpperCase() || 'U'}
+              </div>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-800 truncate">{user?.name}</p>
             <p className="text-xs text-slate-600 truncate">{user?.email}</p>
           </div>
-        </div>
+        </NavLink>
       </div>
     </aside>
   );

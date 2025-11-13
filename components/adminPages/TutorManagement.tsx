@@ -259,9 +259,17 @@ const TutorManagement: React.FC = () => {
                             alt="Tutor" 
                             className="h-8 w-8 rounded-full object-cover border flex-shrink-0"
                             style={{ aspectRatio: '1 / 1' }}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.user?.name || 'Tutor')}&background=random`;
+                            }}
                           />
                         ) : (
-                          <div className="h-8 w-8 rounded-full bg-slate-200 border flex-shrink-0" />
+                          <img
+                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.user?.name || 'Tutor')}&background=random`}
+                            alt="Tutor"
+                            className="h-8 w-8 rounded-full object-cover border flex-shrink-0"
+                            style={{ aspectRatio: '1 / 1' }}
+                          />
                         )}
                         <span className="truncate max-w-[200px]">{tutor.user?.name}</span>
                       </div>
@@ -407,7 +415,7 @@ const TutorManagement: React.FC = () => {
                 <div>
                   <h4 className="font-semibold">Expert Subjects</h4>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {selectedTutor.subjects?.length ? selectedTutor.subjects.map((ts) => (
+                    {(selectedTutor as any).subjects?.length ? (selectedTutor as any).subjects.map((ts: any) => (
                       <span key={(ts as any).tutor_subject_id} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">{(ts as any).subject?.subject_name}</span>
                     )) : <span className="text-sm text-gray-500">No subjects submitted.</span>}
                   </div>
@@ -448,7 +456,7 @@ const TutorManagement: React.FC = () => {
                 <div>
                   <h4 className="font-semibold">Availability</h4>
                   <ul className="mt-2 grid grid-cols-1 gap-2 text-sm">
-                    {selectedTutor.availabilities?.length ? selectedTutor.availabilities.map((a) => (
+                    {(selectedTutor as any).availabilities?.length ? (selectedTutor as any).availabilities.map((a: any) => (
                       <li key={(a as any).availability_id} className="flex justify-between bg-gray-50 p-2 rounded">
                         <span className="font-medium">{(a as any).day_of_week}</span>
                         <span className="text-gray-700">{(a as any).start_time} - {(a as any).end_time}</span>

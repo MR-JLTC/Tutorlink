@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import apiClient from '../../services/api';
+import apiClient, { getFileUrl } from '../../services/api';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { useAuth } from '../../hooks/useAuth';
+import Modal from '../ui/Modal';
 import { DollarSign, TrendingUp, Clock, CheckCircle, Star, Calendar, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Session {
   id: number;
@@ -20,11 +22,20 @@ interface Session {
 
 interface Payment {
   id: number;
-  session_id: number;
+  payment_id: number;
+  session_id?: number;
   amount: number;
-  status: 'pending' | 'approved' | 'paid';
+  subject?: string | null;
+  status: 'pending' | 'admin_confirmed' | 'confirmed' | 'rejected' | 'refunded';
   payment_date?: string;
   created_at: string;
+  student_name?: string;
+  student_id?: number;
+  tutor_id?: number;
+  dispute_status?: string;
+  dispute_proof_url?: string;
+  admin_note?: string;
+  admin_payment_proof_url?: string;
 }
 
 interface EarningsStats {
@@ -37,6 +48,7 @@ interface EarningsStats {
 
 const EarningsHistory: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [tutorId, setTutorId] = useState<number | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -48,20 +60,62 @@ const EarningsHistory: React.FC = () => {
     total_hours: 0
   });
   const [loading, setLoading] = useState(false);
+  const [proofModalOpen, setProofModalOpen] = useState(false);
+  const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
+  const [proofModalTitle, setProofModalTitle] = useState<string>('');
+  const [viewedProofByPayment, setViewedProofByPayment] = useState<Record<number, boolean>>({});
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending'>('all');
   const [paymentsFilter, setPaymentsFilter] = useState<'all' | 'pending' | 'approved'>('all');
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (user?.user_id) {
-      setTutorId(user.user_id);
-      fetchEarningsData();
+      // Fetch the actual tutor_id instead of using user_id
+      const fetchTutorId = async () => {
+        try {
+          const response = await apiClient.get(`/tutors/by-user/${user.user_id}/tutor-id`);
+          const actualTutorId = response.data.tutor_id;
+          if (actualTutorId) {
+            setTutorId(actualTutorId);
+          } else {
+            // Fallback to user_id if the endpoint fails (backend accepts user_id too)
+            setTutorId(user.user_id);
+          }
+        } catch (error: any) {
+          console.error('Failed to fetch tutor ID:', error);
+          // Fallback to user_id if the endpoint fails (backend accepts user_id too)
+          setTutorId(user.user_id);
+        }
+      };
+      fetchTutorId();
     }
   }, [user]);
 
-  const fetchEarningsData = async () => {
+  useEffect(() => {
+    if (tutorId) {
+      const init = async () => {
+        await fetchEarningsData(true);
+        setInitialized(true);
+      };
+      init();
+      // Background refresh every 10s to reflect approvals automatically
+      const interval = setInterval(() => {
+        fetchEarningsData(false);
+      }, 10000);
+      // Refresh when the window regains focus
+      const onFocus = () => fetchEarningsData(false);
+      window.addEventListener('focus', onFocus);
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', onFocus);
+      };
+    }
+  }, [tutorId]);
+
+  const fetchEarningsData = async (isInitial: boolean = false) => {
     if (!tutorId) return;
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
       const [sessionsRes, paymentsRes, statsRes] = await Promise.all([
         apiClient.get(`/tutors/${tutorId}/sessions`),
         apiClient.get(`/tutors/${tutorId}/payments`),
@@ -74,7 +128,7 @@ const EarningsHistory: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch earnings data:', error);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
@@ -84,6 +138,9 @@ const EarningsHistory: React.FC = () => {
       case 'pending': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
       case 'cancelled': return 'text-red-600 bg-red-50 border-red-200';
       case 'approved': return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'confirmed': return 'text-green-600 bg-green-50 border-green-200';
+      case 'rejected': return 'text-red-600 bg-red-50 border-red-200';
+      case 'refunded': return 'text-purple-600 bg-purple-50 border-purple-200';
       case 'paid': return 'text-green-600 bg-green-50 border-green-200';
       default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
@@ -95,6 +152,9 @@ const EarningsHistory: React.FC = () => {
       case 'pending': return <Clock className="h-4 w-4" />;
       case 'cancelled': return <X className="h-4 w-4" />;
       case 'approved': return <CheckCircle className="h-4 w-4" />;
+      case 'confirmed': return <CheckCircle className="h-4 w-4" />;
+      case 'rejected': return <X className="h-4 w-4" />;
+      case 'refunded': return <DollarSign className="h-4 w-4" />;
       case 'paid': return <DollarSign className="h-4 w-4" />;
       default: return <Clock className="h-4 w-4" />;
     }
@@ -106,9 +166,10 @@ const EarningsHistory: React.FC = () => {
   });
 
   const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
-  const approvedPaymentsCount = payments.filter(p => p.status === 'approved').length;
+  const approvedPaymentsCount = payments.filter(p => p.status === 'confirmed').length;
   const filteredPayments = payments.filter(p => {
     if (paymentsFilter === 'all') return true;
+    if (paymentsFilter === 'approved') return p.status === 'confirmed';
     return p.status === paymentsFilter;
   });
 
@@ -161,6 +222,13 @@ const EarningsHistory: React.FC = () => {
                 ₱{stats.total_earnings.toLocaleString()}
               </p>
             </div>
+          </div>
+
+          {/* Bottom action row: View all payments */}
+          <div className="mt-3 flex justify-end">
+            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings/payments')}>
+              View all
+            </Button>
           </div>
         </Card>
 
@@ -243,6 +311,9 @@ const EarningsHistory: React.FC = () => {
             <Calendar className="h-5 w-5 mr-2 text-green-600" />
             Payments
           </h2>
+          <div className="flex justify-end mb-3">
+            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings/payments')}>View all</Button>
+          </div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <span className="text-sm px-2 py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">Pending: {pendingPaymentsCount}</span>
@@ -268,22 +339,88 @@ const EarningsHistory: React.FC = () => {
               ))}
             </div>
           </div>
-          <div className="space-y-3">
-            {filteredPayments.slice(0, 10).map(payment => (
-              <div key={payment.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <span className="font-medium text-slate-800">
-                    Session #{payment.session_id}
-                  </span>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(payment.status)}`}>
-                    <div className="flex items-center space-x-1">
-                      {getStatusIcon(payment.status)}
-                      <span>{payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span>
-                    </div>
-                  </span>
+          <div className="space-y-3 max-h-80 overflow-auto">
+            {filteredPayments.slice(0, 5).map(payment => (
+              <div key={payment.id || payment.payment_id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-1">
+                    <span className="font-medium text-slate-800">
+                      {payment.student_name || 'Unknown Student'}
+                    </span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(payment.status)}`}>
+                      <div className="flex items-center space-x-1">
+                        {getStatusIcon(payment.status)}
+                        <span>{payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span>
+                      </div>
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    Payment ID: #{payment.payment_id || payment.id} • {new Date(payment.created_at).toLocaleDateString()}
+                    {payment.subject && (
+                      <span className="ml-2">• Subject: {payment.subject}</span>
+                    )}
+                    { (payment.status === 'confirmed' || payment.status === 'admin_confirmed') && payment.admin_note && (
+                      <span className="ml-2 text-green-600">✓ Approved by Admin</span>
+                    )}
+
+                    {payment.admin_payment_proof_url && (
+                      <div className="inline-flex items-center space-x-2 ml-2">
+                        <Button
+                          variant="secondary"
+                          disabled={!payment.admin_payment_proof_url}
+                          onClick={() => {
+                            // Only allow tutors to view the admin-uploaded proof here.
+                            if (!payment.admin_payment_proof_url) return;
+                            const srcPath = payment.admin_payment_proof_url as string;
+                            const url = getFileUrl(srcPath);
+                            setProofModalUrl(url);
+                            setProofModalTitle('Admin payment proof');
+                            setProofModalOpen(true);
+                            // mark as viewed so tutor can confirm after inspecting
+                            setViewedProofByPayment(prev => ({ ...prev, [payment.payment_id]: true }));
+                          }}
+                        >
+                          View admin proof
+                        </Button>
+
+                        {/* Always show a Confirm button for tutor action, but disable and explain why when necessary */}
+                        <Button
+                          className="ml-1"
+                          onClick={async () => {
+                            try {
+                              await apiClient.patch(`/payments/${payment.payment_id}/confirm`);
+                              await fetchEarningsData(false);
+                            } catch (e) {
+                              console.error('Failed to confirm payment', e);
+                            }
+                          }}
+                          variant="primary"
+                          disabled={
+                            // disabled if already confirmed or no admin proof or tutor hasn't viewed the admin proof yet
+                            payment.status === 'confirmed' ||
+                            payment.status === 'rejected' ||
+                            payment.status === 'refunded' ||
+                            !payment.admin_payment_proof_url ||
+                            !viewedProofByPayment[payment.payment_id]
+                          }
+                          title={
+                            payment.status === 'confirmed'
+                              ? 'Already confirmed'
+                              : !payment.admin_payment_proof_url
+                                ? 'Waiting for admin to upload proof'
+                                : !viewedProofByPayment[payment.payment_id]
+                                  ? 'Open the admin proof to enable Confirm'
+                                  : 'Confirm payment (mark as received)'
+                          }
+                        >
+                          Confirm
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <span className="font-semibold text-slate-800">
-                  ₱{payment.amount.toLocaleString()}
+                <span className="font-semibold text-slate-800 ml-4">
+                  ₱{Number(payment.amount).toLocaleString()}
                 </span>
               </div>
             ))}
@@ -384,6 +521,13 @@ const EarningsHistory: React.FC = () => {
           )}
         </div>
       </Card>
+      {proofModalOpen && proofModalUrl && (
+        <Modal isOpen={proofModalOpen} onClose={() => setProofModalOpen(false)} title={proofModalTitle}>
+          <div className="flex justify-center">
+            <img src={proofModalUrl} alt={proofModalTitle} className="max-w-full h-auto rounded" />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

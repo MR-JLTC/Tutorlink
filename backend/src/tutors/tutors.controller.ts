@@ -149,9 +149,16 @@ export class TutorsController {
     return this.tutorsService.updateExistingUserToTutor(+userId, { ...body, year_level: body.year_level ? Number(body.year_level) : undefined });
   }
 
+  @Get('status/:userId')
+  @UseGuards(JwtAuthGuard)
+  async getTutorStatusByUserId(@Param('userId') userId: string) {
+    return this.tutorsService.getTutorStatus(+userId);
+  }
+
   @Get(':tutorId/status')
   @UseGuards(JwtAuthGuard)
   async getTutorStatus(@Param('tutorId') tutorId: string) {
+    // Delegate to service which supports both user_id and tutor_id
     return this.tutorsService.getTutorStatus(+tutorId);
   }
 
@@ -165,6 +172,13 @@ export class TutorsController {
   @UseGuards(JwtAuthGuard)
   async updateTutorProfile(@Param('tutorId') tutorId: string, @Body() body: { bio?: string; gcash_number?: string }) {
     return this.tutorsService.updateTutorProfile(+tutorId, body);
+  }
+
+  // Match frontend call: GET /tutors/by-user/:userId/status
+  @Get('by-user/:userId/status')
+  @UseGuards(JwtAuthGuard)
+  async getTutorStatusByUserIdAlias(@Param('userId') userId: string) {
+    return this.tutorsService.getTutorStatus(+userId);
   }
 
   @Get(':tutorId/availability')
@@ -251,6 +265,28 @@ export class TutorsController {
   @UseGuards(JwtAuthGuard)
   async rejectPayment(@Param('bookingId') bookingId: string) {
     return this.tutorsService.updatePaymentStatus(+bookingId, 'rejected');
+  }
+
+  // Tutee uploads payment proof image
+  @Post('booking-requests/:bookingId/payment-proof')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const dest = path.join(process.cwd(), 'tutor_documents');
+        if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+        cb(null, dest);
+      },
+      filename: (req: any, file, cb) => {
+        const bookingId = req.params.bookingId;
+        const ext = path.extname(file.originalname) || '';
+        const safeExt = ext || '.jpg';
+        const filename = `paymentProof_${bookingId}_${Date.now()}${safeExt}`;
+        cb(null, filename);
+      }
+    })
+  }))
+  async uploadPaymentProof(@Param('bookingId') bookingId: string, @UploadedFile() file: any) {
+    return this.tutorsService.uploadPaymentProof(+bookingId, file);
   }
 
   @Get(':tutorId/sessions')

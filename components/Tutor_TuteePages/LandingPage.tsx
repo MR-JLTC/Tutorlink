@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../../components/Logo';
 import Modal from '../../components/ui/Modal';
-import * as TutorRegistrationModule from './TutorRegistrationPage';
-import * as TuteeRegistrationModule from './TuteeRegistrationPage';
+import { TutorRegistrationModal } from './TutorRegistrationPage';
+import { TuteeRegistrationModal } from './TuteeRegistrationPage';
 import apiClient, { getFileUrl } from '../../services/api';
 
 // New icons for "How it works" section
@@ -32,7 +32,11 @@ const LiveStats: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
-    fetch('http://localhost:3000/api/landing/stats')
+    const controller = new AbortController();
+
+    fetch('http://localhost:3000/api/landing/stats', {
+      signal: controller.signal
+    })
       .then(async (res) => {
         if (!res.ok) throw new Error('Failed to load stats');
         return res.json();
@@ -41,10 +45,15 @@ const LiveStats: React.FC = () => {
         if (mounted) setStats(data);
       })
       .catch((e) => {
-        if (mounted) setError(e.message);
+        // Only set error if this is not an abort error
+        if (mounted && e.name !== 'AbortError') {
+          setError(e.message);
+        }
       });
+
     return () => {
       mounted = false;
+      controller.abort();
     };
   }, []);
 
@@ -67,24 +76,31 @@ const LiveStats: React.FC = () => {
   );
 };
 
-const slides = [
+interface Slide {
+    src: string;
+    alt: string;
+}
+
+const slides: Slide[] = [
     { 
-        src: 'assets/images/bgp1.jpg'
-        // alt: 'A tutor helping a student with a laptop in a well-lit room.' 
+        src: 'assets/images/bgp1.jpg',
+        alt: 'A tutor helping a student with a laptop in a well-lit room'
     },
     { 
-        src: 'assets/images/bgp2.jpg'
-        // alt: 'A diverse group of young students studying together around a table.' 
+        src: 'assets/images/bgp2.jpg',
+        alt: 'A diverse group of young students studying together around a table'
     },
     { 
-        src: 'assets/images/bgp3.jpg'
-        // alt: 'Students in a university lecture hall, focused on learning.' 
+        src: 'assets/images/bgp3.jpg',
+        alt: 'Students in a university lecture hall, focused on learning'
     },
     { 
-        src: 'assets/images/bgp4.jpg'
+        src: 'assets/images/bgp4.jpg',
+        alt: 'Online tutoring session in progress'
     },
     { 
-      src: 'assets/images/bgp5.jpg'
+        src: 'assets/images/bgp5.jpg',
+        alt: 'Student studying with digital resources'
     },
 ];
 
@@ -133,14 +149,14 @@ const RoleSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onNav
     if (!isOpen) return null;
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 transition-opacity" onClick={(e) => { e.preventDefault(); onClose(); }} role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div className="bg-white rounded-2xl shadow-2xl p-8 m-4 max-w-3xl w-full flex flex-col md:flex-row gap-8" onClick={e => e.stopPropagation()}>
           <div 
             role="button"
             tabIndex={0}
             className="flex-1 p-8 rounded-xl border-2 border-slate-200 hover:border-sky-500 hover:bg-sky-50 transition-all duration-300 cursor-pointer flex flex-col items-center text-center focus:outline-none focus:ring-2 focus:ring-sky-500 group"
-            onClick={() => onNavigate('/TuteeRegistrationPage')}
-            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') onNavigate('/TuteeRegistrationPage')}}
+            onClick={(e) => { e.preventDefault(); onNavigate('/TuteeRegistrationPage'); }}
+            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onNavigate('/TuteeRegistrationPage'); }}}
           >
             <div className="relative flex items-center justify-center h-32 w-32 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 mb-6 overflow-hidden shadow-lg group-hover:shadow-xl transition-all duration-300">
               <img 
@@ -198,20 +214,22 @@ const LandingPage: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isTutorModalOpen, setIsTutorModalOpen] = useState(false);
   const [isTuteeModalOpen, setIsTuteeModalOpen] = useState(false);
-  const [tutorModalKey, setTutorModalKey] = useState(0);
+    const [tutorModalKey, setTutorModalKey] = useState(0);
   const [tuteeModalKey, setTuteeModalKey] = useState(0);
   const [partnerUniversities, setPartnerUniversities] = useState<Array<{ university_id: number; name: string; logo_url?: string; status?: string }>>([]);
 
   const handleNavigate = (path: string) => {
     if (path === '/TutorRegistrationPage') {
       setIsModalOpen(false);
-      setTutorModalKey((k) => k + 1);
+      // Reset tutor modal
+      setTutorModalKey(k => k + 1);
       setIsTutorModalOpen(true);
       return;
     }
     if (path === '/TuteeRegistrationPage') {
       setIsModalOpen(false);
-      setTuteeModalKey((k) => k + 1);
+      // Reset tutee modal
+      setTuteeModalKey(k => k + 1);
       setIsTuteeModalOpen(true);
       return;
     }
@@ -219,24 +237,53 @@ const LandingPage: React.FC = () => {
   };
 
   useEffect(() => {
+    // Debounce scroll handler
+    let timeoutId: NodeJS.Timeout;
     const handleScroll = () => {
-      const scrollTop = window.scrollY;
-      setIsScrolled(scrollTop > 50);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        const scrollTop = window.scrollY;
+        setIsScrolled(scrollTop > 50);
+      }, 100); // 100ms debounce
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+
     (async () => {
       try {
-        const res = await apiClient.get('/universities');
-        const rows = Array.isArray(res.data) ? res.data : [];
-        const active = rows.filter((u: any) => (u.status || 'active') === 'active');
-        setPartnerUniversities(active);
-      } catch {}
+        const res = await apiClient.get('/universities', {
+          signal: controller.signal
+        });
+        if (mounted) {
+          const rows = Array.isArray(res.data) ? res.data : [];
+          const active = rows.filter((u: any) => (u.status || 'active') === 'active');
+          setPartnerUniversities(active);
+        }
+      } catch (err) {
+        // Ignore AbortError
+        if (err.name !== 'AbortError') {
+          console.error('Failed to fetch universities:', err);
+        }
+      }
     })();
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
   }, []);
 
   return (
@@ -856,9 +903,22 @@ const LandingPage: React.FC = () => {
       </footer>
       
       <RoleSelectionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onNavigate={handleNavigate} />
-      {/** Using default export to ensure compatibility */}
-      {isTutorModalOpen && React.createElement((TutorRegistrationModule as any).default, { key: `tutor-${tutorModalKey}`, isOpen: true, onClose: () => { setIsTutorModalOpen(false); setTutorModalKey((k: number) => k + 1); } })}
-      {isTuteeModalOpen && React.createElement((TuteeRegistrationModule as any).default, { key: `tutee-${tuteeModalKey}`, isOpen: true, onClose: () => { setIsTuteeModalOpen(false); setTuteeModalKey((k: number) => k + 1); } })}
+            {isTutorModalOpen && <TutorRegistrationModal 
+        key={`tutor-${tutorModalKey}`}
+        isOpen={true} 
+        onClose={() => {
+          setIsTutorModalOpen(false);
+          setTutorModalKey(k => k + 1);
+        }} 
+      />}
+      {isTuteeModalOpen && <TuteeRegistrationModal 
+        key={`tutee-${tuteeModalKey}`}
+        isOpen={true} 
+        onClose={() => {
+          setIsTuteeModalOpen(false);
+          setTuteeModalKey(k => k + 1);
+        }}
+      />}
     </div>
   );
 };

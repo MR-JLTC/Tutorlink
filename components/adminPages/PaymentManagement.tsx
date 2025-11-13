@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import apiClient from '../../services/api';
+import apiClient, { getFileUrl } from '../../services/api';
 import { Payment } from '../../types';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Card from '../ui/Card';
+import { Upload } from 'lucide-react';
 
 const PaymentManagement: React.FC = () => {
     const [payments, setPayments] = useState<Payment[]>([]);
@@ -12,6 +13,14 @@ const PaymentManagement: React.FC = () => {
     const [adminNote, setAdminNote] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [verifyingId, setVerifyingId] = useState<number | null>(null);
+    const [selectedPaymentForProof, setSelectedPaymentForProof] = useState<Payment | null>(null);
+    const [adminProofFile, setAdminProofFile] = useState<File | null>(null);
+    const [uploadingProof, setUploadingProof] = useState(false);
+    const [showTutorQrModal, setShowTutorQrModal] = useState<Payment | null>(null);
+    const [approveModalPayment, setApproveModalPayment] = useState<Payment | null>(null);
+    const [approveProofFile, setApproveProofFile] = useState<File | null>(null);
+    const [selectedProofModalPayment, setSelectedProofModalPayment] = useState<Payment | null>(null);
 
     useEffect(() => {
         const fetchPayments = async () => {
@@ -29,6 +38,46 @@ const PaymentManagement: React.FC = () => {
         fetchPayments();
     }, []);
 
+    const verify = async (paymentId: number, status: 'confirmed' | 'rejected', adminFile?: File | null) => {
+        try {
+            setVerifyingId(paymentId);
+            const formData = new FormData();
+            formData.append('status', status);
+            
+            // If approving and an admin proof file is provided, include it
+            const adminProofToUse = adminFile ?? (status === 'confirmed' && approveModalPayment?.payment_id === paymentId ? approveProofFile : null);
+            if (status === 'confirmed' && adminProofToUse) {
+                formData.append('adminProof', adminProofToUse);
+            }
+            
+            // Let the browser set the multipart Content-Type (including boundary).
+            // Manually setting it can prevent the file from being sent correctly.
+            await apiClient.patch(`/payments/${paymentId}/verify`, formData);
+            
+            const response = await apiClient.get('/payments');
+            setPayments(response.data);
+            setApproveModalPayment(null);
+            setApproveProofFile(null);
+            setSelectedProofModalPayment(null);
+        } finally {
+            setVerifyingId(null);
+        }
+    };
+
+    const handleApproveProofChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            alert('Please upload an image file');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File size should be less than 5MB');
+            return;
+        }
+        setApproveProofFile(file);
+    };
+
     if (loading) return <div>Loading payments...</div>;
     if (error) return <div className="text-red-500">{error}</div>;
 
@@ -39,9 +88,18 @@ const PaymentManagement: React.FC = () => {
         refunded: 'bg-blue-100 text-blue-800',
     };
 
+    const pendingCount = payments.filter(p => p.status === 'pending').length;
+
     return (
         <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-6">Payment Management</h1>
+            <div className="flex items-center gap-4 mb-6">
+                <h1 className="text-3xl font-bold text-slate-800">Payment Management</h1>
+                {pendingCount > 0 && (
+                    <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+                        {pendingCount} pending
+                    </div>
+                )}
+            </div>
             <Card>
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -70,7 +128,34 @@ const PaymentManagement: React.FC = () => {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                                        <Button variant="secondary" onClick={() => { setSelectedPayment(payment); setDisputeStatus(payment.dispute_status || 'none'); setAdminNote(payment.admin_note || ''); }}>Dispute</Button>
+                                        <div className="inline-flex items-center gap-2">
+                                            <Button variant="secondary" onClick={() => { setSelectedPayment(payment); setDisputeStatus(payment.dispute_status || 'none'); setAdminNote(payment.admin_note || ''); }}>Dispute</Button>
+                                                {/* View student's uploaded proof (opens modal) */}
+                                                {payment.dispute_proof_url && (
+                                                    <Button variant="secondary" onClick={() => { setSelectedProofModalPayment(payment); }}>View Proof</Button>
+                                                )}
+                                            {payment.status === 'pending' && (
+                                                <>
+                                                    <Button 
+                                                        onClick={() => setApproveModalPayment(payment)} 
+                                                        disabled={verifyingId === payment.payment_id}
+                                                    >
+                                                        Approve
+                                                    </Button>
+                                                    <Button variant="danger" onClick={() => verify(payment.payment_id, 'rejected')} disabled={verifyingId === payment.payment_id}>Reject</Button>
+                                                </>
+                                            )}
+                                            {payment.status === 'confirmed' && (payment as any).admin_payment_proof_url && (
+                                                <a 
+                                                    href={getFileUrl((payment as any).admin_payment_proof_url)} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="text-xs text-green-600 hover:text-green-700 underline"
+                                                >
+                                                    View proof
+                                                </a>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -111,6 +196,80 @@ const PaymentManagement: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium text-slate-700">Admin Note</label>
                             <textarea className="mt-1 block w-full border border-slate-300 rounded-md px-3 py-2" rows={4} value={adminNote} onChange={(e) => setAdminNote(e.target.value)} />
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {approveModalPayment && (
+                <Modal 
+                    isOpen={true} 
+                    onClose={() => { setApproveModalPayment(null); setApproveProofFile(null); }} 
+                    title={`Approve Payment #${approveModalPayment.payment_id}`}
+                    footer={
+                        <div className="flex items-center gap-2">
+                            <Button variant="secondary" onClick={() => { setApproveModalPayment(null); setApproveProofFile(null); }}>Cancel</Button>
+                            <Button 
+                                onClick={() => verify(approveModalPayment.payment_id, 'confirmed')} 
+                                disabled={verifyingId === approveModalPayment.payment_id || !approveProofFile}
+                            >
+                                Confirm Approve
+                            </Button>
+                        </div>
+                    }
+                >
+                    <div className="space-y-4">
+                        <p className="text-sm text-slate-600">
+                            Review the tutor's QR, then upload an admin proof screenshot to finalize approval.
+                        </p>
+                        {(approveModalPayment.tutor as any)?.gcash_qr_url ? (
+                            <div className="flex justify-center">
+                                <img 
+                                    src={getFileUrl((approveModalPayment.tutor as any).gcash_qr_url)} 
+                                    alt="Tutor GCash QR" 
+                                    className="max-w-full h-auto border border-slate-200 rounded-lg"
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300?text=QR+Not+Available';
+                                    }}
+                                />
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-500 text-center py-4">Tutor has not uploaded a GCash QR code yet.</p>
+                        )}
+                        {(approveModalPayment.tutor as any)?.gcash_number && (
+                            <p className="text-sm text-slate-600 text-center">
+                                <strong>GCash Number:</strong> {(approveModalPayment.tutor as any).gcash_number}
+                            </p>
+                        )}
+                        <div className="pt-2">
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Upload Admin Proof</label>
+                            <input type="file" accept="image/*" onChange={handleApproveProofChange} />
+                            {approveProofFile && (
+                                <div className="text-xs text-green-700 mt-1">Selected: {approveProofFile.name}</div>
+                            )}
+                            {!approveProofFile && (
+                                <div className="text-xs text-red-600 mt-1">Proof is required to confirm approval.</div>
+                            )}
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* Student proof modal: lets admin view the tutee-uploaded proof and Approve/Reject from the same modal */}
+            {selectedProofModalPayment && (
+                <Modal
+                    isOpen={true}
+                    onClose={() => { setSelectedProofModalPayment(null); }}
+                    title={`Payment Proof #${selectedProofModalPayment.payment_id}`}
+                >
+                    <div className="space-y-4">
+                        <div className="text-sm text-slate-700">
+                            <p><strong>Student:</strong> {selectedProofModalPayment.student?.user?.name || 'N/A'}</p>
+                            <p><strong>Tutor:</strong> {selectedProofModalPayment.tutor?.user?.name || 'N/A'}</p>
+                            <p><strong>Amount:</strong> ${Number(selectedProofModalPayment.amount).toFixed(2)}</p>
+                        </div>
+                        <div className="flex justify-center">
+                            <img src={getFileUrl((selectedProofModalPayment as any).dispute_proof_url || (selectedProofModalPayment as any).dispute_proof_url)} alt="Payment proof" className="max-h-[70vh] object-contain border rounded" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=No+Image'; }} />
                         </div>
                     </div>
                 </Modal>

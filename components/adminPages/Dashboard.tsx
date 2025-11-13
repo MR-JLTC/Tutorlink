@@ -28,7 +28,9 @@ const StatCard: React.FC<{ icon: React.ElementType, title: string, value: string
     );
 }
 
-const Dashboard: React.FC = () => {
+import ErrorBoundary from '../ErrorBoundary';
+
+const DashboardContent: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -223,7 +225,7 @@ const Dashboard: React.FC = () => {
              <StatCard 
               icon={PesoSignIcon}
               title="Total Revenue"
-              value={`₱${stats.totalRevenue.toLocaleString()}`}
+              value={`₱${(stats.totalRevenue || 0).toLocaleString()}`}
               color="bg-indigo-500"
             />
             <StatCard 
@@ -411,6 +413,14 @@ const Dashboard: React.FC = () => {
         </Card>
       </div>
     </div>
+  );
+};
+
+const Dashboard: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <DashboardContent />
+    </ErrorBoundary>
   );
 };
 

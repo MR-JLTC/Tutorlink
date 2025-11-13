@@ -31,16 +31,19 @@ export interface Subject {
 
 export interface User {
   user_id: number;
-  name: string;
+  id: string;  // For API compatibility
   email: string;
-  role?: UserRole; // Role might be determined on the fly
-  is_verified: boolean;
+  name: string;
+  user_type?: 'tutor' | 'tutee' | 'admin';
+  role?: UserRole;
+  status?: 'active' | 'inactive' | 'pending_verification';
   created_at: string;
-  university_id: number;
+  profile_image_url?: string | null;
+  password?: string;
+  is_verified?: boolean;
+  university_id?: number;
   course_id?: number;
   year_level?: number;
-  status?: 'active' | 'inactive';
-  profile_image_url?: string;
   
   // Joined data from backend
   university?: University;
@@ -90,6 +93,7 @@ export interface Payment {
   dispute_status?: 'none' | 'open' | 'under_review' | 'resolved' | 'rejected';
   dispute_proof_url?: string;
   admin_note?: string;
+  admin_payment_proof_url?: string;
 
   // Joined data from backend
   student?: { user?: { name: string } };

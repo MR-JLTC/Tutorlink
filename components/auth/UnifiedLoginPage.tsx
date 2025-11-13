@@ -57,14 +57,20 @@ const UnifiedLoginPage: React.FC = () => {
     }    
   ];
 
-  // Auto-advance slideshow
+  // Auto-advance slideshow with cleanup and pause on unmount
   useEffect(() => {
+    let isMounted = true;
     const interval = setInterval(() => {
-      setCurrentSlide((prevSlide) => (prevSlide + 1) % slideshowImages.length);
+      if (isMounted) {
+        setCurrentSlide((prevSlide) => (prevSlide + 1) % slideshowImages.length);
+      }
     }, 4000);
 
-    return () => clearInterval(interval);
-  }, [slideshowImages.length]);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -77,12 +83,37 @@ const UnifiedLoginPage: React.FC = () => {
     setIsLoading(true);
     setError('');
 
+    console.log('Attempting login with:', { email: formData.email });
+
     try {
-      await loginTutorTutee(formData.email, formData.password);
-      // Navigation is handled by the AuthContext
+      console.log('Calling loginTutorTutee...');
+      const result = await loginTutorTutee(formData.email, formData.password);
+      console.log('Login result:', result);
+
+      // Handle navigation here based on role with replace to prevent history stack build-up
+      const role = result as string; // Type assertion since we know it returns a string
+      console.log('Determined role:', role);
+
+      switch (role) {
+        case 'tutee':
+          console.log('Navigating to tutee dashboard...');
+          navigate('/tutee-dashboard', { replace: true });
+          break;
+        case 'tutor':
+          console.log('Navigating to tutor dashboard...');
+          navigate('/tutor-dashboard', { replace: true });
+          break;
+        default:
+          console.error('Invalid role received:', role);
+          throw new Error('Invalid user role');
+      }
     } catch (err: any) {
+      console.error('Login error:', err);
+      console.error('Error response:', err.response);
       const errorMessage = err.response?.data?.message || 'Invalid credentials. Please try again.';
+      console.error('Setting error message:', errorMessage);
       setError(errorMessage);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -274,23 +305,12 @@ const UnifiedLoginPage: React.FC = () => {
                             data-lpignore="true"
                             data-1p-ignore="true"
                             data-bwignore="true"
-                            style={{
-                              WebkitTextSecurity: showPassword ? 'none' : 'disc',
-                              WebkitAppearance: 'none',
-                              MozAppearance: 'textfield'
-                            }}
                             required
                             value={formData.password}
                             onChange={handleInputChange}
                             minLength={7}
                             maxLength={13}
-                            className={`${inputStyles} pr-10 
-                              [&::-ms-reveal]:hidden 
-                              [&::-webkit-credentials-auto-fill-button]:!hidden 
-                              [&::-webkit-strong-password-auto-fill-button]:!hidden 
-                              [&::-webkit-credentials-auto-fill-button]:!hidden 
-                              [&::-webkit-strong-password-auto-fill-button]:!hidden`
-                            }
+                            className={`${inputStyles} pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-strong-password-auto-fill-button]:hidden`}
                             placeholder="Enter your password"
                           />
                           <button

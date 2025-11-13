@@ -47,6 +47,15 @@ const tutorNavLinks = [
     requiresApproval: true,
     isFirstStep: false
   },
+  {
+    // Make this route consistent with other tutor dashboard links so it highlights/behaves like the rest
+    to: '/tutor-dashboard/upcoming-sessions',
+    icon: Calendar,
+    label: 'Upcoming Sessions',
+    description: 'View and manage your upcoming scheduled sessions in one place.',
+    requiresApproval: true,
+    isFirstStep: false
+  },
   { 
     to: '/tutor-dashboard/earnings', 
     icon: DollarSign, 

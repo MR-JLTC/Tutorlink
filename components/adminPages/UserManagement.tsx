@@ -40,6 +40,8 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  // (Removed accidental admin modal handlers; admin profile is shown from the header instead)
+
   const fetchDisputes = async () => {
     try {
       setDisputesLoading(true);
@@ -439,6 +441,8 @@ const UserManagement: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      
     </div>
   );
 };

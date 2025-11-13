@@ -17,4 +17,7 @@ export class Admin {
   @ManyToOne(() => University, (university) => university.admins)
   @JoinColumn({ name: 'university_id' })
   university: University;
+
+  @Column({ type: 'text', nullable: true })
+  qr_code_url?: string;
 }

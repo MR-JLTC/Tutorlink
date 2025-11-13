@@ -5,6 +5,7 @@ import Card from '../ui/Card';
 import { useAuth } from '../../hooks/useAuth';
 import { useVerification } from '../../context/VerificationContext';
 import { User, Camera, CreditCard, Star, Edit, Save, X, CheckCircle, Clock } from 'lucide-react';
+import { updateRoleUser } from '../../utils/authRole';
 
 interface TutorProfile {
   bio: string;
@@ -177,6 +178,7 @@ const ProfileSetup: React.FC = () => {
             if (user) {
               const updatedUser = { ...user, profile_image_url: profilePhotoUrl } as any;
               localStorage.setItem('user', JSON.stringify(updatedUser));
+              updateRoleUser(updatedUser);
             }
           }
           setIsEditing(false);
@@ -243,6 +245,7 @@ const ProfileSetup: React.FC = () => {
             if (user) {
               const updatedUser = { ...user, profile_image_url: profilePhotoUrl };
               localStorage.setItem('user', JSON.stringify(updatedUser));
+              updateRoleUser(updatedUser);
             }
           } else {
             console.warn('Profile image URL not found in response:', profileResponse.data);
@@ -406,22 +409,22 @@ const ProfileSetup: React.FC = () => {
                   </div>
                 )}
               </div>
-            ) : profile.profile_photo ? (
+            ) : profile.profile_photo || user?.profile_image_url ? (
               <div className="relative">
                 <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
                   <img
-                    src={getFileUrl(profile.profile_photo)}
+                    src={getFileUrl(profile.profile_photo || (user as any)?.profile_image_url || '')}
                     alt="Profile"
                     className="w-full h-full object-cover"
                     style={{aspectRatio: '1/1'}}
                     onError={(e) => {
-                      console.error('Failed to load profile image. Original URL:', profile.profile_photo);
-                      console.error('Constructed URL:', getFileUrl(profile.profile_photo));
-                      // Hide broken image
-                      (e.target as HTMLImageElement).style.display = 'none';
+                      console.error('Failed to load profile image. Original URL:', profile.profile_photo || (user as any)?.profile_image_url);
+                      console.error('Constructed URL:', getFileUrl(profile.profile_photo || (user as any)?.profile_image_url || ''));
+                      // Fallback to initials avatar
+                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent((user as any)?.name || 'Tutor')}&background=random`;
                     }}
                     onLoad={() => {
-                      console.log('Profile image loaded successfully:', getFileUrl(profile.profile_photo));
+                      console.log('Profile image loaded successfully:', getFileUrl(profile.profile_photo || (user as any)?.profile_image_url || ''));
                     }}
                   />
                 </div>

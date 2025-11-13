@@ -14,57 +14,74 @@ export class AuthService {
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
-    console.log('=== VALIDATE USER DEBUG ===');
+    console.log('\n=== VALIDATE USER DEBUG ===');
     console.log('Email:', email);
-    console.log('Password provided:', !!pass);
+    console.log('Password provided length:', pass?.length || 0);
     
     const user = await this.usersService.findOneByEmail(email);
     console.log('User found in database:', !!user);
     
     if (user) {
-      console.log('User details:', {
+      console.log('\nUser details:', {
         user_id: user.user_id,
         email: user.email,
         name: user.name,
         user_type: user.user_type,
         status: user.status,
-        has_password: !!user.password
+        has_password: !!user.password,
+        password_length: user.password?.length || 0
       });
       
-      // Try normal password comparison first
-      let passwordMatch = await bcrypt.compare(pass, user.password);
-      console.log('Password match (normal):', passwordMatch);
-      
-      // If normal comparison fails, try comparing against double-hashed password
-      // This handles existing users who were registered with double-hashed passwords
-      if (!passwordMatch) {
-        console.log('Trying double-hashed password comparison...');
-        const doubleHashed = await bcrypt.hash(pass, 10);
-        passwordMatch = await bcrypt.compare(doubleHashed, user.password);
-        console.log('Password match (double-hashed):', passwordMatch);
-        
-        // If double-hashed comparison works, update the password to single-hashed
-        if (passwordMatch) {
-          console.log('✅ Double-hashed password detected, updating to single-hashed');
-          const singleHashed = await bcrypt.hash(pass, 10);
-          await this.usersService.updatePassword(user.user_id, singleHashed);
-          console.log('Password updated to single-hashed version');
-        }
+      // First, ensure we have both passwords for comparison
+      if (!pass || !user.password) {
+        console.log('❌ Missing password data:', {
+          providedPassword: !!pass,
+          storedPassword: !!user.password
+        });
+        return null;
       }
       
-      if (passwordMatch) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { password, ...result } = user;
-        console.log('✅ User validation successful');
-        return result;
-      } else {
-        console.log('❌ Password does not match');
+      try {
+        // Try normal password comparison first
+        console.log('\nAttempting normal password comparison...');
+        let passwordMatch = await bcrypt.compare(pass, user.password);
+        console.log('Password match (normal):', passwordMatch);
+        
+        // If normal comparison fails, try comparing against double-hashed password
+        if (!passwordMatch) {
+          console.log('\nTrying double-hashed password comparison...');
+          const doubleHashed = await bcrypt.hash(pass, 10);
+          passwordMatch = await bcrypt.compare(doubleHashed, user.password);
+          console.log('Password match (double-hashed):', passwordMatch);
+          
+          // If double-hashed comparison works, update the password to single-hashed
+          if (passwordMatch) {
+            console.log('✅ Double-hashed password detected, updating to single-hashed');
+            const singleHashed = await bcrypt.hash(pass, 10);
+            await this.usersService.updatePassword(user.user_id, singleHashed);
+            console.log('Password updated to single-hashed version');
+          }
+        }
+        
+        if (passwordMatch) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { password, ...result } = user;
+          console.log('\n✅ User validation successful');
+          console.log('Returning user data:', result);
+          return result;
+        } else {
+          console.log('\n❌ Password does not match');
+          console.log('Password comparison failed for user:', user.email);
+        }
+      } catch (error) {
+        console.error('\n❌ Error during password comparison:', error);
+        return null;
       }
     } else {
-      console.log('❌ No user found with this email');
+      console.log('\n❌ No user found with this email');
     }
     
-    console.log('❌ User validation failed');
+    console.log('\n❌ User validation failed');
     return null;
   }
 
@@ -84,9 +101,9 @@ export class AuthService {
       throw new UnauthorizedException('Access denied. Only admins can log in.');
     }
 
-    const payload = { email: user.email, sub: user.user_id, name: user.name };
+    const payload = { email: user.email, sub: user.user_id, name: user.name, role: 'admin' };
     return {
-      user,
+      user: { ...user, role: 'admin' },
       accessToken: this.jwtService.sign(payload),
     };
   }
@@ -127,9 +144,12 @@ export class AuthService {
       throw new UnauthorizedException('Admin accounts are not allowed here. Please use the Admin Portal.');
     }
 
-    // Determine user type based on their profile
-    const userType = await this.determineUserType(user.user_id);
-    console.log('Determined user type:', userType);
+    // Map student/tutee to the correct role for frontend
+    let userType = user.user_type;
+    if (userType === 'student' || userType === 'tutee') {
+      userType = 'student'; // Normalize both to 'student' for frontend
+    }
+    console.log('Mapped user type:', userType);
     
     const payload = { email: user.email, sub: user.user_id, name: user.name, role: userType };
     console.log('✅ Login successful, generating token');

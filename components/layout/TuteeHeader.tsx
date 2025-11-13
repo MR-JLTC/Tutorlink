@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogOut } from 'lucide-react';
 import Button from '../ui/Button';
+import { NotificationBell } from '../ui/NotificationBell';
 
 const TuteeHeader: React.FC = () => {
   const { user, logout } = useAuth();
@@ -15,6 +16,7 @@ const TuteeHeader: React.FC = () => {
         </div>
         
         <div className="flex items-center space-x-4">
+          <NotificationBell />
           <Button 
             onClick={logout} 
             variant="secondary" 

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { logoBase64 } from '../../assets/logo';
 import ReactDOM from 'react-dom';
 
 const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,11 +25,26 @@ const LoginPage: React.FC = () => {
         setIsLoading(false);
         return;
       }
+      
       await login(email, password);
-      // The login function in AuthContext handles navigation on success
+      
+      // Get current user from localStorage after login
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        throw new Error('Login failed: No user data found');
+      }
+      
+      const userData = JSON.parse(userStr);
+      if (userData.user_type !== 'admin' && userData.role !== 'admin') {
+        throw new Error('This login is for administrators only. Please use the regular login page.');
+      }
+      
+      // After successful login and role verification, navigate to admin dashboard
+      navigate('/admin/dashboard', { replace: true });
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Invalid credentials. Please try again.';
       setError(errorMessage);
+    } finally {
       setIsLoading(false);
     }
   };

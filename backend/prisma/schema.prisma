@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  tutorId   String
+  tuteeId   String
+  startTime DateTime
+  endTime   DateTime
+  status    String
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  subjectId String
+  tutor     User     @relation("TutorSessions", fields: [tutorId], references: [id])
+  tutee     User     @relation("TuteeSessions", fields: [tuteeId], references: [id])
+}
+
+model Subject {
+  id       String    @id @default(uuid())
+  name     String
+  sessions Session[]
+}
+
+model User {
+  id              String         @id @default(uuid())
+  email           String         @unique
+  name            String
+  role            String
+  tutorSessions   Session[]      @relation("TutorSessions")
+  tuteeSessions   Session[]      @relation("TuteeSessions")
+  notifications   Notification[]
+}
+
+model Notification {
+  id           String   @id @default(uuid())
+  userId       String
+  userType     String
+  sessionId    String
+  message      String
+  timestamp    DateTime @default(now())
+  read         Boolean  @default(false)
+  sessionDate  DateTime
+  subjectName  String
+  user         User     @relation(fields: [userId], references: [id])
+}

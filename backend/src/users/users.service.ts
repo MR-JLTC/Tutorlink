@@ -1,7 +1,8 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User, Admin, Tutor, Course, University, Student } from '../database/entities';
+import { Between, In, Repository } from 'typeorm';
+import { User, Admin, Tutor, Course, University, Student, Notification, BookingRequest } from '../database/entities';
+import { NotificationsService } from '../notifications/notifications.service';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from '../auth/auth.dto';
 
@@ -20,6 +21,11 @@ export class UsersService {
     private universitiesRepository: Repository<University>,
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
+    @InjectRepository(Notification)
+    private notificationRepository: Repository<Notification>,
+    @InjectRepository(BookingRequest)
+    private bookingRequestRepository: Repository<BookingRequest>,
+    private notificationsService: NotificationsService,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -67,6 +73,51 @@ export class UsersService {
   async isAdmin(userId: number): Promise<boolean> {
       const admin = await this.adminRepository.findOne({ where: { user: { user_id: userId } } });
       return !!admin;
+  }
+
+  async getAdminProfile(userId: number) {
+    const user = await this.usersRepository.findOne({
+      where: { user_id: userId },
+      relations: ['admin_profile', 'admin_profile.university']
+    });
+    if (!user || !user.admin_profile) {
+      throw new BadRequestException('Admin not found');
+    }
+    const admin = user.admin_profile as any;
+    return {
+      user_id: user.user_id,
+      name: user.name,
+      email: user.email,
+      profile_image_url: user.profile_image_url,
+      created_at: (user as any).created_at,
+      university_id: admin.university_id || null,
+      university_name: admin.university?.name || null,
+      qr_code_url: admin.qr_code_url || null,
+    };
+  }
+
+  async updateAdminQr(userId: number, qrUrl: string) {
+    const admin = await this.adminRepository.findOne({
+      where: { user: { user_id: userId } },
+      relations: ['user']
+    });
+    if (!admin) {
+      throw new BadRequestException('Admin not found');
+    }
+    (admin as any).qr_code_url = qrUrl;
+    await this.adminRepository.save(admin);
+    return { success: true, qr_code_url: qrUrl };
+  }
+
+  async getAdminsWithQr(): Promise<Array<{ user_id: number; name: string; qr_code_url: string }>> {
+    const admins = await this.adminRepository.find({ relations: ['user'] });
+    return admins
+      .filter((a: any) => !!a.qr_code_url)
+      .map((a: any) => ({
+        user_id: a.user?.user_id,
+        name: a.user?.name,
+        qr_code_url: a.qr_code_url,
+      }));
   }
 
   async findTutorProfile(userId: number): Promise<Tutor | null> {
@@ -149,7 +200,7 @@ export class UsersService {
       name: body.name,
       email: body.email,
       password: body.password, // Use the already hashed password
-      user_type: 'tutee',
+      user_type: 'student', // Changed from 'tutee' to 'student' for consistency
       status: 'active', // Assuming registration only happens after email is verified
     });
     const savedUser: User = await this.usersRepository.save(user);
@@ -239,5 +290,217 @@ export class UsersService {
 
     // Reload user with profile
     return (await this.usersRepository.findOne({ where: { user_id: savedUser.user_id }, relations: ['tutor_profile', 'tutor_profile.university', 'tutor_profile.course'] })) as User;
+  }
+
+  async getNotifications(userId: number) {
+    // Determine user type from user_id
+    const user = await this.usersRepository.findOne({ 
+      where: { user_id: userId },
+      relations: ['tutor_profile', 'student_profile']
+    });
+    
+    if (!user) {
+      console.log(`getNotifications: User with user_id=${userId} not found`);
+      return { success: true, data: [] };
+    }
+
+    const userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
+    console.log(`getNotifications: Fetching notifications for user_id=${userId}, userType=${userType}`);
+    
+    // For tutors, only show booking requests and admin payment notifications
+    // For tutees, show all their notifications
+    // Delegate fetching to NotificationsService which filters by receiver_id and userType
+    let notifications = await this.notificationsService.getNotifications(userId, userType as 'tutor' | 'tutee' | 'admin');
+
+    // For tutors: further filter to only show booking requests and admin payment notifications
+    if (userType === 'tutor') {
+      notifications = notifications.filter((n: any) => {
+        const message = (n.message || '').toLowerCase();
+        return message.includes('requested a booking') || 
+               message.includes('booking request') ||
+               (message.includes('payment') && message.includes('approved by admin'));
+      });
+    }
+
+    // For tutees: exclude upcoming session notice in the bell
+    if (userType === 'tutee') {
+      notifications = notifications.filter((n: any) => !((n.message || '').toLowerCase().includes('upcoming')));
+    }
+    
+    console.log(`getNotifications: Found ${notifications.length} notifications for user_id=${userId}, userType=${userType}`);
+
+    // Map to frontend format
+    const mapped = notifications.map((n: any) => {
+      // Determine notification type based on message content
+      // Priority: payment > booking_update > upcoming_session > system
+      let type: 'upcoming_session' | 'booking_update' | 'payment' | 'system' = 'system';
+      const messageLower = (n.message || '').toLowerCase();
+      
+      // Check for payment-related keywords first (highest priority)
+      if (messageLower.includes('payment') || messageLower.includes('pay') || messageLower.includes('amount') || messageLower.includes('₱')) {
+        type = 'payment';
+      } else if (messageLower.includes('booking') || messageLower.includes('approved') || messageLower.includes('accepted') || messageLower.includes('declined')) {
+        type = 'booking_update';
+      } else if (n.sessionDate) {
+        type = 'upcoming_session';
+      }
+
+      return {
+        notification_id: n.notification_id,
+        user_id: n.userId,
+        booking_id: n.booking?.id || null,
+        title: n.subjectName || 'Notification',
+        message: n.message,
+        type: type,
+        is_read: n.read,
+        created_at: n.timestamp,
+        scheduled_for: n.sessionDate ? new Date(n.sessionDate).toISOString() : undefined,
+        metadata: {
+          session_date: n.sessionDate ? new Date(n.sessionDate).toISOString() : undefined,
+          subject: n.subjectName,
+          tutor_name: n.booking?.tutor?.user?.name || undefined,
+          student_name: n.booking?.student?.name || undefined
+        }
+      };
+    });
+
+    return { success: true, data: mapped };
+  }
+
+  async getUnreadNotificationCount(userId: number) {
+    const user = await this.usersRepository.findOne({ 
+      where: { user_id: userId },
+      relations: ['tutor_profile', 'student_profile']
+    });
+    
+    if (!user) {
+      return { success: true, data: { count: 0 } };
+    }
+
+    const userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
+    
+    const count = await this.notificationRepository.count({
+      where: { receiver_id: userId, userType: userType as 'tutor' | 'tutee', read: false }
+    });
+
+    return { success: true, data: { count } };
+  }
+
+  async hasUpcomingSessions(userId: number) {
+    // Check if user has any upcoming bookings in the next 7 days using bookings, not notifications
+    const user = await this.usersRepository.findOne({ 
+      where: { user_id: userId },
+      relations: ['tutor_profile', 'student_profile']
+    });
+    if (!user) return { success: true, data: { hasUpcoming: false } };
+
+    const isTutor = !!user.tutor_profile;
+    const now = new Date();
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Upcoming session criteria: scheduled within next 7 days and status 'upcoming'
+    const statuses: any[] = ['upcoming'];
+
+    let hasUpcoming = false;
+    if (isTutor) {
+      const tutor = await this.tutorRepository.findOne({ where: { user: { user_id: userId } }, relations: ['user'] } as any);
+      if (tutor) {
+        const count = await this.bookingRequestRepository.count({
+          where: {
+            tutor: { tutor_id: (tutor as any).tutor_id } as any,
+            status: In(statuses) as any,
+            date: Between(now, sevenDaysFromNow) as any
+          } as any
+        });
+        hasUpcoming = count > 0;
+      }
+    } else {
+      const count = await this.bookingRequestRepository.count({
+        where: {
+          student: { user_id: userId } as any,
+          status: In(statuses) as any,
+          date: Between(now, sevenDaysFromNow) as any
+        } as any
+      });
+      hasUpcoming = count > 0;
+    }
+
+    return { success: true, data: { hasUpcoming } };
+  }
+
+  async getUpcomingSessionsList(userId: number) {
+    const user = await this.usersRepository.findOne({ 
+      where: { user_id: userId },
+      relations: ['tutor_profile', 'student_profile']
+    });
+    if (!user) return { success: true, data: [] };
+
+    const isTutor = !!user.tutor_profile;
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const statuses: any[] = ['upcoming'];
+
+    let bookings: BookingRequest[] = [];
+    if (isTutor) {
+      const tutor = await this.tutorRepository.findOne({ where: { user: { user_id: userId } }, relations: ['user'] } as any);
+      if (tutor) {
+        bookings = await this.bookingRequestRepository.find({
+          where: {
+            tutor: { tutor_id: (tutor as any).tutor_id } as any,
+            status: In(statuses) as any,
+            date: Between(now, thirtyDaysFromNow) as any
+          } as any,
+          relations: ['tutor', 'tutor.user', 'student'],
+          order: { date: 'ASC' }
+        });
+      }
+    } else {
+      bookings = await this.bookingRequestRepository.find({
+        where: {
+          student: { user_id: userId } as any,
+          status: In(statuses) as any,
+          date: Between(now, thirtyDaysFromNow) as any
+        } as any,
+        relations: ['tutor', 'tutor.user', 'student'],
+        order: { date: 'ASC' }
+      });
+    }
+
+    const data = bookings.map((b: any) => ({
+      id: b.id,
+      subject: b.subject,
+      date: b.date,
+      time: b.time,
+      duration: b.duration,
+      status: b.status,
+      tutor_name: b.tutor?.user?.name,
+      student_name: b.student?.name
+    }));
+
+    return { success: true, data };
+  }
+
+  async markNotificationAsRead(notificationId: number) {
+    await this.notificationRepository.update(notificationId, { read: true });
+    return { success: true };
+  }
+
+  async markAllNotificationsAsRead(userId: number) {
+    const user = await this.usersRepository.findOne({ 
+      where: { user_id: userId },
+      relations: ['tutor_profile', 'student_profile']
+    });
+    
+    if (!user) {
+      return { success: true };
+    }
+
+    const userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
+    
+    await this.notificationRepository.update(
+      { receiver_id: userId, userType: userType as 'tutor' | 'tutee' },
+      { read: true }
+    );
+    return { success: true };
   }
 }

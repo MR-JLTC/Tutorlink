@@ -12,6 +12,7 @@ import { EmailModule } from './email/email.module';
 import * as entities from './database/entities';
 import { LandingModule } from './landing/landing.module';
 import { SubjectsModule } from './subjects/subjects.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Controller()
 export class AppController {
@@ -58,6 +59,7 @@ export class AppController {
     LandingModule,
     SubjectsModule,
     EmailModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [],

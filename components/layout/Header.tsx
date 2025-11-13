@@ -3,12 +3,26 @@ import { useAuth } from '../../hooks/useAuth';
 import { LogOut, User as UserIcon } from 'lucide-react';
 import Button from '../ui/Button';
 import { getFileUrl } from '../../services/api';
+import apiClient from '../../services/api';
+import { useNavigate } from 'react-router-dom';
+import HeaderNotificationBell from '../ui/HeaderNotificationBell';
+import { User } from '../../types';
+import Modal from '../ui/Modal';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [imageError, setImageError] = useState(false);
+  // Modal-based profile view removed; navigation to /admin/profile instead
 
-  const profileImageUrl = user?.profile_image_url ? getFileUrl(user.profile_image_url) : null;
+  const profileUrl = (user as any)?.profile_image_url;
+  const profileImageUrl = profileUrl ? getFileUrl(profileUrl) : null;
+
+  const openAdminDetails = () => {
+    navigate('/admin/profile');
+  };
+
+  // Upload logic moved to AdminProfile page
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-end px-6">
@@ -17,7 +31,12 @@ const Header: React.FC = () => {
           <p className="text-sm font-semibold text-slate-800">{user?.name}</p>
           <p className="text-xs text-slate-500">{user?.email}</p>
         </div>
-        <div className="h-10 w-10 rounded-full overflow-hidden bg-slate-200 border-2 border-slate-300">
+        <button
+          type="button"
+          onClick={openAdminDetails}
+          title="View profile"
+          className="h-10 w-10 rounded-full overflow-hidden bg-slate-200 border-2 border-slate-300 focus:outline-none"
+        >
           {profileImageUrl && !imageError ? (
             <img 
               src={profileImageUrl}
@@ -36,11 +55,14 @@ const Header: React.FC = () => {
               )}
             </div>
           )}
-        </div>
+        </button>
+        <HeaderNotificationBell />
         <Button onClick={logout} variant="secondary" className="!px-2 !py-2">
           <LogOut className="h-5 w-5" />
         </Button>
       </div>
+
+      {/* Modal removed in favor of routed /admin/profile page */}
     </header>
   );
 };

@@ -29,10 +29,31 @@ export class BookingRequest {
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'accepted', 'declined', 'awaiting_payment', 'confirmed', 'completed', 'cancelled'],
+    enum: [
+      'pending',
+      'accepted',
+      'declined',
+      'awaiting_payment',
+      'payment_pending',
+      'payment_rejected',
+      'payment_approved',
+      'upcoming',
+      'completed',
+      'cancelled'
+    ],
     default: 'pending',
   })
-  status: 'pending' | 'accepted' | 'declined' | 'awaiting_payment' | 'confirmed' | 'completed' | 'cancelled';
+  status:
+    | 'pending'
+    | 'accepted'
+    | 'declined'
+    | 'awaiting_payment'
+    | 'payment_pending'
+    | 'payment_rejected'
+    | 'payment_approved'
+    | 'upcoming'
+    | 'completed'
+    | 'cancelled';
 
   @Column({ type: 'text', nullable: true })
   payment_proof: string;

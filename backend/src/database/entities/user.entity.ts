@@ -23,10 +23,10 @@ export class User {
 
   @Column({
     type: 'enum',
-    enum: ['tutor', 'tutee', 'admin'],
+    enum: ['tutor', 'tutee', 'admin', 'student'],
     nullable: true,
   })
-  user_type: 'tutor' | 'tutee' | 'admin';
+  user_type: 'tutor' | 'tutee' | 'admin' | 'student';
 
   @Column({
     type: 'enum',

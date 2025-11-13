@@ -43,6 +43,19 @@ async function bootstrap() {
     }
   }));
 
+  // Ensure admin_qr folder exists and serve static files for admin qr images
+  const adminQrDir = join(process.cwd(), 'admin_qr');
+  if (!fs.existsSync(adminQrDir)) {
+    fs.mkdirSync(adminQrDir, { recursive: true });
+  }
+  app.use('/admin_qr', express.static(adminQrDir, {
+    setHeaders: (res, path) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+  }));
+
   // Set a global prefix for all routes except the root path
   app.setGlobalPrefix('api', {
     exclude: ['/']

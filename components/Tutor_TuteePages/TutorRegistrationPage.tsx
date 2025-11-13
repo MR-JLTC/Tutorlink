@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Logo from '../../components/Logo';
 import apiClient from '../../services/api';
+import { mapRoleToStorageKey, setRoleAuth } from '../../utils/authRole';
 import { Page } from '../../types';
 // Subjects now fetched from backend
 import { CheckCircleIcon } from '../../components/icons/CheckCircleIcon';
@@ -1280,6 +1281,10 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         localStorage.setItem('token', accessToken);
         localStorage.setItem('user', JSON.stringify(user));
         console.log('Token stored for authenticated requests');
+        const storageRole = mapRoleToStorageKey(user?.role) ?? mapRoleToStorageKey(user?.user_type);
+        if (storageRole && user) {
+          setRoleAuth(storageRole, user, accessToken);
+        }
       }
       
       // Try different possible response structures
@@ -1418,7 +1423,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     }
   };
 
-  const isModalOpen = typeof isOpen === 'boolean' ? isOpen : true;
+  const isModal = typeof isOpen === 'boolean';
+  const isModalOpen = isModal ? !!isOpen : true;
   const handleCloseModal = () => {
     if (onClose) return onClose();
     try { window.history.back(); } catch {}
@@ -1428,8 +1434,16 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" role="dialog" aria-modal="true">
-        <div className="w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]">
+      <div
+        className={isModal ? "fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" : ""}
+        role={isModal ? "dialog" : undefined}
+        aria-modal={isModal ? "true" : undefined as any}
+      >
+        <div className={
+          isModal
+            ? "w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
+            : "w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+        }>
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
             <div className="flex items-center gap-3">
               <Logo className="h-14 w-14" />
@@ -1438,9 +1452,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <p className="text-slate-600 text-xs sm:text-sm">Share your expertise and start earning.</p>
               </div>
             </div>
-            <button aria-label="Close" onClick={handleCloseModal} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
+            {isModal && (
+              <button aria-label="Close" onClick={handleCloseModal} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            )}
           </div>
           <div className="max-h-[85vh] overflow-y-auto px-4 sm:px-5 py-5 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
             <div className="w-full bg-white/80 backdrop-blur-lg p-4 sm:p-5 rounded-2xl shadow-xl border border-white/50">
@@ -1529,7 +1545,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <button
                   type="button"
                   onClick={handleSendVerificationCode}
-                  disabled={!email || !universityId || emailDomainError || isSendingCode || isEmailVerified}
+                  disabled={!email || !universityId || !!emailDomainError || isSendingCode || isEmailVerified}
                   className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform ${
                     isEmailVerified
                       ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 

@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from './AuthContext';
 import apiClient from '../services/api';
 
 interface VerificationContextType {
@@ -10,13 +10,13 @@ interface VerificationContextType {
   refreshStatus: () => Promise<void>;
 }
 
-export const VerificationContext = createContext<VerificationContextType | undefined>(undefined);
+const VerificationContext = createContext<VerificationContextType | undefined>(undefined);
 
 interface VerificationProviderProps {
   children: ReactNode;
 }
 
-export const VerificationProvider: React.FC<VerificationProviderProps> = ({ children }) => {
+function VerificationProvider({ children }: VerificationProviderProps) {
   const { user } = useAuth();
   const [isVerified, setIsVerified] = useState(false);
   const [applicationStatus, setApplicationStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
@@ -66,12 +66,14 @@ export const VerificationProvider: React.FC<VerificationProviderProps> = ({ chil
       {children}
     </VerificationContext.Provider>
   );
-};
+}
 
-export const useVerification = () => {
+export { VerificationContext, VerificationProvider };
+
+export function useVerification() {
   const context = React.useContext(VerificationContext);
   if (context === undefined) {
     throw new Error('useVerification must be used within a VerificationProvider');
   }
   return context;
-};
+}

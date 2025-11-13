@@ -13,15 +13,18 @@ export class Payment {
   @Column()
   tutor_id: number;
 
+  @Column({ type: 'text', nullable: true })
+  subject?: string;
+
   @Column('decimal', { precision: 10, scale: 2 })
   amount: number;
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'confirmed', 'rejected', 'refunded'],
+    enum: ['pending', 'admin_confirmed', 'confirmed', 'rejected', 'refunded'],
     default: 'pending',
   })
-  status: 'pending' | 'confirmed' | 'rejected' | 'refunded';
+  status: 'pending' | 'admin_confirmed' | 'confirmed' | 'rejected' | 'refunded';
 
   @CreateDateColumn()
   created_at: Date;
@@ -46,4 +49,7 @@ export class Payment {
 
   @Column({ type: 'text', nullable: true })
   admin_note?: string;
+
+  @Column({ type: 'text', nullable: true })
+  admin_payment_proof_url?: string;
 }

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Tutor, User, TutorDocument, TutorAvailability, TutorSubject, TutorSubjectDocument, Subject, Course, University, SubjectApplication, SubjectApplicationDocument, BookingRequest } from '../database/entities';
+import { Tutor, User, TutorDocument, TutorAvailability, TutorSubject, TutorSubjectDocument, Subject, Course, University, SubjectApplication, SubjectApplicationDocument, BookingRequest, Notification, Payment, Student } from '../database/entities';
 import { EmailService } from '../email/email.service';
 import type { Express } from 'express';
 import * as bcrypt from 'bcrypt';
@@ -35,6 +35,12 @@ export class TutorsService {
     private subjectApplicationDocumentRepository: Repository<SubjectApplicationDocument>,
     @InjectRepository(BookingRequest)
     private bookingRequestRepository: Repository<BookingRequest>,
+    @InjectRepository(Notification)
+    private notificationRepository: Repository<Notification>,
+    @InjectRepository(Payment)
+    private paymentRepository: Repository<Payment>,
+    @InjectRepository(Student)
+    private studentRepository: Repository<Student>,
     private emailService: EmailService,
   ) {}
 
@@ -682,7 +688,8 @@ export class TutorsService {
   // New methods for tutor dashboard functionality
 
   async createBookingRequest(tutorId: number, studentUserId: number, data: { subject: string; date: string; time: string; duration: number; student_notes?: string }) {
-    const tutor = await this.tutorsRepository.findOne({ where: { tutor_id: tutorId } });
+  // Load tutor with user relation so we can reference tutor.user.user_id when creating notifications
+  const tutor = await this.tutorsRepository.findOne({ where: { tutor_id: tutorId }, relations: ['user'] });
     if (!tutor) throw new NotFoundException('Tutor not found');
 
     const student = await this.usersRepository.findOne({ where: { user_id: studentUserId } });
@@ -754,8 +761,57 @@ export class TutorsService {
       status: 'pending',
     } as any);
 
+    console.log(`createBookingRequest: About to save booking with tutor_id=${tutor.tutor_id}, tutor entity:`, {
+      tutor_id: tutor.tutor_id,
+      has_tutor: !!(entity as any).tutor,
+      tutor_object: (entity as any).tutor ? { tutor_id: ((entity as any).tutor as any).tutor_id } : 'missing'
+    });
+
     const saved = await this.bookingRequestRepository.save(entity as any);
+    
+    // Verify the saved booking has the correct tutor_id
+    const verifyBooking = await this.bookingRequestRepository.findOne({
+      where: { id: (saved as any).id },
+      relations: ['tutor', 'student']
+    });
+    
     console.log(`createBookingRequest: saved booking id=${(saved as any).id} tutor_id=${tutor.tutor_id} tutor_user_id=${(tutor.user as any)?.user_id} student_user_id=${(student as any)?.user_id}`);
+    console.log(`createBookingRequest: booking details:`, {
+      id: (saved as any).id,
+      subject: (saved as any).subject,
+      date: (saved as any).date,
+      time: (saved as any).time,
+      status: (saved as any).status,
+      tutor_id: tutor.tutor_id,
+      student_id: (student as any)?.user_id,
+      verified_tutor_id: (verifyBooking as any)?.tutor?.tutor_id || (verifyBooking as any)?.tutor_id || 'NOT FOUND'
+    });
+    
+    // Get student user name for notification
+    const studentUserName = (student as any)?.name || 'A student';
+    
+    // Create notification for tutor only (do NOT notify the student to avoid duplicates and empty receiver_id)
+    const tutorNotification = this.notificationRepository.create({
+      userId: (tutor.user as any)?.user_id?.toString(),
+      receiver_id: (tutor.user as any)?.user_id,
+      userType: 'tutor',
+      message: `${studentUserName} has requested a booking for ${data.subject}`,
+      timestamp: new Date(),
+      read: false,
+      sessionDate: data.date,
+      subjectName: data.subject,
+      booking: saved
+    });
+
+    try {
+      console.log(`createBookingRequest: Saving notification for tutor user_id=${(tutor.user as any)?.user_id}`);
+      const savedNotif = await this.notificationRepository.save(tutorNotification as any);
+      console.log(`createBookingRequest: Notification saved id=${(savedNotif as any)?.notification_id}`);
+    } catch (err) {
+      console.error('createBookingRequest: Failed to save tutor notification', err);
+      // Don't throw - booking succeeded; but log for debugging and continue
+    }
+
     return { success: true, bookingId: (saved as any).id };
   }
 
@@ -763,22 +819,96 @@ export class TutorsService {
     const student = await this.usersRepository.findOne({ where: { user_id: studentUserId } });
     if (!student) throw new NotFoundException('Student not found');
 
-    const requests = await this.bookingRequestRepository.find({ where: { student: { user_id: studentUserId } as any }, relations: ['tutor', 'tutor.user'], order: { created_at: 'DESC' } });
+    // Always return the student's booking requests; frontend filters by status
+    const requests = await this.bookingRequestRepository.find({
+      where: { student: { user_id: studentUserId } as any },
+      relations: ['tutor', 'tutor.user'],
+      order: { created_at: 'DESC' }
+    });
     return requests;
   }
 
-  async getTutorStatus(userId: number) {
-    const tutor = await this.tutorsRepository.findOne({ 
-      where: { user: { user_id: userId } },
-      relations: ['user']
-    });
-    if (!tutor) throw new NotFoundException('Tutor not found');
+  async getTutorStatus(idParam: number) {
+    console.log(`[getTutorStatus] 🔍 Starting status check for ID: ${idParam}`);
     
-    return {
-      is_verified: tutor.status === 'approved',
-      status: tutor.status,
+    // Try to find tutor by user_id first with EXACT raw database query
+    const rawQuery = await this.tutorsRepository.query(
+      `SELECT t.*, u.user_id, u.name 
+       FROM tutors t 
+       JOIN users u ON t.user_id = u.user_id 
+       WHERE u.user_id = ?`,
+      [idParam]
+    );
+    console.log('[getTutorStatus] 📝 Raw DB Query Result:', rawQuery);
+
+    let tutor;
+    if (rawQuery && rawQuery.length > 0) {
+      // Use raw query result
+      tutor = rawQuery[0];
+      console.log('[getTutorStatus] ✅ Found tutor by user_id in raw query:', {
+        tutor_id: tutor.tutor_id,
+        user_id: tutor.user_id,
+        raw_status: tutor.status
+      });
+    } else {
+      // Fallback to repository query
+      console.log(`[getTutorStatus] 🔍 Raw query found nothing, trying repository query...`);
+      tutor = await this.tutorsRepository.findOne({ 
+        where: { user: { user_id: idParam } },
+        relations: ['user']
+      });
+
+      if (!tutor) {
+        // Last resort: try by tutor_id
+        console.log(`[getTutorStatus] 🔍 Not found by user_id, trying tutor_id: ${idParam}`);
+        tutor = await this.tutorsRepository.findOne({
+          where: { tutor_id: idParam },
+          relations: ['user']
+        });
+      }
+    }
+    
+    if (!tutor) {
+      console.error(`[getTutorStatus] ❌ Tutor not found for either user_id or tutor_id: ${idParam}`);
+      throw new NotFoundException('Tutor not found');
+    }
+
+    // Log raw tutor data
+    console.log('[getTutorStatus] 📊 Raw tutor data:', {
+      tutor_id: tutor.tutor_id,
+      user_id: tutor.user_id || (tutor.user && tutor.user.user_id),
+      raw_status: tutor.status,
+      status_type: typeof tutor.status
+    });
+    
+    // Debug log raw data from database
+    console.log(`[getTutorStatus] 📊 Raw tutor data from DB:`, {
+      tutor_id: tutor.tutor_id,
+      user_id: tutor.user_id || (tutor.user && tutor.user.user_id),
+      raw_status: tutor.status,
+      status_type: typeof tutor.status,
+      admin_notes: tutor.admin_notes || 'none'
+    });
+    
+    // Normalize status to lowercase for consistency
+    const normalizedStatus = String(tutor.status || '').toLowerCase();
+    const isApproved = normalizedStatus === 'approved';
+    
+    console.log(`[getTutorStatus] 🔄 Status normalization:`, {
+      original_status: tutor.status,
+      normalized_status: normalizedStatus,
+      is_approved: isApproved
+    });
+    
+    const response = {
+      is_verified: isApproved,
+      status: normalizedStatus, // Send normalized status
       admin_notes: tutor.admin_notes || null
     };
+    
+    console.log('[getTutorStatus] ✅ Returning response:', response);
+    
+    return response;
   }
 
   async getTutorId(userId: number): Promise<number> {
@@ -1185,40 +1315,234 @@ export class TutorsService {
       throw new NotFoundException('Tutor not found');
     }
 
-    const requests = await this.bookingRequestRepository.find({
-      where: { tutor: { tutor_id: tutor.tutor_id } as any },
-      relations: ['student'],
+    console.log(`getBookingRequests: Looking for bookings with tutor_id=${tutor.tutor_id}`);
+    
+    // First, let's check if there are any bookings at all for this tutor using raw query
+    const rawCount = await this.bookingRequestRepository
+      .createQueryBuilder('br')
+      .where('br.tutor_id = :tutorId', { tutorId: tutor.tutor_id })
+      .getCount();
+    console.log(`getBookingRequests: Raw count of bookings with tutor_id=${tutor.tutor_id}: ${rawCount}`);
+    
+    // Use QueryBuilder to query by the tutor_id foreign key directly
+    // This is more reliable than using nested object queries
+    // Note: student is already a User entity, not a Student entity, so no need to join student.user
+    const requests = await this.bookingRequestRepository
+      .createQueryBuilder('br')
+      .leftJoinAndSelect('br.student', 'student')
+      .leftJoinAndSelect('br.tutor', 'tutor')
+      .leftJoinAndSelect('tutor.user', 'tutorUser')
+      .where('br.tutor_id = :tutorId', { tutorId: tutor.tutor_id })
+      .orderBy('br.created_at', 'DESC')
+      .getMany();
+    
+    console.log(`getBookingRequests: found ${requests.length} requests for tutor_id=${tutor.tutor_id}`);
+    console.log(`getBookingRequests: booking IDs:`, requests.map((r: any) => ({ 
+      id: r.id, 
+      subject: r.subject, 
+      status: r.status, 
+      date: r.date,
+      tutor_id_in_booking: (r.tutor as any)?.tutor_id || (r as any).tutor_id || 'missing',
+      student_id: (r.student as any)?.user_id || 'missing'
+    })));
+    
+    // Also try alternative query to see if we get different results
+    const altRequests = await this.bookingRequestRepository.find({
+      where: { tutor: tutor } as any,
+      relations: ['student', 'tutor'],
       order: { created_at: 'DESC' }
     });
-    console.log(`getBookingRequests: found ${requests.length} requests for tutor_id=${tutor.tutor_id}`);
+    console.log(`getBookingRequests: Alternative query found ${altRequests.length} requests`);
+    
     return requests;
   }
 
   async updateBookingRequestStatus(bookingId: number, status: 'accepted' | 'declined') {
-    const request = await this.bookingRequestRepository.findOne({ where: { id: bookingId } });
+    const request = await this.bookingRequestRepository.findOne({ 
+      where: { id: bookingId },
+      relations: ['tutor', 'tutor.user', 'student']
+    });
     if (!request) throw new NotFoundException('Booking request not found');
 
+    const student = await this.usersRepository.findOne({
+      where: { user_id: request.student.user_id }
+    });
+    if (!student) throw new NotFoundException('Student not found');
+
+    // Get tutor with full details including hourly rate
+    const tutor = await this.tutorsRepository.findOne({
+      where: { tutor_id: (request.tutor as any).tutor_id },
+      relations: ['user']
+    });
+    if (!tutor) throw new NotFoundException('Tutor not found');
+
+    const acceptanceTime = new Date();
     request.status = status;
     if (status === 'accepted') {
       request.status = 'awaiting_payment';
     }
-    await this.bookingRequestRepository.save(request);
+    const savedRequest = await this.bookingRequestRepository.save(request);
+
+    // Calculate amount based on tutor's hourly rate and booking duration
+    const hourlyRate = Number(tutor.session_rate_per_hour) || 0;
+    const duration = Number(request.duration) || 0;
+    const totalAmount = hourlyRate * duration;
+
+    // Format booking date
+    const bookingDate = new Date(request.date);
+    const formattedDate = bookingDate.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+
+    // Format acceptance date and time
+    const formattedAcceptanceDate = acceptanceTime.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    const formattedAcceptanceTime = acceptanceTime.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const tutorName = (tutor.user as any)?.name || 'Tutor';
+
+    // Create notification for student with detailed message
+    const notificationMessage = status === 'accepted' 
+      ? `${tutorName} has approved your booking on ${formattedDate} for ${duration} hour${duration !== 1 ? 's' : ''}. Please pay the corresponding amount of ₱${totalAmount.toFixed(2)}. Accepted on ${formattedAcceptanceDate} at ${formattedAcceptanceTime}.`
+      : `Your booking request for ${request.subject} was declined.`;
+    
+    // Ensure sessionDate is a Date object
+    const sessionDate = request.date instanceof Date ? request.date : new Date(request.date);
+    
+    const studentNotification = this.notificationRepository.create({
+      userId: student.user_id.toString(),
+      receiver_id: student.user_id,
+      userType: 'tutee',
+      message: notificationMessage,
+      timestamp: acceptanceTime,
+      read: false,
+      sessionDate: sessionDate,
+      subjectName: request.subject,
+      booking: savedRequest
+    });
+    
+    const savedNotification = await this.notificationRepository.save(studentNotification);
+    console.log(`updateBookingRequestStatus: Created notification for student user_id=${student.user_id} about booking approval`);
+    console.log(`updateBookingRequestStatus: Notification ID=${savedNotification.notification_id}, userId=${savedNotification.userId}, userType=${savedNotification.userType}`);
+    console.log(`updateBookingRequestStatus: Message=${notificationMessage.substring(0, 100)}...`);
+
+    // Also create a notification for the tutor about the accepted booking (separate, tutor-scoped)
+    if (status === 'accepted') {
+      const tutorNotification = this.notificationRepository.create({
+        userId: (tutor.user as any)?.user_id?.toString(),
+        receiver_id: (tutor.user as any)?.user_id,
+        userType: 'tutor',
+        message: `You approved a booking with ${(student as any).name || 'a student'} for ${request.subject} on ${formattedDate}.`,
+        timestamp: acceptanceTime,
+        read: false,
+        sessionDate: sessionDate,
+        subjectName: request.subject,
+        booking: savedRequest
+      });
+      await this.notificationRepository.save(tutorNotification);
+      console.log(`updateBookingRequestStatus: Created notification for tutor user_id=${(tutor.user as any)?.user_id} about approval`);
+    }
 
     return { success: true };
   }
 
   async updatePaymentStatus(bookingId: number, status: 'approved' | 'rejected') {
-    const request = await this.bookingRequestRepository.findOne({ where: { id: bookingId } });
+    const request = await this.bookingRequestRepository.findOne({
+      where: { id: bookingId },
+      relations: ['tutor', 'tutor.user', 'student', 'student.user']
+    });
     if (!request) throw new NotFoundException('Booking request not found');
 
     if (status === 'approved') {
-      request.status = 'confirmed';
+      // Tutor confirms after admin approval -> mark as upcoming
+      request.status = 'upcoming';
     } else {
-      request.status = 'pending'; // Reset to pending for admin review
+      request.status = 'payment_rejected';
     }
-    await this.bookingRequestRepository.save(request);
+    const savedRequest = await this.bookingRequestRepository.save(request);
+
+    // Notifications: do NOT notify for upcoming sessions (per requirement).
+    // Only notify when tutor rejects after admin approval.
+    if (status !== 'approved') {
+      const notifications = [
+        // Notify student about rejection
+        this.notificationRepository.create({
+          userId: request.student.user_id.toString(),
+          receiver_id: request.student.user_id,
+          userType: 'tutee',
+          message: `Your payment for the ${request.subject} session was rejected by the tutor. Please try again.`,
+          timestamp: new Date(),
+          read: false,
+          sessionDate: request.date,
+          subjectName: request.subject,
+          booking: savedRequest
+        }),
+        // Notify tutor about rejection (confirmation of action)
+        this.notificationRepository.create({
+          userId: (request.tutor.user as any).user_id.toString(),
+          receiver_id: (request.tutor.user as any).user_id,
+          userType: 'tutor',
+          message: `You rejected the payment for ${request.subject} from ${request.student.name}`,
+          timestamp: new Date(),
+          read: false,
+          sessionDate: request.date,
+          subjectName: request.subject,
+          booking: savedRequest
+        })
+      ];
+      await Promise.all(notifications.map(n => this.notificationRepository.save(n)));
+    }
 
     return { success: true };
+  }
+
+  async uploadPaymentProof(bookingId: number, file: any) {
+    const request = await this.bookingRequestRepository.findOne({
+      where: { id: bookingId },
+      relations: ['tutor', 'tutor.user', 'student']
+    });
+    if (!request) {
+      throw new NotFoundException('Booking request not found');
+    }
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Save file URL and set status back to awaiting_payment for tutor review
+    const fileUrl = `/tutor_documents/${file.filename}`;
+    request.payment_proof = fileUrl;
+    // Keep status consistent with tutor dashboard logic
+    if (request.status === 'pending' || request.status === 'declined' || request.status === 'cancelled') {
+      // Do not allow payment on non-accepted requests
+      throw new BadRequestException('Cannot upload payment proof for this booking status');
+    }
+    // If previously rejected or still awaiting, set to awaiting_payment for review
+    request.status = 'awaiting_payment';
+    const saved = await this.bookingRequestRepository.save(request);
+
+    // Notify tutor that student uploaded a payment proof
+    const notification = this.notificationRepository.create({
+      userId: (request.tutor as any)?.user?.user_id?.toString(),
+      receiver_id: (request.tutor as any)?.user?.user_id,
+      userType: 'tutor',
+      message: `Payment proof uploaded by ${request.student?.name || 'student'} for ${request.subject}`,
+      timestamp: new Date(),
+      read: false,
+      sessionDate: request.date as any,
+      subjectName: request.subject,
+      booking: saved
+    });
+    await this.notificationRepository.save(notification);
+
+    return { success: true, payment_proof: fileUrl };
   }
 
   async getTutorSessions(userId: number) {
@@ -1228,20 +1552,88 @@ export class TutorsService {
   }
 
   async getTutorPayments(userId: number) {
-    // This would need to be implemented based on your payment entity
-    // For now, return empty array
-    return [];
+    // Accept either tutor_id or user.user_id
+    let tutor = await this.tutorsRepository.findOne({ where: { tutor_id: userId as any } });
+    if (!tutor) {
+      tutor = await this.tutorsRepository.findOne({ 
+        where: { user: { user_id: userId } },
+        relations: ['user']
+      });
+    }
+    if (!tutor) {
+      console.warn(`getTutorPayments: Tutor not found for id/user_id=${userId}`);
+      throw new NotFoundException('Tutor not found');
+    }
+
+    // Fetch all payments for this tutor with student and user relations
+    const payments = await this.paymentRepository.find({
+      where: { tutor_id: tutor.tutor_id } as any,
+      relations: ['student', 'student.user', 'tutor', 'tutor.user'],
+      order: { created_at: 'DESC' }
+    });
+
+    // Map to frontend-friendly format
+    return payments.map((p: any) => ({
+      id: p.payment_id,
+      payment_id: p.payment_id,
+      subject: p.subject || null,
+      amount: Number(p.amount),
+      status: p.status, // 'pending', 'confirmed', 'rejected', 'refunded'
+      created_at: p.created_at,
+      student_name: p.student?.user?.name || 'Unknown Student',
+      student_id: p.student_id,
+      tutor_id: p.tutor_id,
+      admin_payment_proof_url: p.admin_payment_proof_url,
+      dispute_status: p.dispute_status,
+      dispute_proof_url: p.dispute_proof_url,
+      admin_note: p.admin_note
+    }));
   }
 
   async getTutorEarningsStats(userId: number) {
-    // This would need to be implemented based on your session and payment entities
-    // For now, return default values
+    // Accept either tutor_id or user.user_id
+    let tutor = await this.tutorsRepository.findOne({ where: { tutor_id: userId as any } });
+    if (!tutor) {
+      tutor = await this.tutorsRepository.findOne({ 
+        where: { user: { user_id: userId } },
+        relations: ['user']
+      });
+    }
+    if (!tutor) {
+      console.warn(`getTutorEarningsStats: Tutor not found for id/user_id=${userId}`);
+      throw new NotFoundException('Tutor not found');
+    }
+
+    // Fetch all payments for this tutor
+    const payments = await this.paymentRepository.find({
+      where: { tutor_id: tutor.tutor_id } as any
+    });
+
+    // Calculate stats from payments
+    const confirmedPayments = payments.filter((p: any) => p.status === 'confirmed');
+    const pendingPayments = payments.filter((p: any) => p.status === 'pending');
+
+    const total_earnings = confirmedPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const pending_earnings = pendingPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+
+    // Get completed bookings (confirmed status)
+    const completedBookings = await this.bookingRequestRepository.find({
+      where: { tutor: { tutor_id: tutor.tutor_id } as any, status: 'confirmed' } as any
+    });
+
+    // Calculate total hours from completed bookings
+    const total_hours = completedBookings.reduce((sum: number, b: any) => sum + Number(b.duration || 0), 0);
+
+    // Get average rating (this would need to be implemented based on rating entity)
+    // For now, return 0
+    const average_rating = 0;
+
     return {
-      total_earnings: 0,
-      pending_earnings: 0,
-      completed_sessions: 0,
-      average_rating: 0,
-      total_hours: 0
+      total_earnings,
+      pending_earnings,
+      completed_sessions: completedBookings.length,
+      average_rating,
+      total_hours
     };
   }
 
