@@ -73,48 +73,50 @@ const PaymentsHistoryPage: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings')}>
-            <div className="flex items-center gap-2"><ArrowLeft className="h-4 w-4"/> Back</div>
-          </Button>
-          <h1 className="text-2xl font-bold">Payments history</h1>
-        </div>
-
-        <div className="flex items-center gap-3 ml-auto">
-          <div className="flex items-center space-x-2">
-            <button className={`px-3 py-1 rounded ${timeframe === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setTimeframe('all')}>All</button>
-            <button className={`px-3 py-1 rounded ${timeframe === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setTimeframe('week')}>1 week</button>
-            <button className={`px-3 py-1 rounded ${timeframe === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setTimeframe('month')}>1 month</button>
+    <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex flex-col gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings')} className="text-xs sm:text-sm !px-2 sm:!px-3 !py-1 sm:!py-1.5 bg-white/20 hover:bg-white/30 text-white border-white/30">
+              <div className="flex items-center gap-1 sm:gap-1.5"><ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4"/> <span className="hidden sm:inline">Back</span></div>
+            </Button>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white">Payments history</h1>
           </div>
 
-          <div>
-            <input type="search" placeholder="Search student name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-3 py-2 border rounded-lg w-64" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+            <div className="flex items-center space-x-1 sm:space-x-2">
+              <button className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-colors touch-manipulation ${timeframe === 'all' ? 'bg-white text-blue-600 shadow-md' : 'bg-white/20 text-white hover:bg-white/30'}`} onClick={() => setTimeframe('all')} style={{ WebkitTapHighlightColor: 'transparent' }}>All</button>
+              <button className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-colors touch-manipulation ${timeframe === 'week' ? 'bg-white text-blue-600 shadow-md' : 'bg-white/20 text-white hover:bg-white/30'}`} onClick={() => setTimeframe('week')} style={{ WebkitTapHighlightColor: 'transparent' }}>1 week</button>
+              <button className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-colors touch-manipulation ${timeframe === 'month' ? 'bg-white text-blue-600 shadow-md' : 'bg-white/20 text-white hover:bg-white/30'}`} onClick={() => setTimeframe('month')} style={{ WebkitTapHighlightColor: 'transparent' }}>1 month</button>
+            </div>
+
+            <div className="w-full sm:w-auto flex-1 sm:flex-none">
+              <input type="search" placeholder="Search student name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="px-3 py-2 border-0 rounded-lg w-full sm:w-64 text-sm bg-white/90 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-white/50" />
+            </div>
           </div>
         </div>
       </div>
 
-      <Card className="p-6">
+      <Card className="p-4 sm:p-6">
         {loading ? (
-          <div className="text-center py-6">Loading...</div>
+          <div className="text-center py-6 text-sm sm:text-base">Loading...</div>
         ) : filteredPayments.length === 0 ? (
-          <div className="text-center py-6 text-slate-500">No payments found</div>
+          <div className="text-center py-6 text-slate-500 text-sm sm:text-base">No payments found</div>
         ) : (
           <div className="space-y-2 max-h-[60vh] overflow-auto p-1">
             {filteredPayments.map(p => (
-              <div key={p.payment_id} className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm hover:shadow-md transition">
-                <div>
-                  <div className="font-medium text-slate-800">{p.student_name || 'Student'}</div>
-                  <div className="text-xs text-slate-500">ID #{p.payment_id} • {new Date(p.created_at).toLocaleString()}{p.subject ? ` • Subject: ${p.subject}` : ''}</div>
+              <div key={p.payment_id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 p-3 bg-white border rounded-lg shadow-sm hover:shadow-md transition">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-sm sm:text-base text-slate-800 break-words">{p.student_name || 'Student'}</div>
+                  <div className="text-xs text-slate-500 break-words">ID #{p.payment_id} • {new Date(p.created_at).toLocaleString()}{p.subject ? ` • Subject: ${p.subject}` : ''}</div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
+                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                  <div className="text-left sm:text-right">
                     <div className="text-sm font-semibold">₱{Number(p.amount).toLocaleString()}</div>
                     <div className="text-xs text-slate-500">{p.status}</div>
                   </div>
                   {p.admin_payment_proof_url && (
-                    <Button variant="secondary" onClick={() => { setProofUrl(getFileUrl(p.admin_payment_proof_url)); setProofOpen(true); }}>
+                    <Button variant="secondary" onClick={() => { setProofUrl(getFileUrl(p.admin_payment_proof_url)); setProofOpen(true); }} className="text-xs sm:text-sm w-full sm:w-auto">
                       View proof
                     </Button>
                   )}

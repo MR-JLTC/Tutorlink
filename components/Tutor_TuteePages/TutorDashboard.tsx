@@ -18,9 +18,9 @@ const TutorDashboard: React.FC = () => {
 
   return (
     <TutorLayout>
-      <div className="p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <div className="lg:col-span-4">
+      <div className="w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-0 lg:gap-6">
+          <div className="lg:col-span-4 w-full">
             <Routes>
               <Route path="/" element={<Navigate to="/tutor-dashboard/application" replace />} />
               <Route path="/application" element={<ApplicationVerification />} />

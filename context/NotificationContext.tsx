@@ -118,6 +118,22 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   }, [refreshNotifications]);
 
+  // Poll for new notifications periodically while the user is authenticated.
+  // This provides near-real-time updates without adding a WS layer.
+  useEffect(() => {
+    let interval: any = null;
+    const token = getActiveToken();
+    if (token) {
+      // Poll every 10 seconds
+      interval = setInterval(() => {
+        refreshNotifications();
+      }, 10000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [refreshNotifications]);
+
   const markAsRead = async (notificationId: number | string) => {
     try {
       await notificationService.markAsRead(notificationId);

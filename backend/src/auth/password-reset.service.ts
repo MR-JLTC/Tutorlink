@@ -17,7 +17,16 @@ export class PasswordResetService {
     private emailService: EmailService,
   ) {}
 
-  async requestPasswordReset(email: string): Promise<{ message: string }> {
+  private normalizeUserType(userType?: string | null): 'admin' | 'tutor' | 'tutee' | undefined {
+    if (!userType) return undefined;
+    if (userType === 'student') return 'tutee';
+    return userType as 'admin' | 'tutor' | 'tutee';
+  }
+
+  async requestPasswordReset(
+    email: string,
+    options?: { requiredUserType?: 'admin' | 'tutor' | 'tutee' },
+  ): Promise<{ message: string }> {
     // Debug: Log the email being searched
     console.log('=== PASSWORD RESET REQUEST DEBUG ===');
     console.log('Searching for email:', email);
@@ -40,9 +49,9 @@ export class PasswordResetService {
     console.log('Trimmed email:', trimmedEmail);
 
     // Find user by email with explicit field selection
-    const user = await this.userRepository.findOne({ 
+    const user = await this.userRepository.findOne({
       where: { email: trimmedEmail },
-      select: ['user_id', 'name', 'email', 'status']
+      select: ['user_id', 'name', 'email', 'status', 'user_type']
     });
 
     // Debug: Check if user was found
@@ -61,12 +70,21 @@ export class PasswordResetService {
       throw new NotFoundException('User not found with this email address');
     }
 
-    // Debug logging
+    const normalizedType = this.normalizeUserType((user as any).user_type);
+    if (options?.requiredUserType && normalizedType !== options.requiredUserType) {
+      console.log('❌ User type mismatch for password reset:', {
+        required: options.requiredUserType,
+        actual: normalizedType,
+      });
+      throw new BadRequestException('Password reset is not available for this account type.');
+    }
+
     console.log('✅ User found for password reset:', {
       user_id: user.user_id,
       name: user.name,
       email: user.email,
       status: user.status,
+      user_type: normalizedType,
     });
     console.log('=== END DEBUG ===');
 
@@ -113,7 +131,8 @@ export class PasswordResetService {
   async verifyCodeAndResetPassword(
     email: string,
     code: string,
-    newPassword: string
+    newPassword: string,
+    options?: { requiredUserType?: 'admin' | 'tutor' | 'tutee' },
   ): Promise<{ message: string }> {
     // Debug: Log the verification attempt
     console.log('=== PASSWORD RESET VERIFICATION DEBUG ===');
@@ -137,9 +156,9 @@ export class PasswordResetService {
     console.log('Trimmed email:', trimmedEmail);
 
     // Find user by email with explicit field selection
-    const user = await this.userRepository.findOne({ 
+    const user = await this.userRepository.findOne({
       where: { email: trimmedEmail },
-      select: ['user_id', 'name', 'email', 'status']
+      select: ['user_id', 'name', 'email', 'status', 'user_type']
     });
 
     // Debug: Check if user was found
@@ -148,11 +167,21 @@ export class PasswordResetService {
       throw new NotFoundException('User not found with this email address');
     }
 
+    const normalizedType = this.normalizeUserType((user as any).user_type);
+    if (options?.requiredUserType && normalizedType !== options.requiredUserType) {
+      console.log('❌ User type mismatch for password verification:', {
+        required: options.requiredUserType,
+        actual: normalizedType,
+      });
+      throw new BadRequestException('Password reset is not available for this account type.');
+    }
+
     console.log('✅ User found for verification:', {
       user_id: user.user_id,
       name: user.name,
       email: user.email,
-      status: user.status
+      status: user.status,
+      user_type: normalizedType,
     });
 
     // Find valid token

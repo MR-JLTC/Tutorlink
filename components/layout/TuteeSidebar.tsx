@@ -63,27 +63,234 @@ const TuteeSidebar: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useToast();
   const [hasPendingPayments, setHasPendingPayments] = useState(false);
+  const [upcomingCount, setUpcomingCount] = useState<number>(0);
 
+  //OLD CODE HERE, BUG IS THE RED DOT IS STILL VISIBLE EVEN
+  //AFTER THE PAYMENT IS CONFIRMED, THE RED DOT SHOULD BE HIDDEN
+  // useEffect(() => {
+  //   const checkPendingPayments = async () => {
+  //     try {
+  //       // Fetch both bookings and payments to check payment status
+  //       const [bookingsResponse, paymentsResponse] = await Promise.all([
+  //         apiClient.get('/users/me/bookings'),
+  //         apiClient.get('/payments').catch(() => ({ data: [] })) // Don't fail if payments endpoint fails
+  //       ]);
+
+  //       // If the server returned an unexpected shape, clear pending flag
+  //       if (!Array.isArray(bookingsResponse.data)) {
+  //         console.warn('checkPendingPayments: unexpected bookings response, clearing pending flag', bookingsResponse.data);
+  //         setHasPendingPayments(false);
+  //         return;
+  //       }
+
+  //       const allBookings = bookingsResponse.data || [];
+  //       const allPayments = paymentsResponse.data || [];
+
+  //       // Filter payments for current user (student)
+  //       const userPayments = allPayments.filter((p: any) => {
+  //         if (user?.user_id) {
+  //           return (p as any).student?.user?.user_id === user.user_id ||
+  //                  (p as any).student_id === (user as any).student_id;
+  //         }
+  //         return false;
+  //       });
+
+  //       // Check for bookings that need payment (awaiting payment, payment pending, payment rejected)
+  //       const relevantBookings = allBookings.filter((booking: any) => {
+  //         const status = (booking?.status || '').toString().toLowerCase().trim();
+  //         return (
+  //           status === 'awaiting_payment' ||
+  //           status === 'payment_pending' ||
+  //           status === 'payment_rejected'
+  //         );
+  //       });
+
+  //       // Check if any relevant booking has a payment that needs attention
+  //       // Hide dot if payment status is 'admin_confirmed' or 'confirmed'
+  //       let shouldShowDot = false;
+
+  //       // Check each relevant booking - need to check ALL bookings before deciding
+  //       for (const booking of relevantBookings) {
+  //         // Find matching payment for this booking
+  //         const matchingPayment = userPayments.find((p: any) => {
+  //           return p.tutor_id === booking.tutor?.tutor_id &&
+  //                  (p.subject === booking.subject || !p.subject);
+  //         });
+          
+  //         if (matchingPayment) {
+  //           // Payment exists - check its status
+  //           const paymentStatus = (matchingPayment.status || '').toLowerCase().trim();
+            
+  //           // Debug logging (can be removed in production)
+  //           console.log('[TuteeSidebar] Booking:', booking.id, 'Payment status:', paymentStatus, 'Payment ID:', matchingPayment.payment_id);
+          
+  //           // ❌ Hide dot for these statuses - payment is confirmed, no action needed
+  //           if (paymentStatus === 'admin_confirmed' || paymentStatus === 'confirmed') {
+  //             // This booking is confirmed, continue checking other bookings
+  //             continue;
+  //           }
+          
+  //           // ✅ Show dot for pending / rejected - payment needs attention
+  //           if (paymentStatus === 'pending' || paymentStatus === 'rejected') {
+  //             console.log('[TuteeSidebar] Found pending/rejected payment, showing dot');
+  //             shouldShowDot = true;
+  //             break; // Found one that needs attention, show dot immediately
+  //           }
+          
+  //           // Unknown status - treat as needing attention to be safe
+  //           console.log('[TuteeSidebar] Unknown payment status:', paymentStatus, 'showing dot to be safe');
+  //           shouldShowDot = true;
+  //           break;
+  //         } else {
+  //           // No payment entity exists yet - booking still needs payment
+  //           console.log('[TuteeSidebar] No payment found for booking:', booking.id, 'showing dot');
+  //           shouldShowDot = true;
+  //           break; // Found one that needs attention, show dot immediately
+  //         }
+  //       }
+        
+  //       // Debug: log final decision
+  //       if (relevantBookings.length > 0) {
+  //         console.log('[TuteeSidebar] Relevant bookings:', relevantBookings.length, 'Should show dot:', shouldShowDot);
+  //       }
+
+  //       // Also check standalone payments (not necessarily linked to bookings yet)
+  //       // Only show dot if they are pending or rejected, NOT if admin_confirmed or confirmed
+  //       if (!shouldShowDot) {
+  //         const standalonePendingPayments = userPayments.filter((p: any) => {
+  //           const paymentStatus = (p.status || '').toLowerCase();
+  //           // Only show dot for pending or rejected, NOT for admin_confirmed or confirmed
+  //           return paymentStatus === 'pending' || paymentStatus === 'rejected';
+  //         });
+
+  //         if (standalonePendingPayments.length > 0) {
+  //           shouldShowDot = true;
+  //         }
+  //       }
+
+  //       setHasPendingPayments(shouldShowDot);
+  //     } catch (error) {
+  //       // On error we should not leave the badge stuck — clear it so the UI doesn't mislead the user
+  //       console.error('Failed to check pending payments:', error);
+  //       setHasPendingPayments(false);
+  //     }
+  //   };
+
+  //   checkPendingPayments();
+  //   // Check more frequently so the badge clears quickly after actions and also when the window regains focus
+  //   const interval = setInterval(checkPendingPayments, 10000);
+  //   const onFocus = () => checkPendingPayments();
+  //   window.addEventListener('focus', onFocus);
+  //   return () => {
+  //     clearInterval(interval);
+  //     window.removeEventListener('focus', onFocus);
+  //   };
+  // }, [user?.user_id]);
+  
   useEffect(() => {
     const checkPendingPayments = async () => {
       try {
-        const response = await apiClient.get('/users/me/bookings');
-        const relevantBookings = (response.data || []).filter((booking: any) => 
-          booking.status === 'awaiting_payment' || 
-          booking.status === 'payment_pending' ||
-          booking.status === 'payment_rejected'
-        );
-        setHasPendingPayments(relevantBookings.length > 0);
-      } catch (error) {
-        console.error('Failed to check pending payments:', error);
+        const [bookingsResponse, paymentsResponse] = await Promise.all([
+          apiClient.get('/users/me/bookings'),
+          apiClient.get('/payments').catch(() => ({ data: [] }))
+        ]);
+  
+        if (!Array.isArray(bookingsResponse.data)) {
+          setHasPendingPayments(false);
+          return;
+        }
+  
+        const allBookings = bookingsResponse.data || [];
+        const allPayments = paymentsResponse.data || [];
+  
+        // Filter payments for current user
+        const userPayments = allPayments.filter((p: any) => {
+          if (!user?.user_id) return false;
+          return (
+            p.student?.user?.user_id === user.user_id ||
+            p.student_id === user.student_id
+          );
+        });
+  
+        // Bookings that require payment attention
+        const relevantBookings = allBookings.filter((booking: any) => {
+          const status = (booking?.status || '').toLowerCase().trim();
+          return (
+            status === 'awaiting_payment' ||
+            status === 'payment_pending' ||
+            status === 'payment_rejected'
+          );
+        });
+  
+        let shouldShowDot = false;
+  
+        for (const booking of relevantBookings) {
+          // Match payment by booking_id
+          const matchingPayment = userPayments.find((p: any) => p.booking_id === booking.id);
+  
+          if (!matchingPayment) {
+            // No payment yet → show dot
+            shouldShowDot = true;
+            break;
+          }
+  
+          const paymentStatus = (matchingPayment.status || '').toLowerCase().trim();
+  
+          // Only show dot for 'pending' or 'rejected'
+          if (paymentStatus === 'pending' || paymentStatus === 'rejected') {
+            shouldShowDot = true;
+            break;
+          }
+  
+          // 'confirmed', 'admin_confirmed', 'refunded' → no dot
+        }
+  
+        setHasPendingPayments(shouldShowDot);
+  
+      } catch (err) {
+        console.error('Failed to check pending payments', err);
+        setHasPendingPayments(false);
       }
     };
-
+  
     checkPendingPayments();
-    // Check for pending payments every minute
-    const interval = setInterval(checkPendingPayments, 60000);
-    return () => clearInterval(interval);
-  }, []);
+    const interval = setInterval(checkPendingPayments, 8000);
+    const onFocus = () => checkPendingPayments();
+  
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [user?.user_id]);
+  
+  
+
+  // Fetch numeric upcoming sessions count for tutee and refresh on focus
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!user?.user_id) {
+        if (mounted) setUpcomingCount(0);
+        return;
+      }
+      try {
+        const res = await apiClient.get('/users/upcoming-sessions/list');
+        const items = res.data?.data || [];
+        if (mounted) setUpcomingCount(Array.isArray(items) ? items.length : 0);
+      } catch (err) {
+        console.error('Failed to load upcoming sessions count (tutee):', err);
+        if (mounted) setUpcomingCount(0);
+      }
+    };
+    load();
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      mounted = false;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [user?.user_id]);
   const { unreadCount, hasUpcomingSessions } = useNotifications();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
@@ -193,8 +400,10 @@ const TuteeSidebar: React.FC = () => {
                   {showNotification && hasPendingPayments && (
                     <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-2" />
                   )}
-                  {showUpcoming && hasUpcomingSessions && (
-                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse ml-2" />
+                  {showUpcoming && upcomingCount > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-600 text-white">
+                      {upcomingCount > 99 ? '99+' : upcomingCount}
+                    </span>
                   )}
                 </div>
               </NavLink>

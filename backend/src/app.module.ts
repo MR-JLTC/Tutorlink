@@ -13,6 +13,7 @@ import * as entities from './database/entities';
 import { LandingModule } from './landing/landing.module';
 import { SubjectsModule } from './subjects/subjects.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ReschedulesModule } from './reschedules/reschedules.module';
 
 @Controller()
 export class AppController {
@@ -60,6 +61,7 @@ export class AppController {
     SubjectsModule,
     EmailModule,
     NotificationsModule,
+  ReschedulesModule,
   ],
   controllers: [AppController],
   providers: [],

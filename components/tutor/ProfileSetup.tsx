@@ -324,40 +324,40 @@ const ProfileSetup: React.FC = () => {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-1">Profile Setup</h1>
-            <p className="text-blue-100">Manage your public profile and payment information</p>
+    <div className="space-y-3 sm:space-y-4 md:space-y-5">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1">Profile Setup</h1>
+            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Manage your public profile and payment information</p>
           </div>
-          <div className="flex items-center gap-3 bg-white/95 backdrop-blur-sm rounded-xl p-2 shadow-md">
-            <div className={`px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-slate-800 border flex items-center space-x-2 ${applicationStatus === 'approved' ? 'border-green-300' : 'border-red-300'}`}>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 md:gap-3 bg-white/95 backdrop-blur-sm rounded-lg sm:rounded-xl p-2 shadow-md w-full sm:w-auto">
+            <div className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs md:text-sm font-semibold text-slate-800 border flex items-center justify-center space-x-1.5 sm:space-x-2 ${applicationStatus === 'approved' ? 'border-green-300' : 'border-red-300'}`}>
               {applicationStatus === 'approved' ? (
                 <>
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Approved</span>
+                  <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
+                  <span className="whitespace-nowrap">Approved</span>
                 </>
               ) : (
                 <>
-                  <X className="h-4 w-4 text-red-600" />
-                  <span>Not Approved</span>
+                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-600 flex-shrink-0" />
+                  <span className="whitespace-nowrap">Not Approved</span>
                 </>
               )}
             </div>
             <div className="flex space-x-2">
               {isEditing ? (
                 <>
-                  <Button variant="secondary" onClick={() => setIsEditing(false)} className="!px-3 !py-2">
+                  <Button variant="secondary" onClick={() => setIsEditing(false)} className="!px-2.5 sm:!px-3 !py-1.5 sm:!py-2 text-[10px] sm:text-xs md:text-sm flex-1 sm:flex-none">
                     Cancel
                   </Button>
-                  <Button onClick={saveProfile} disabled={loading} className="!px-3 !py-2 bg-blue-600 text-white hover:bg-blue-700 shadow-sm">
+                  <Button onClick={saveProfile} disabled={loading} className="!px-2.5 sm:!px-3 !py-1.5 sm:!py-2 bg-blue-600 text-white hover:bg-blue-700 shadow-sm text-[10px] sm:text-xs md:text-sm flex-1 sm:flex-none">
                     {loading ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </>
               ) : (
-                <Button onClick={() => setIsEditing(true)} className="!px-3 !py-2 bg-blue-600 text-white hover:bg-blue-700 shadow-sm flex items-center space-x-2">
-                  <Edit className="h-4 w-4" />
+                <Button onClick={() => setIsEditing(true)} className="!px-2.5 sm:!px-3 !py-1.5 sm:!py-2 bg-blue-600 text-white hover:bg-blue-700 shadow-sm flex items-center justify-center space-x-1.5 sm:space-x-2 text-[10px] sm:text-xs md:text-sm w-full sm:w-auto">
+                  <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
                   <span>Edit Profile</span>
                 </Button>
               )}
@@ -367,10 +367,10 @@ const ProfileSetup: React.FC = () => {
       </div>
 
       {/* Profile Overview */}
-      <Card className="p-5">
-        <div className="mb-5">
+      <Card className="p-4 sm:p-5">
+        <div className="mb-4 sm:mb-5">
           {/* Profile Image */}
-          <div className="flex justify-center mb-4">
+          <div className="flex justify-center mb-3 sm:mb-4">
             {profileImage ? (
               <div className="relative">
                 <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
@@ -482,10 +482,10 @@ const ProfileSetup: React.FC = () => {
           
           {/* Tutor Name and Email - Below Profile Image */}
           <div className="text-center">
-            <h3 className="text-xl font-bold text-slate-800 mb-1">
+            <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">
               {user?.name || 'Tutor'}
             </h3>
-            <p className="text-sm text-slate-600">
+            <p className="text-xs sm:text-sm text-slate-600 break-words">
               {user?.email || ''}
             </p>
           </div>
@@ -493,10 +493,10 @@ const ProfileSetup: React.FC = () => {
         
         <div className="flex-1 min-w-0">
           <div className="flex items-center space-x-4 mb-2">
-            <h2 className="text-2xl font-bold text-slate-800">Your Profile</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Your Profile</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="bg-green-50 p-3 rounded-lg">
               <p className="text-sm font-medium text-green-800">Approved Subjects</p>
               <p className="text-lg font-bold text-green-600">{profile.subjects.length}</p>
@@ -521,10 +521,10 @@ const ProfileSetup: React.FC = () => {
       </Card>
 
       {/* Bio Section */}
-      <Card className="p-5">
-        <h2 className="text-xl font-semibold mb-3 flex items-center">
-          <User className="h-5 w-5 mr-2 text-blue-600" />
-          Bio & Description
+      <Card className="p-4 sm:p-5">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 flex items-center">
+          <User className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-blue-600 flex-shrink-0" />
+          <span>Bio & Description</span>
         </h2>
         
         {isEditing ? (
@@ -555,10 +555,10 @@ const ProfileSetup: React.FC = () => {
       </Card>
 
       {/* Subjects Section */}
-      <Card className="p-5">
-        <h2 className="text-xl font-semibold mb-3 flex items-center">
-          <Star className="h-5 w-5 mr-2 text-blue-600" />
-          Approved Subjects of Expertise
+      <Card className="p-4 sm:p-5">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 flex items-center">
+          <Star className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-blue-600 flex-shrink-0" />
+          <span>Approved Subjects of Expertise</span>
         </h2>
         <div className="flex flex-wrap gap-2">
           {profile.subjects.map((subject, index) => (
@@ -591,15 +591,15 @@ const ProfileSetup: React.FC = () => {
       </Card>
 
       {/* Payment Information */}
-      <Card className="p-5">
-        <h2 className="text-xl font-semibold mb-3 flex items-center">
-          <CreditCard className="h-5 w-5 mr-2 text-green-600" />
-          Payment Information
+      <Card className="p-4 sm:p-5">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 flex items-center">
+          <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-green-600 flex-shrink-0" />
+          <span>Payment Information</span>
         </h2>
         
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5">
               GCash Number
             </label>
             {isEditing ? (
@@ -630,22 +630,22 @@ const ProfileSetup: React.FC = () => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5">
               GCash QR Code
             </label>
             {isEditing ? (
               <div>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleGcashQRChange}
-                    className="flex-1 border-2 border-slate-300 rounded-lg px-3 py-2 bg-white shadow-sm"
+                    className="flex-1 border-2 border-slate-300 rounded-lg px-3 py-2 bg-white shadow-sm text-xs sm:text-sm"
                   />
                   {gcashQR && (
                     <button
                       onClick={() => setGcashQR(null)}
-                      className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                      className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center"
                       title="Remove selected QR code"
                     >
                       <X className="h-4 w-4" />
@@ -653,25 +653,25 @@ const ProfileSetup: React.FC = () => {
                   )}
                 </div>
                 {gcashQR && (
-                  <p className="text-sm text-slate-600 mt-1">Selected: {gcashQR.name}</p>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-1">Selected: {gcashQR.name}</p>
                 )}
               </div>
             ) : (
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <div className="bg-slate-50 p-3 sm:p-4 rounded-lg border border-slate-200 flex justify-center sm:justify-start">
                 {gcashQR ? (
                   <img
                     src={URL.createObjectURL(gcashQR)}
                     alt="GCash QR Preview"
-                    className="w-32 h-32 object-contain border border-slate-200 rounded bg-white"
+                    className="w-24 h-24 sm:w-32 sm:h-32 object-contain border border-slate-200 rounded bg-white"
                   />
                 ) : profile.gcash_qr ? (
                   <img
                     src={getFileUrl(profile.gcash_qr)}
                     alt="GCash QR Code"
-                    className="w-32 h-32 object-contain border border-slate-200 rounded bg-white"
+                    className="w-24 h-24 sm:w-32 sm:h-32 object-contain border border-slate-200 rounded bg-white"
                   />
                 ) : (
-                  <p className="text-slate-500 italic">No GCash QR code uploaded yet</p>
+                  <p className="text-xs sm:text-sm text-slate-500 italic">No GCash QR code uploaded yet</p>
                 )}
               </div>
             )}
@@ -681,18 +681,18 @@ const ProfileSetup: React.FC = () => {
 
       {/* Recent Reviews */}
       {profile.total_reviews > 0 && (
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Student Feedback</h2>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center space-x-2 mb-2">
+        <Card className="p-4 sm:p-6">
+          <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Student Feedback</h2>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-2 mb-2">
               <div className="flex items-center space-x-1">
                 {renderStars(profile.rating)}
               </div>
-              <span className="font-medium text-yellow-800">
+              <span className="text-sm sm:text-base font-medium text-yellow-800">
                 {profile.rating.toFixed(1)} out of 5.0
               </span>
             </div>
-            <p className="text-sm text-yellow-700">
+            <p className="text-xs sm:text-sm text-yellow-700">
               Based on {profile.total_reviews} student review{profile.total_reviews !== 1 ? 's' : ''}
             </p>
           </div>

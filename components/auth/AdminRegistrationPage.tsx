@@ -25,6 +25,7 @@ const RegistrationPage: React.FC = () => {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const mobileLogoIco = new URL('../../assets/images/tutorlink-logo_ico.ico', import.meta.url).href;
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [verificationError, setVerificationError] = useState('');
@@ -157,8 +158,8 @@ const RegistrationPage: React.FC = () => {
       setError("Passwords do not match.");
       return;
     }
-    if (password.length < 7 || password.length > 21) {
-      setError('Password must be between 7 and 21 characters.');
+    if (password.length < 7 || password.length > 13) {
+      setError('Password must be between 7 and 13 characters.');
       return;
     }
     if (emailDomainError) {
@@ -175,7 +176,13 @@ const RegistrationPage: React.FC = () => {
       await register({ name, email, password, user_type: 'admin', ...(universityId ? { university_id: Number(universityId) } : {}) });
       // The register function in AuthContext handles navigation on success
     } catch (err: any) {
-      setError(err.message || 'An unknown error occurred during registration.');
+      const serverMessage = err.response?.data?.message || err.message || 'An unknown error occurred during registration.';
+      const statusCode = err.response?.status;
+      const normalizedMessage =
+        statusCode === 404 || serverMessage?.toString().includes('404')
+          ? '1 Admin Account is permitted.'
+          : serverMessage;
+      setError(normalizedMessage);
       setIsLoading(false);
     }
   };
@@ -214,6 +221,23 @@ const RegistrationPage: React.FC = () => {
 
             {/* Form side */}
             <Card className="!p-8 bg-white/80 border-0 rounded-none md:rounded-l-none">
+              {/* Mobile Header */}
+              <div className="md:hidden mb-6 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="relative group">
+                    <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-2xl blur-xl opacity-40 group-hover:opacity-70 transition-opacity duration-300" />
+                    <div className="relative bg-white/95 backdrop-blur-sm p-4 rounded-2xl shadow-xl border border-white/70 group-hover:scale-105 transition-transform duration-300">
+                      <img src={mobileLogoIco} alt="TutorLink logo" className="h-12 w-12 object-contain" />
+                    </div>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 via-sky-800 to-indigo-800 bg-clip-text text-transparent">
+                    Create Admin Account
+                  </h1>
+                  <p className="text-sm text-slate-600 font-medium mt-2">Connecting Minds, Building Futures</p>
+                </div>
+              </div>
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -241,7 +265,7 @@ const RegistrationPage: React.FC = () => {
                 Email Verification
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 <div>
                   <label className="block text-slate-700 font-semibold mb-2">University(Optional)</label>
                   <select 
@@ -278,16 +302,18 @@ const RegistrationPage: React.FC = () => {
               </div>
 
               {/* Verification Status and Button */}
-              <div className="mt-4 flex items-center justify-between">
-                <div className="flex items-center">
+              <div className="mt-4 space-y-4">
+                <div className="flex items-center text-slate-600">
                   {isEmailVerified ? (
                     <div className="flex items-center text-green-700">
                       <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
                       </svg>
-                      <span className="font-medium">
-                        Email Verified Successfully!
-                      </span>
+                      <span className="font-medium">Email verified successfully!</span>
                     </div>
                   ) : (
                     <div className="flex items-center text-slate-600">
@@ -298,22 +324,22 @@ const RegistrationPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-                
+
                 <button
                   type="button"
                   onClick={handleSendVerificationCode}
                   disabled={!email || emailDomainError || isSendingCode || isEmailVerified}
-                  className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform ${
+                  className={`w-full px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform ${
                     isEmailVerified
-                      ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 
+                      ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default'
                       : !email || emailDomainError
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-lg hover:shadow-xl'
                   }`}
                   title={
                     isEmailVerified
-                      ? 'Email verified ✓' 
-                      : !email 
+                      ? 'Email verified ✓'
+                      : !email
                       ? 'Enter email first'
                       : emailDomainError
                       ? 'Fix email domain error first'
@@ -321,22 +347,22 @@ const RegistrationPage: React.FC = () => {
                   }
                 >
                   {isSendingCode ? (
-                    <div className="flex items-center">
+                    <div className="flex justify-center items-center">
                       <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
                       Sending Code...
                     </div>
                   ) : isEmailVerified ? (
-                    <div className="flex items-center">
+                    <div className="flex justify-center items-center">
                       <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
                       Verified ✓
                     </div>
                   ) : (
-                    <div className="flex items-center">
+                    <div className="flex justify-center items-center">
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                       </svg>
@@ -377,7 +403,7 @@ const RegistrationPage: React.FC = () => {
                     [&::-webkit-strong-password-auto-fill-button]:!hidden`
                   }
                   minLength={7}
-                  maxLength={21}
+                  maxLength={13}
                   placeholder="********"
                 />
                 <button
@@ -457,7 +483,7 @@ const RegistrationPage: React.FC = () => {
                     [&::-webkit-strong-password-auto-fill-button]:!hidden`
                   }
                   minLength={7}
-                  maxLength={21}
+                  maxLength={13}
                   placeholder="********"
                 />
                 <button
@@ -672,20 +698,16 @@ const AdminRegisterSlideshow: React.FC = () => {
   const [index, setIndex] = React.useState(0);
   const slides = React.useMemo(() => [
     {
-      src: 'assets/images/bgp3.jpg',
-      alt: 'Team collaborating on platform operations with laptops',
+      src: 'https://images.unsplash.com/photo-1552581234-26160f608093?q=80&w=2070&auto=format&fit=crop',
+      alt: 'Admin secure registration environment',
     },
     {
-      src: 'assets/images/bgp5.jpg',
-      alt: 'Administrator monitoring online tutoring platform dashboard',
-    },    
-    {
-      src: 'https://images.unsplash.com/photo-1603791440384-56cd371ee9a7?q=80&w=2070&auto=format&fit=crop',
-      alt: 'Team collaborating on student-tutor system management',
+      src: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=2070&auto=format&fit=crop',
+      alt: 'Admin collaboration in modern workspace',
     },
     {
-      src: 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?q=80&w=2070&auto=format&fit=crop',
-      alt: 'Administrator overseeing secure online tutoring operations',
+      src: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=2070&auto=format&fit=crop',
+      alt: 'Admin teamwork in modern office',
     },
   ], []);
 

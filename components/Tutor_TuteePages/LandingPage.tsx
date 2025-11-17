@@ -34,7 +34,8 @@ const LiveStats: React.FC = () => {
     let mounted = true;
     const controller = new AbortController();
 
-    fetch('http://localhost:3000/api/landing/stats', {
+    const backendIP = import.meta.env.VITE_BACKEND_LAPTOP_IP || 'localhost';
+    fetch(`http://${backendIP}:3000/api/landing/stats`, {
       signal: controller.signal
     })
       .then(async (res) => {
@@ -218,7 +219,29 @@ const LandingPage: React.FC = () => {
   const [tuteeModalKey, setTuteeModalKey] = useState(0);
   const [partnerUniversities, setPartnerUniversities] = useState<Array<{ university_id: number; name: string; logo_url?: string; status?: string }>>([]);
 
+  // Detect if device is mobile
+  const isMobileDevice = () => {
+    if (typeof window === 'undefined') return false;
+    // Check for mobile devices using user agent and screen width
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isMobileUserAgent = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+    const isMobileWidth = window.innerWidth <= 768; // Mobile breakpoint
+    return isMobileUserAgent || isMobileWidth;
+  };
+
   const handleNavigate = (path: string) => {
+    // On mobile devices, navigate to full-page routes instead of opening modals
+    if (isMobileDevice()) {
+      if (path === '/TutorRegistrationPage' || path === '/TuteeRegistrationPage') {
+        setIsModalOpen(false);
+        navigate(path);
+        return;
+      }
+      navigate(path);
+      return;
+    }
+
+    // On desktop, open modals
     if (path === '/TutorRegistrationPage') {
       setIsModalOpen(false);
       // Reset tutor modal
@@ -361,11 +384,12 @@ const LandingPage: React.FC = () => {
               Login
             </button>
             <button 
-              className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+              className="hidden sm:block bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
               onClick={() => setIsModalOpen(true)}
             >
               Get Started
             </button>
+
             
             {/* Mobile Menu Button */}
             <button
@@ -453,36 +477,36 @@ const LandingPage: React.FC = () => {
 
       <main>
         {/* Hero Section */}
-        <section className="relative overflow-hidden">
+        <section className="relative overflow-hidden min-h-[85vh] flex items-center justify-center pt-2 pb-8 sm:pb-12 md:pb-16">
           <div className="pointer-events-none absolute -top-24 -right-24 h-72 w-72 rounded-full bg-sky-100 blur-3xl"></div>
           <div className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-indigo-100 blur-3xl"></div>
-          <div className="px-3 sm:px-5 md:px-8 lg:px-16 py-6 md:py-10 xl:py-14 grid md:grid-cols-2 gap-8 md:gap-16 items-center min-h-[72vh] max-w-7xl mx-auto w-full">
-          <div className="hero-text text-center md:text-left space-y-6">
-            <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 leading-tight break-words">
-              Connecting Students with <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-indigo-600">Tutors</span> <br className="hidden sm:inline" /> for Success.
-            </h1>
-            <p className="mt-4 md:mt-6 text-base sm:text-lg md:text-xl text-slate-600 max-w-lg mx-auto md:mx-0 leading-relaxed">
-              Find the perfect local tutor to help you excel in any subject. Personalized learning, simplified.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 lg:gap-8 mt-7 md:mt-10">
-              <button 
-                className="bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-bold py-3.5 px-10 rounded-xl shadow-lg hover:from-sky-700 hover:to-indigo-700 transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1 hover:shadow-2xl"
-                onClick={() => setIsModalOpen(true)}
-              >
-                Get Started Today
-              </button>
-              <button 
-                className="border-2 border-sky-600 text-sky-600 font-bold py-3.5 px-10 rounded-xl hover:bg-sky-600 hover:text-white transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1"
-                onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                Learn More
-              </button>
+          <div className="relative z-10 px-3 sm:px-5 md:px-8 lg:px-16 py-2 sm:py-3 md:py-4 grid md:grid-cols-2 gap-6 sm:gap-8 md:gap-12 lg:gap-16 items-center max-w-7xl mx-auto w-full">
+            <div className="hero-text text-center md:text-left space-y-6">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-extrabold text-slate-900 leading-tight break-words">
+                Connecting Students with <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-600 to-indigo-600">Tutors</span> <br className="hidden sm:inline" /> for Success.
+              </h1>
+              <p className="mt-4 md:mt-6 text-base sm:text-lg md:text-xl text-slate-600 max-w-lg mx-auto md:mx-0 leading-relaxed">
+                Find the perfect local tutor to help you excel in any subject. Personalized learning, simplified.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 md:gap-4 lg:gap-8 mt-7 md:mt-10 justify-center md:justify-start">
+                <button 
+                  className="bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-bold py-3.5 px-10 rounded-xl shadow-lg hover:from-sky-700 hover:to-indigo-700 transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1 hover:shadow-2xl"
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  Get Started Today
+                </button>
+                <button 
+                  className="border-2 border-sky-600 text-sky-600 font-bold py-3.5 px-10 rounded-xl hover:bg-sky-600 hover:text-white transition-all duration-300 text-lg sm:text-xl transform hover:-translate-y-1"
+                  onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+                >
+                  Learn More
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="hero-image aspect-[1.3/1] h-56 xs:h-72 sm:h-80 md:h-96 lg:h-[520px] rounded-2xl overflow-hidden relative shadow-2xl border-4 border-white w-full max-w-[640px] mx-auto md:mx-0">
-            <HeroImageSlider />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-          </div>
+            <div className="hero-image aspect-[1.3/1] h-56 xs:h-72 sm:h-80 md:h-96 lg:h-[520px] rounded-2xl overflow-hidden relative shadow-2xl border-4 border-white w-full max-w-[640px] mx-auto md:mx-0">
+              <HeroImageSlider />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+            </div>
           </div>
         </section>
 

@@ -128,7 +128,7 @@ const TuteeProfile: React.FC = () => {
 
   return (
     <div className="p-6">
-      <ToastContainer position="top-center" />
+      <ToastContainer position="top-center" aria-label="Notification center" />
       <h1 className="text-2xl font-bold mb-4">My Profile</h1>
       <Card className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">

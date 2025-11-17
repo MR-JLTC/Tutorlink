@@ -41,6 +41,8 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [verificationError, setVerificationError] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
   
   // Profile image state
   const [profileImage, setProfileImage] = useState<File | null>(null);
@@ -91,12 +93,50 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
       const response = await apiClient.get(`/auth/email-verification/status?email=${encodeURIComponent(emailToCheck)}&user_type=tutee`);
       if (response.data && response.data.is_verified === 1) {
         setIsEmailVerified(true);
+        // Reset code state when email is already verified
+        setCodeSent(false);
+        setCodeExpiresAt(null);
       } else {
         setIsEmailVerified(false);
       }
     } catch (err) {
       // If API call fails, assume email is not verified
       setIsEmailVerified(false);
+    }
+  };
+
+  const checkActiveVerificationCode = async (emailToCheck: string) => {
+    if (!emailToCheck || !universityId) {
+      setCodeSent(false);
+      setCodeExpiresAt(null);
+      return;
+    }
+
+    try {
+      // Check if there's an active verification code by checking the registry
+      // We'll use a custom endpoint or check the status endpoint with additional info
+      const response = await apiClient.get(`/auth/email-verification/status?email=${encodeURIComponent(emailToCheck)}&user_type=tutee`);
+      
+      // If the response includes code expiration info, use it
+      if (response.data && response.data.verification_expires) {
+        const expiresAt = new Date(response.data.verification_expires).getTime();
+        const now = Date.now();
+        
+        // If code exists and hasn't expired
+        if (expiresAt > now) {
+          setCodeExpiresAt(expiresAt);
+          setCodeSent(true);
+          return;
+        }
+      }
+      
+      // If no active code found, reset state
+      setCodeSent(false);
+      setCodeExpiresAt(null);
+    } catch (err) {
+      // If API call fails, assume no active code
+      setCodeSent(false);
+      setCodeExpiresAt(null);
     }
   };
 
@@ -122,7 +162,10 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
       console.log('Frontend: Verification code response:', response.data);
       
       if (response.data) {
-        setShowVerificationModal(true);
+        // Set code expiration to 10 minutes from now
+        const expirationTime = Date.now() + (10 * 60 * 1000); // 10 minutes
+        setCodeExpiresAt(expirationTime);
+        setCodeSent(true);
         notify('Verification code sent to your email!', 'success');
       }
     } catch (err: any) {
@@ -132,6 +175,13 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
       notify(errorMessage, 'error');
     } finally {
       setIsSendingCode(false);
+    }
+  };
+
+  const handleInputCode = () => {
+    if (codeSent && !isCodeExpired) {
+      setShowVerificationModal(true);
+      setVerificationError('');
     }
   };
 
@@ -157,6 +207,8 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
         setIsEmailVerified(true);
         setShowVerificationModal(false);
         setVerificationCode('');
+        setCodeSent(false);
+        setCodeExpiresAt(null);
         notify('Email verified successfully! You can now submit your registration.', 'success');
       }
     } catch (err: any) {
@@ -232,24 +284,52 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
     if (!formData.email || !universityId) {
       setEmailDomainError(null);
       setIsEmailVerified(false);
+      setCodeSent(false);
+      setCodeExpiresAt(null);
       return;
     }
     const uni = universities.find(u => u.university_id === universityId);
     if (!uni) {
       setEmailDomainError(null);
       setIsEmailVerified(false);
+      setCodeSent(false);
+      setCodeExpiresAt(null);
       return;
     }
     const domain = formData.email.split('@')[1] || '';
     if (!domain || domain.toLowerCase() !== uni.email_domain.toLowerCase()) {
       setEmailDomainError(`Email domain must be ${uni.email_domain}`);
       setIsEmailVerified(false);
+      setCodeSent(false);
+      setCodeExpiresAt(null);
     } else {
       setEmailDomainError(null);
       // Check if email is already verified
       checkEmailVerificationStatus(formData.email);
+      // Check if there's an active verification code
+      checkActiveVerificationCode(formData.email);
     }
   }, [formData.email, universityId, universities]);
+
+  // Check if code has expired
+  const isCodeExpired = useMemo(() => {
+    if (!codeExpiresAt) return true;
+    return Date.now() > codeExpiresAt;
+  }, [codeExpiresAt]);
+
+  // Check expiration periodically
+  useEffect(() => {
+    if (!codeExpiresAt) return;
+    
+    const interval = setInterval(() => {
+      if (Date.now() > codeExpiresAt) {
+        setCodeSent(false);
+        setCodeExpiresAt(null);
+      }
+    }, 1000); // Check every second
+
+    return () => clearInterval(interval);
+  }, [codeExpiresAt]);
 
   const filteredCourses = useMemo(() => {
     return courses.filter((c: any) => {
@@ -463,7 +543,8 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
     );
   }
 
-  const isModalOpen = typeof isOpen === 'boolean' ? isOpen : true;
+  const isModal = typeof isOpen === 'boolean';
+  const isModalOpen = isModal ? !!isOpen : true;
   const handleCloseModal = () => {
     if (onClose) return onClose();
     try { window.history.back(); } catch {}
@@ -482,37 +563,66 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
   if (!isModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" role="dialog" aria-modal="true">
-      <div className="w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
-          <div className="flex items-center gap-2.5">
-            <Logo className="h-12 w-12" />
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Student Registration</h1>
-              <p className="text-slate-600 text-xs sm:text-sm">Create your account to find a tutor.</p>
+    <div 
+      className={isModal ? "fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" : "min-h-screen bg-gradient-to-br from-indigo-50/40 to-sky-50/40"}
+      role={isModal ? "dialog" : undefined}
+      aria-modal={isModal ? "true" : undefined as any}
+    >
+      <div 
+        className={
+          isModal
+            ? "w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
+            : "w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+        }
+      >
+        <div className="flex items-center justify-between px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+            <Logo className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 truncate">Student Registration</h1>
+              <p className="text-slate-600 text-xs sm:text-sm hidden sm:block">Create your account to find a tutor.</p>
             </div>
           </div>
-          <button aria-label="Close" onClick={handleCloseModal} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
+          {isModal ? (
+            <button aria-label="Close" onClick={handleCloseModal} className="p-1.5 sm:p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors flex-shrink-0 ml-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          ) : (
+            <button 
+              type="button"
+              aria-label="Back" 
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onClose) {
+                  onClose();
+                } else {
+                  window.history.back();
+                }
+              }} 
+              className="p-1.5 sm:p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors flex-shrink-0 ml-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            </button>
+          )}
         </div>
-        <div className="max-h-[85vh] overflow-y-auto px-3 sm:px-4 py-4 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
-          <div className="w-full bg-white/80 backdrop-blur-lg p-4 rounded-2xl shadow-xl border border-white/50">
+        <div className="max-h-[85vh] sm:max-h-[90vh] overflow-y-auto px-2 sm:px-3 md:px-4 py-3 sm:py-4 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
+          <div className="w-full bg-white/80 backdrop-blur-lg p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl shadow-xl border border-white/50">
             <form onSubmit={handleSubmit} noValidate className="max-w-5xl mx-auto">
           {/* Email Verification Section */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200 mb-4">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
-              <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 md:p-6 rounded-lg sm:rounded-xl border border-blue-200 mb-3 sm:mb-4">
+            <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-3 sm:mb-4 flex items-center">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
-              Email Verification
+              <span className="truncate">Email Verification</span>
             </h3>
             
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div className="md:col-span-6">
-                <label className="block text-slate-700 font-semibold mb-2">University</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="w-full">
+                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1.5 sm:mb-2">University</label>
               <select
-                  className="w-full min-w-[40ch] px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
                 value={universityId}
                 onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')}
                 required
@@ -523,14 +633,14 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                 ))}
               </select>
             </div>
-             <div className="md:col-span-6">
-                <label className="block text-slate-700 font-semibold mb-2">Email Address</label>
+             <div className="w-full">
+                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1.5 sm:mb-2">Email Address</label>
                 <input 
                   type="email" 
                   value={formData.email} 
                   onChange={handleInputChange} 
                   disabled={!universityId}
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
                     emailDomainError ? 'border-red-400 bg-red-50' : 
                     !universityId ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed' : 
                     'border-slate-300'
@@ -540,96 +650,130 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                   required 
                 />
                 {!universityId && (
-                  <p className="text-sm text-slate-500 mt-2 flex items-center">
-                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1.5 sm:mt-2 flex items-start sm:items-center">
+                    <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Please select a university first to enter your email
+                    <span className="break-words">Please select a university first to enter your email</span>
                   </p>
                 )}
-                {emailDomainError && <p className="text-sm text-red-600 mt-2 flex items-center">
-                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                {emailDomainError && <p className="text-xs sm:text-sm text-red-600 mt-1.5 sm:mt-2 flex items-start sm:items-center">
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5 sm:mt-0" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 000 16zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  {emailDomainError}
+                  <span className="break-words">{emailDomainError}</span>
                 </p>}
               </div>
             </div>
 
             {/* Verification Status and Button */}
-            <div className="mt-3 flex items-center justify-between">
-              <div className="flex items-center">
+            <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center min-w-0 flex-1">
                 {isEmailVerified ? (
-                  <div className="flex items-center text-green-700">
-                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="flex items-center text-green-700 min-w-0">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    <span className="font-medium">
+                    <span className="font-medium text-xs sm:text-sm md:text-base truncate">
                       Email Verified Successfully!
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center text-slate-600">
-                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-center text-slate-600 min-w-0">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
-                    <span>Email verification required to submit registration</span>
+                    <span className="text-xs sm:text-sm md:text-base break-words">Email verification required to submit registration</span>
                   </div>
                 )}
               </div>
               
-              <button
-                type="button"
-                onClick={handleSendVerificationCode}
-                disabled={Boolean(!formData.email || !universityId || emailDomainError || isSendingCode || isEmailVerified)}
-                className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform ${
-                  isEmailVerified
-                    ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 
-                    : !formData.email || !universityId || emailDomainError
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-lg hover:shadow-xl'
-                }`}
-                title={
-                  isEmailVerified
-                    ? 'Email verified ✓' 
-                    : !formData.email || !universityId 
-                    ? 'Enter email and select university first'
-                    : emailDomainError
-                    ? 'Fix email domain error first'
-                    : 'Send verification code'
-                }
-              >
-                {isSendingCode ? (
-                  <div className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Sending Code...
-                  </div>
-                ) : isEmailVerified ? (
-                  <div className="flex items-center">
-                    <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    Verified ✓
-                  </div>
-                ) : (
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleInputCode}
+                  disabled={!codeSent || isCodeExpired || isEmailVerified}
+                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base rounded-lg font-semibold transition-all duration-300 transform flex-shrink-0 ${
+                    isEmailVerified
+                      ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default'
+                      : !codeSent || isCodeExpired
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105 shadow-lg hover:shadow-xl'
+                  }`}
+                  title={
+                    isEmailVerified
+                      ? 'Email verified ✓'
+                      : !codeSent
+                      ? 'Send verification code first'
+                      : isCodeExpired
+                      ? 'Code expired. Please send a new code'
+                      : 'Input verification code'
+                  }
+                >
                   <div className="flex items-center">
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
-                    Send Verification Code
+                    Input Code
                   </div>
-                )}
-              </button>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={handleSendVerificationCode}
+                  disabled={Boolean(!formData.email || !universityId || emailDomainError || isSendingCode || isEmailVerified || (codeSent && !isCodeExpired))}
+                  className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base rounded-lg font-semibold transition-all duration-300 transform flex-shrink-0 ${
+                    isEmailVerified
+                      ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 
+                      : !formData.email || !universityId || emailDomainError || (codeSent && !isCodeExpired)
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-lg hover:shadow-xl'
+                  }`}
+                  title={
+                    isEmailVerified
+                      ? 'Email verified ✓' 
+                      : !formData.email || !universityId 
+                      ? 'Enter email and select university first'
+                      : emailDomainError
+                      ? 'Fix email domain error first'
+                      : (codeSent && !isCodeExpired)
+                      ? 'Code already sent. Use "Input Code" button or wait for expiration'
+                      : 'Send verification code'
+                  }
+                >
+                  {isSendingCode ? (
+                    <div className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending Code...
+                    </div>
+                  ) : isEmailVerified ? (
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Verified ✓
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Send Verification Code
+                    </div>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Other Account Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-5 items-start">
-            <div className="md:col-span-8 max-w-lg">
-              <label className="block text-slate-700 font-semibold mb-1" htmlFor="name">Full Name</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 mb-4 sm:mb-5 items-start">
+            <div className="w-full sm:col-span-2 lg:col-span-8">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1" htmlFor="name">Full Name</label>
               <input 
                 type="text" 
                 id="name" 
@@ -640,14 +784,14 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                   handleInputChange({ target: { name: 'name', value: next } } as any);
                 }} 
                 maxLength={60}
-                className="w-full py-2 pl-4 pr-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                className="w-full py-2 sm:py-2.5 pl-3 sm:pl-4 pr-3 sm:pr-4 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 placeholder="Enter your full name"
                 required 
               />
             </div>
-            <div className="md:col-span-4">
-              <label className="block text-slate-700 font-semibold mb-1" htmlFor="password">Password</label>
-              <div className="relative w-fit">
+            <div className="w-full sm:col-span-2 lg:col-span-4">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1" htmlFor="password">Password</label>
+              <div className="relative w-full">
                 <input 
                   type={showPassword ? "text" : "password"} 
                   id="password" 
@@ -656,7 +800,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                   onChange={handleInputChange} 
                   minLength={7} 
                   maxLength={21} 
-                  className="w-[27ch] px-4 py-2 pr-10 border border-slate-300 rounded-lg 
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 pr-10 sm:pr-12 text-sm sm:text-base border border-slate-300 rounded-lg 
                   [&::-ms-reveal]:hidden 
                   [&::-webkit-credentials-auto-fill-button]:hidden 
                   [&::-webkit-strong-password-auto-fill-button]:hidden" 
@@ -670,7 +814,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                  className="absolute inset-y-0 right-0 pr-2 sm:pr-3 flex items-center text-slate-400 hover:text-slate-600"
                 >
                   {showPassword ? (
                     // Swapped to a cleaner, known-good "Eye" SVG
@@ -680,7 +824,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                       viewBox="0 0 24 24" 
                       strokeWidth={1.5} 
                       stroke="currentColor" 
-                      className="h-5 w-5"
+                      className="h-4 w-4 sm:h-5 sm:w-5"
                     >
                       <path 
                         strokeLinecap="round" 
@@ -701,7 +845,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                       viewBox="0 0 24 24" 
                       strokeWidth={1.5} 
                       stroke="currentColor" 
-                      className="h-5 w-5"
+                      className="h-4 w-4 sm:h-5 sm:w-5"
                     >
                       <path 
                         strokeLinecap="round" 
@@ -713,10 +857,10 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                 </button>
               </div>
             </div>
-            <div className="md:col-span-8 max-w-3xl">
-              <label className="block text-slate-700 font-semibold mb-1">Course</label>
+            <div className="w-full sm:col-span-2 lg:col-span-8">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Course</label>
               <select
-                className={`w-full min-w-[40ch] px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
+                className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
                 value={courseId}
                 onChange={(e) => {
                   const value = e.target.value ? Number(e.target.value) : '';
@@ -734,14 +878,14 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                 ))}
               </select>
             </div>
-            <div className="md:col-span-4 max-w-[18ch]">
-              <label className="block text-slate-700 font-semibold mb-1" htmlFor="yearLevel">Year Level</label>
+            <div className="w-full sm:col-span-2 lg:col-span-4">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1" htmlFor="yearLevel">Year Level</label>
               <select 
                 id="yearLevel" 
                 name="yearLevel" 
                 value={formData.yearLevel} 
                 onChange={handleInputChange} 
-                className="w-[18ch] px-3 py-2 border border-slate-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm sm:text-base border border-slate-300 rounded-lg"
                 required
               >
                 <option value="">Select Year Level</option>
@@ -755,37 +899,37 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
           </div>
           
           {/* Profile Image Upload */}
-          <div className="mb-6">
-            <label className="block text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
+          <div className="mb-4 sm:mb-6">
+            <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
             <input 
               type="file" 
               accept="image/*" 
               onChange={handleProfileImageChange} 
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg"
+              className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg"
             />
             {profileImage && <p className="text-xs text-slate-500 mt-1">Selected: {profileImage.name}</p>}
             <p className="text-xs text-slate-500 mt-1">Upload a photo of yourself (JPG, PNG, or other image formats)</p>
           </div>
           
           <div className="pt-2">
-            <div className="flex items-start gap-2 text-sm text-slate-700">
+            <div className="flex items-start gap-2 text-xs sm:text-sm text-slate-700">
               <input
                 id="accept-terms-tutee"
                 type="checkbox"
                 checked={acceptedTerms}
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
                 disabled={!termsViewed}
-                className={`mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 ${
+                className={`mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0 ${
                   !termsViewed ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               />
-              <label htmlFor="accept-terms-tutee" className="leading-5">
+              <label htmlFor="accept-terms-tutee" className="leading-5 break-words">
                 {termsViewed
                   ? 'I have read and agree to the Student Terms and Conditions.'
                   : 'I agree to the Student Terms and Conditions (please read the terms first).'}
                 <button
                   type="button"
-                  className="ml-2 text-indigo-600 hover:text-indigo-700 underline"
+                  className="ml-1 sm:ml-2 text-indigo-600 hover:text-indigo-700 underline whitespace-nowrap"
                   onClick={() => {
                     setShowTermsModal(true);
                     setTermsScrollProgress(0);
@@ -796,16 +940,16 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
               </label>
             </div>
             {!termsViewed && (
-              <p className="text-xs text-amber-600 mt-1 ml-6 flex items-center">
-                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <p className="text-xs text-amber-600 mt-1 ml-6 sm:ml-7 flex items-start sm:items-center">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5 sm:mt-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
-                Please open and read the Terms and Conditions before accepting.
+                <span className="break-words">Please open and read the Terms and Conditions before accepting.</span>
               </p>
             )}
             <button  
               type="submit" 
-              className={`mt-4 w-full font-bold py-3 px-6 rounded-lg transition-colors ${
+              className={`mt-3 sm:mt-4 w-full font-bold py-2.5 sm:py-3 px-4 sm:px-6 text-sm sm:text-base rounded-lg transition-colors ${
                 isEmailVerified && acceptedTerms && termsViewed
                   ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
                   : 'bg-gray-400 text-gray-600 cursor-not-allowed'

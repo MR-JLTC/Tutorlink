@@ -188,6 +188,13 @@ export class AuthService {
       throw new BadRequestException('Email address not verified. Please complete email verification first.');
     }
 
+    if (registerDto.user_type === 'admin') {
+      const adminExists = await this.usersService.hasAdmin();
+      if (adminExists) {
+        throw new BadRequestException('An admin account already exists. Please log in instead.');
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
     let user;
     if (registerDto.user_type === 'admin') {

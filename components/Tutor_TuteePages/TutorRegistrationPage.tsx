@@ -28,6 +28,7 @@ interface TutorRegistrationModalProps {
 const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, onClose }) => {
   const { notify } = useToast();
   const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set<string>());
+  const [isFileSelecting, setIsFileSelecting] = useState(false);
   const [warningModal, setWarningModal] = useState<{
     show: boolean;
     message: string;
@@ -68,6 +69,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   const [isSendingCode, setIsSendingCode] = useState(false);
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [verificationError, setVerificationError] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
   const [nsfwModel, setNsfwModel] = useState<any>(null);
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const [availability, setAvailability] = useState<Record<string, DayAvailability>>({});
@@ -399,24 +402,52 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     if (!email || !universityId) {
       setEmailDomainError(null);
       setIsEmailVerified(false);
+      setCodeSent(false);
+      setCodeExpiresAt(null);
       return;
     }
     const uni = universities.find(u => u.university_id === universityId);
     if (!uni) {
       setEmailDomainError(null);
       setIsEmailVerified(false);
+      setCodeSent(false);
+      setCodeExpiresAt(null);
       return;
     }
     const domain = email.split('@')[1] || '';
     if (!domain || domain.toLowerCase() !== uni.email_domain.toLowerCase()) {
       setEmailDomainError(`Email domain must be ${uni.email_domain}`);
       setIsEmailVerified(false);
+      setCodeSent(false);
+      setCodeExpiresAt(null);
     } else {
       setEmailDomainError(null);
       // Check if email is already verified
       checkEmailVerificationStatus(email);
+      // Check if there's an active verification code
+      checkActiveVerificationCode(email);
     }
   }, [email, universityId, universities]);
+
+  // Check if code has expired
+  const isCodeExpired = useMemo(() => {
+    if (!codeExpiresAt) return true;
+    return Date.now() > codeExpiresAt;
+  }, [codeExpiresAt]);
+
+  // Check expiration periodically
+  useEffect(() => {
+    if (!codeExpiresAt) return;
+    
+    const interval = setInterval(() => {
+      if (Date.now() > codeExpiresAt) {
+        setCodeSent(false);
+        setCodeExpiresAt(null);
+      }
+    }, 1000); // Check every second
+
+    return () => clearInterval(interval);
+  }, [codeExpiresAt]);
 
   const filteredCourses = useMemo(() => {
     return courses.filter((c: any) => {
@@ -505,6 +536,12 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   }, [availableSubjects, universityId, courseId]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Set file selecting flag to prevent form submission
+    setIsFileSelecting(true);
+    
     if (e.target.files) {
       const files = Array.from(e.target.files);
       const processedFiles: File[] = [];
@@ -527,6 +564,18 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         setUploadedFiles(prev => [...prev, ...processedFiles]);
         notify(`${processedFiles.length} file(s) uploaded successfully!`, 'success');
       }
+      
+      // Reset the input value after processing to allow re-selecting the same file
+      setTimeout(() => {
+        if (e.currentTarget) {
+          e.currentTarget.value = '';
+        }
+        // Reset file selecting flag after a delay to ensure file selection completes
+        setTimeout(() => setIsFileSelecting(false), 300);
+      }, 0);
+    } else {
+      // Reset flag if no files selected
+      setTimeout(() => setIsFileSelecting(false), 300);
     }
   };
 
@@ -897,12 +946,50 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       const response = await apiClient.get(`/auth/email-verification/status?email=${encodeURIComponent(emailToCheck)}&user_type=tutor`);
       if (response.data && response.data.is_verified === 1) {
         setIsEmailVerified(true);
+        // Reset code state when email is already verified
+        setCodeSent(false);
+        setCodeExpiresAt(null);
       } else {
         setIsEmailVerified(false);
       }
     } catch (err) {
       // If API call fails, assume email is not verified
       setIsEmailVerified(false);
+    }
+  };
+
+  const checkActiveVerificationCode = async (emailToCheck: string) => {
+    if (!emailToCheck || !universityId) {
+      setCodeSent(false);
+      setCodeExpiresAt(null);
+      return;
+    }
+
+    try {
+      // Check if there's an active verification code by checking the registry
+      // We'll use a custom endpoint or check the status endpoint with additional info
+      const response = await apiClient.get(`/auth/email-verification/status?email=${encodeURIComponent(emailToCheck)}&user_type=tutor`);
+      
+      // If the response includes code expiration info, use it
+      if (response.data && response.data.verification_expires) {
+        const expiresAt = new Date(response.data.verification_expires).getTime();
+        const now = Date.now();
+        
+        // If code exists and hasn't expired
+        if (expiresAt > now) {
+          setCodeExpiresAt(expiresAt);
+          setCodeSent(true);
+          return;
+        }
+      }
+      
+      // If no active code found, reset state
+      setCodeSent(false);
+      setCodeExpiresAt(null);
+    } catch (err) {
+      // If API call fails, assume no active code
+      setCodeSent(false);
+      setCodeExpiresAt(null);
     }
   };
 
@@ -1094,7 +1181,10 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       console.log('Frontend: Verification code response:', response.data);
       
       if (response.data) {
-        setShowVerificationModal(true);
+        // Set code expiration to 10 minutes from now
+        const expirationTime = Date.now() + (10 * 60 * 1000); // 10 minutes
+        setCodeExpiresAt(expirationTime);
+        setCodeSent(true);
         notify('Verification code sent to your email!', 'success');
       }
     } catch (err: any) {
@@ -1104,6 +1194,13 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       notify(errorMessage, 'error');
     } finally {
       setIsSendingCode(false);
+    }
+  };
+
+  const handleInputCode = () => {
+    if (codeSent && !isCodeExpired) {
+      setShowVerificationModal(true);
+      setVerificationError('');
     }
   };
 
@@ -1129,6 +1226,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         setIsEmailVerified(true);
         setShowVerificationModal(false);
         setVerificationCode('');
+        setCodeSent(false);
+        setCodeExpiresAt(null);
         notify('Email verified successfully! You can now submit your application.', 'success');
       }
     } catch (err: any) {
@@ -1172,6 +1271,13 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Prevent submission if file selection is in progress
+    if (isFileSelecting) {
+      return;
+    }
+    
     if (!email || !password || !universityId || !fullName.trim()) {
       notify('Please enter email, full name, password, and select your university.', 'error');
       return;
@@ -1426,6 +1532,10 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   const isModal = typeof isOpen === 'boolean';
   const isModalOpen = isModal ? !!isOpen : true;
   const handleCloseModal = () => {
+    // Prevent closing if file selection is in progress
+    if (isFileSelecting) {
+      return;
+    }
     if (onClose) return onClose();
     try { window.history.back(); } catch {}
   };
@@ -1435,52 +1545,101 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   return (
     <>
       <div
-        className={isModal ? "fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" : ""}
+        className={isModal ? "fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" : "min-h-screen bg-gradient-to-br from-indigo-50/40 to-sky-50/40"}
         role={isModal ? "dialog" : undefined}
         aria-modal={isModal ? "true" : undefined as any}
+        onClick={(e) => {
+          // Only close if clicking the backdrop directly (not a child element) and file selection is not in progress
+          if (isModal && e.target === e.currentTarget && !isFileSelecting) {
+            handleCloseModal();
+          }
+        }}
       >
-        <div className={
-          isModal
-            ? "w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
-            : "w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
-        }>
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
-            <div className="flex items-center gap-3">
-              <Logo className="h-14 w-14" />
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Tutor Application</h1>
-                <p className="text-slate-600 text-xs sm:text-sm">Share your expertise and start earning.</p>
+        <div 
+          className={
+            isModal
+              ? "w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
+              : "w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+          }
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3.5 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <Logo className="h-10 w-10 sm:h-14 sm:w-14 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 truncate">Tutor Application</h1>
+                <p className="text-slate-600 text-xs sm:text-sm hidden sm:block">Share your expertise and start earning.</p>
               </div>
             </div>
-            {isModal && (
-              <button aria-label="Close" onClick={handleCloseModal} className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors">
+            {isModal ? (
+              <button 
+                type="button"
+                aria-label="Close" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleCloseModal();
+                }} 
+                className="p-1.5 sm:p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors flex-shrink-0 ml-2"
+              >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            ) : (
+              <button 
+                type="button"
+                aria-label="Back" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (onClose) {
+                    onClose();
+                  } else {
+                    window.history.back();
+                  }
+                }} 
+                className="p-1.5 sm:p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors flex-shrink-0 ml-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
               </button>
             )}
           </div>
-          <div className="max-h-[85vh] overflow-y-auto px-4 sm:px-5 py-5 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
-            <div className="w-full bg-white/80 backdrop-blur-lg p-4 sm:p-5 rounded-2xl shadow-xl border border-white/50">
-        <form onSubmit={handleSubmit} className="mx-auto max-w-4xl">
+          <div className="max-h-[85vh] sm:max-h-[90vh] overflow-y-auto px-2 sm:px-4 md:px-5 py-3 sm:py-4 md:py-5 bg-gradient-to-br from-indigo-50/40 to-sky-50/40 relative">
+            <div className="w-full bg-white/80 backdrop-blur-lg p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl shadow-xl border border-white/50">
+        <form 
+          onSubmit={handleSubmit} 
+          id="tutor-registration-form"
+          className="mx-auto max-w-4xl" 
+          noValidate
+          onKeyDown={(e) => {
+            // Prevent form submission on Enter key unless it's the submit button
+            const target = e.target as HTMLElement;
+            const isButton = target.tagName === 'BUTTON';
+            const isSubmitButton = isButton && (target as HTMLButtonElement).type === 'submit';
+            if (e.key === 'Enter' && !isButton && !isSubmitButton) {
+              e.preventDefault();
+            }
+          }}
+        >
           {/* Account Info */}
           <div className="space-y-5 mb-6">
             {/* Email Verification Section */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200 shadow-sm">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 md:p-6 rounded-lg sm:rounded-xl border border-blue-200 shadow-sm">
+              <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-3 sm:mb-4 flex items-center">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                Email Verification
+                <span className="truncate">Email Verification</span>
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="max-w-lg">
-                  <label className="block text-slate-700 font-semibold mb-2">Email Address</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="w-full">
+                  <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1.5 sm:mb-2">Email Address</label>
                   <input 
                     type="email" 
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)} 
                     disabled={!universityId}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                    className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
                       emailDomainError ? 'border-red-400 bg-red-50' : 
                       !universityId ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed' : 
                       'border-slate-300'
@@ -1489,25 +1648,25 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     required 
                   />
                   {!universityId && (
-                    <p className="text-sm text-slate-500 mt-2 flex items-center">
-                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <p className="text-xs sm:text-sm text-slate-500 mt-1.5 sm:mt-2 flex items-start sm:items-center">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      Please select a university first to enter your email
+                      <span className="break-words">Please select a university first to enter your email</span>
                     </p>
                   )}
-                  {emailDomainError && <p className="text-sm text-red-600 mt-2 flex items-center">
-                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  {emailDomainError && <p className="text-xs sm:text-sm text-red-600 mt-1.5 sm:mt-2 flex items-start sm:items-center">
+                    <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5 sm:mt-0" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 000 16zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
-                    {emailDomainError}
+                    <span className="break-words">{emailDomainError}</span>
                   </p>}
                 </div>
                 
-                <div className="w-full max-w-3xl">
-                  <label className="block text-slate-700 font-semibold mb-2">University</label>
+                <div className="w-full">
+                  <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1.5 sm:mb-2">University</label>
                   <select 
-                    className="w-full min-w-[40ch] px-4 py-3 border border-slate-300 rounded-lg focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white" 
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 sm:focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white" 
                     value={universityId} 
                     onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')} 
                     required
@@ -1521,79 +1680,113 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               </div>
 
               {/* Verification Status and Button */}
-              <div className="mt-4 flex items-center justify-between">
-                <div className="flex items-center">
+              <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center min-w-0 flex-1">
                   {isEmailVerified ? (
-                    <div className="flex items-center text-green-700">
-                      <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <div className="flex items-center text-green-700 min-w-0">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      <span className="font-medium">
+                      <span className="font-medium text-xs sm:text-sm md:text-base truncate">
                         Email Verified Successfully!
                       </span>
                     </div>
                   ) : (
-                    <div className="flex items-center text-slate-600">
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex items-center text-slate-600 min-w-0">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
                       </svg>
-                      <span>Email verification required to submit application</span>
+                      <span className="text-xs sm:text-sm md:text-base break-words">Email verification required to submit application</span>
                     </div>
                   )}
                 </div>
                 
-                <button
-                  type="button"
-                  onClick={handleSendVerificationCode}
-                  disabled={!email || !universityId || !!emailDomainError || isSendingCode || isEmailVerified}
-                  className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform ${
-                    isEmailVerified
-                      ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 
-                      : !email || !universityId || emailDomainError
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-lg hover:shadow-xl'
-                  }`}
-                  title={
-                    isEmailVerified
-                      ? 'Email verified ✓' 
-                      : !email || !universityId 
-                      ? 'Enter email and select university first'
-                      : emailDomainError
-                      ? 'Fix email domain error first'
-                      : 'Send verification code'
-                  }
-                >
-                  {isSendingCode ? (
-                    <div className="flex items-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Sending Code...
-                    </div>
-                  ) : isEmailVerified ? (
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      Verified ✓
-                    </div>
-                  ) : (
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleInputCode}
+                    disabled={!codeSent || isCodeExpired || isEmailVerified}
+                    className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base rounded-lg font-semibold transition-all duration-300 transform flex-shrink-0 ${
+                      isEmailVerified
+                        ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default'
+                        : !codeSent || isCodeExpired
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-105 shadow-lg hover:shadow-xl'
+                    }`}
+                    title={
+                      isEmailVerified
+                        ? 'Email verified ✓'
+                        : !codeSent
+                        ? 'Send verification code first'
+                        : isCodeExpired
+                        ? 'Code expired. Please send a new code'
+                        : 'Input verification code'
+                    }
+                  >
                     <div className="flex items-center">
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
-                      Send Verification Code
+                      Input Code
                     </div>
-                  )}
-                </button>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={handleSendVerificationCode}
+                    disabled={!email || !universityId || !!emailDomainError || isSendingCode || isEmailVerified || (codeSent && !isCodeExpired)}
+                    className={`w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base rounded-lg font-semibold transition-all duration-300 transform flex-shrink-0 ${
+                      isEmailVerified
+                        ? 'bg-green-100 text-green-800 border-2 border-green-300 cursor-default' 
+                        : !email || !universityId || emailDomainError || (codeSent && !isCodeExpired)
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700 hover:scale-105 shadow-lg hover:shadow-xl'
+                    }`}
+                    title={
+                      isEmailVerified
+                        ? 'Email verified ✓' 
+                        : !email || !universityId 
+                        ? 'Enter email and select university first'
+                        : emailDomainError
+                        ? 'Fix email domain error first'
+                        : (codeSent && !isCodeExpired)
+                        ? 'Code already sent. Use "Input Code" button or wait for expiration'
+                        : 'Send verification code'
+                    }
+                  >
+                    {isSendingCode ? (
+                      <div className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Sending Code...
+                      </div>
+                    ) : isEmailVerified ? (
+                      <div className="flex items-center">
+                        <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Verified ✓
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Send Verification Code
+                      </div>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Other Account Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-6 bg-white rounded-xl border border-slate-200 shadow-sm items-start">
-              <div className="max-w-lg md:col-span-8">
-                <label className="block text-slate-700 font-semibold mb-1">Full Name</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm items-start">
+              <div className="w-full sm:col-span-2 lg:col-span-8">
+                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Full Name</label>
                 <input 
                   type="text" 
                   value={fullName} 
@@ -1601,15 +1794,15 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     const next = e.target.value.replace(/[^A-Za-z\-\s]/g, '').slice(0, 60);
                     setFullName(next);
                   }} 
-                  className="w-full py-2 pl-4 pr-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full py-2 sm:py-2.5 pl-3 sm:pl-4 pr-3 sm:pr-4 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   placeholder="Enter your full name"
                   required 
                 />
               </div>
               
-              <div className="max-w-sm md:col-span-4">
-                <label className="block text-slate-700 font-semibold mb-1">Password</label>
-                <div className="relative w-fit">
+              <div className="w-full sm:col-span-2 lg:col-span-4">
+                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Password</label>
+                <div className="relative w-full">
                   <input 
                     type={showPassword ? "text" : "password"} 
                     value={password} 
@@ -1626,7 +1819,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                       MozAppearance: 'textfield'
                     }}
                     required 
-                    className="w-[27ch] py-2 pl-4 pr-12 border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
+                    className="w-full py-2 sm:py-2.5 pl-3 sm:pl-4 pr-10 sm:pr-12 text-sm sm:text-base border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
                     placeholder="Desired Password"
                   />
                   <button
@@ -1636,12 +1829,12 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 z-10" 
                   >
                     {showPassword ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4 sm:h-5 sm:w-5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                       </svg>
                     ) : (
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4 sm:h-5 sm:w-5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L6.228 6.228" />
                       </svg>
                     )}
@@ -1649,10 +1842,10 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 </div>
               </div>
               
-              <div className="max-w-3xl md:col-span-12">
-                <label className="block text-slate-700 font-semibold mb-1">Course</label>
+              <div className="w-full sm:col-span-2 lg:col-span-12">
+                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Course</label>
                 <select
-                  className={`w-full px-4 py-2 border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border rounded-lg ${!universityId ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-300'}`}
                   value={courseId}
                   onChange={(e) => {
                     setCourseId(e.target.value || '');
@@ -1672,13 +1865,13 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Additional Info */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6 p-5 bg-white rounded-xl border border-slate-200 shadow-sm items-start">
-            <div className="md:col-span-3">
-              <label className="block text-slate-700 font-semibold mb-1">Year Level</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 md:p-5 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm items-start">
+            <div className="w-full sm:col-span-1 lg:col-span-3">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Year Level</label>
               <select 
                 value={yearLevel} 
                 onChange={(e) => setYearLevel(e.target.value)} 
-                className="w-[18ch] px-3 py-2 border border-slate-300 rounded-lg"
+                className="w-full px-3 py-2 text-sm sm:text-base border border-slate-300 rounded-lg"
                 required
               >
                 <option value="">Select Year Level</option>
@@ -1691,8 +1884,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <option value="Post-Graduate">Post-Graduate</option> */}
               </select>
             </div>
-            <div className="md:col-span-5">
-              <label className="block text-slate-700 font-semibold mb-1">GCash Number</label>
+            <div className="w-full sm:col-span-1 lg:col-span-5">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">GCash Number</label>
               <input 
                 type="tel" 
                 value={gcashNumber} 
@@ -1704,7 +1897,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     setGcashNumber(numbersOnly);
                   }
                 }} 
-                className="w-[20ch] px-3 py-2 border border-slate-300 rounded-lg" 
+                className="w-full px-3 py-2 text-sm sm:text-base border border-slate-300 rounded-lg" 
                 placeholder="09XXXXXXXXX"
                 pattern="09[0-9]{9}"
                 maxLength={11}
@@ -1712,10 +1905,10 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               />
               <p className="text-xs text-slate-500 mt-1">Format: 09XXXXXXXXX (11 digits, numbers only)</p>
             </div>
-            <div className="md:col-span-4">
-              <label className="block text-slate-700 font-semibold mb-1">Session Rate (₱/hour)</label>
-              <div className="relative w-[20ch]">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500">₱</span>
+            <div className="w-full sm:col-span-2 lg:col-span-4">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Session Rate (₱/hour)</label>
+              <div className="relative w-full">
+                <span className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm sm:text-base">₱</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -1724,7 +1917,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     const cleaned = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
                     setSessionRate(cleaned);
                   }}
-                  className="w-full pl-6 pr-2 py-2 border border-slate-300 rounded-lg"
+                  className="w-full pl-6 sm:pl-7 pr-2 sm:pr-3 py-2 text-sm sm:text-base border border-slate-300 rounded-lg"
                   placeholder="e.g., 350"
                 />
               </div>
@@ -1733,8 +1926,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Bio */}
-          <div className="mb-6 max-w-4xl p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-            <label className="block text-slate-700 font-semibold mb-1">Your Bio (why you'd be a great tutor)</label>
+          <div className="mb-4 sm:mb-6 max-w-4xl p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
+            <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Your Bio (why you'd be a great tutor)</label>
             <textarea 
               value={bio} 
               onChange={(e) => {
@@ -1742,13 +1935,13 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 setBio(filtered);
               }} 
               rows={4} 
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500" 
+              className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 sm:focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500" 
               placeholder="Share your peer-to-peer tutoring style, subjects you can help with, relevant study experience, and how you support fellow students." 
             />
           </div>
           {/* Subjects of Expertise */}
-          <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-            <h2 className="block text-slate-700 font-semibold mb-2 text-lg">1. Subjects of Expertise</h2>
+          <div className="p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
+            <h2 className="block text-base sm:text-lg text-slate-700 font-semibold mb-2">1. Subjects of Expertise</h2>
             <div className="flex flex-wrap gap-2 mb-4 min-h-[2.5rem] items-center">
               {Array.from(selectedSubjects).map((subject: string) => (
                 <div key={subject} className="flex items-center bg-indigo-100 text-indigo-800 text-sm font-medium pl-3 pr-2 py-1 rounded-full">
@@ -1772,7 +1965,21 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
             {selectedSubjects.size > 0 && (
               <div className="space-y-4 mb-6">
                 {Array.from(selectedSubjects as Set<string>).map((subject: string) => (
-                  <div key={`files-${subject}`} className="border rounded-lg p-3 bg-slate-50/50">
+                  <div 
+                    key={`files-${subject}`} 
+                    className="border rounded-lg p-3 bg-slate-50/50"
+                    onClick={(e) => {
+                      // Prevent any clicks in this section from bubbling up
+                      if (e.target !== e.currentTarget) {
+                        e.stopPropagation();
+                      }
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.target !== e.currentTarget) {
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
                     <label className="block text-slate-700 font-semibold mb-1">
                       Supporting documents for: <span className="text-indigo-700">{subject}</span>
                       {(subjectFilesMap[subject] || []).length > 0 && (
@@ -1782,22 +1989,66 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                       )}
                     </label>
                     <p className="text-xs text-slate-500 mb-2">Upload proofs (PDF, PNG, JPG, JPEG). At least one file required.</p>
-                    <div className="relative">
+                    <div 
+                      className="relative"
+                      onClick={(e) => {
+                        // Only stop propagation, don't prevent default to allow file input to work
+                        e.stopPropagation();
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onMouseUp={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
                       <input
                         type="file"
                         multiple
                         accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg,image/jpg"
                         onChange={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsFileSelecting(false);
                           const files = Array.from(e.target.files || []);
-                          if (files.length === 0) return;
+                          if (files.length === 0) {
+                            setIsFileSelecting(false);
+                            return;
+                          }
                           setSubjectFilesMap((prev) => ({
                             ...prev,
                             [subject]: [...(prev[subject] || []), ...files],
                           }));
-                          e.currentTarget.value = '';
+                          // Reset the input value after processing to allow re-selecting the same file
+                          setTimeout(() => {
+                            if (e.currentTarget) {
+                              e.currentTarget.value = '';
+                            }
+                          }, 0);
+                        }}
+                        onClick={(e) => {
+                          // Don't prevent default - we need the file picker to open
+                          e.stopPropagation();
+                          setIsFileSelecting(true);
+                        }}
+                        onFocus={(e) => {
+                          e.stopPropagation();
+                          setIsFileSelecting(true);
+                        }}
+                        onBlur={(e) => {
+                          e.stopPropagation();
+                          // Delay resetting the flag to ensure file selection completes
+                          setTimeout(() => setIsFileSelecting(false), 300);
+                        }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                        }}
+                        onMouseUp={(e) => {
+                          e.stopPropagation();
                         }}
                         className="block w-full text-sm text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                         id={`file-input-${subject}`}
+                        form="" // Explicitly disassociate from any parent form
                       />
                       {(subjectFilesMap[subject] || []).length > 0 && (
                         <div className="mt-2">
@@ -1812,7 +2063,9 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                                 <button
                                   type="button"
                                   className="text-red-600 hover:text-red-700 hover:underline flex-shrink-0"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
                                     setSubjectFilesMap((prev) => {
                                       const next = { ...prev };
                                       const arr = [...(next[subject] || [])];
@@ -1956,15 +2209,15 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
 
 
            {/* Availability Scheduling */}
-          <div className="mt-8 p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-            <h2 className="block text-slate-700 font-semibold mb-2 text-lg">2. Weekly Availability</h2>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
+          <div className="mt-6 sm:mt-8 p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
+            <h2 className="block text-base sm:text-lg text-slate-700 font-semibold mb-2">2. Weekly Availability</h2>
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                 <select
                   id="day-to-add"
                   value={dayToAdd}
                   onChange={(e) => setDayToAdd(e.target.value)}
-                  className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+                  className="flex-1 sm:flex-none border border-slate-300 rounded-md px-3 py-2 text-sm"
                 >
                   <option value="">Select a day</option>
                   {remainingDays.map(d => <option key={d} value={d}>{d}</option>)}
@@ -1973,44 +2226,46 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                   type="button"
                   onClick={() => addDay(dayToAdd)}
                   disabled={!dayToAdd}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${!dayToAdd ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+                  className={`w-full sm:w-auto px-4 py-2 rounded-md text-sm font-medium ${!dayToAdd ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
                 >
                   Add
                 </button>
               </div>
 
               {Object.keys(availability).length === 0 && (
-                <p className="text-sm text-slate-500">No availability added yet. Click "Add Day" to begin.</p>
+                <p className="text-xs sm:text-sm text-slate-500">No availability added yet. Click "Add Day" to begin.</p>
               )}
 
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {Object.entries(availability).map(([day, d]) => (
-                  <div key={day} className="p-3 border rounded-lg bg-white">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="font-medium text-slate-800">{day}</div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => addTimeSlot(day)} className="text-sm px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded-md">Add Time</button>
-                        <button type="button" onClick={() => removeDay(day)} className="text-sm px-3 py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-md">Remove Day</button>
+                  <div key={day} className="p-3 sm:p-4 border rounded-lg bg-white">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-2 sm:mb-3">
+                      <div className="font-medium text-sm sm:text-base text-slate-800">{day}</div>
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <button type="button" onClick={() => addTimeSlot(day)} className="flex-1 sm:flex-none text-xs sm:text-sm px-3 py-1.5 sm:py-1 bg-slate-100 hover:bg-slate-200 rounded-md">Add Time</button>
+                        <button type="button" onClick={() => removeDay(day)} className="flex-1 sm:flex-none text-xs sm:text-sm px-3 py-1.5 sm:py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-md">Remove Day</button>
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       {(d as DayAvailability).slots.map((slot, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            type="time"
-                            value={slot.startTime}
-                            onChange={(e) => updateSlotTime(day, idx, 'startTime', e.target.value)}
-                            className="px-2 py-1 border rounded-md text-sm"
-                          />
-                          <span className="text-slate-500">-</span>
-                          <input
-                            type="time"
-                            value={slot.endTime}
-                            onChange={(e) => updateSlotTime(day, idx, 'endTime', e.target.value)}
-                            className="px-2 py-1 border rounded-md text-sm"
-                          />
-                          <button type="button" onClick={() => removeTimeSlot(day, idx)} className="ml-2 text-sm text-red-600">Remove</button>
+                        <div key={idx} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <input
+                              type="time"
+                              value={slot.startTime}
+                              onChange={(e) => updateSlotTime(day, idx, 'startTime', e.target.value)}
+                              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-1 border rounded-md text-xs sm:text-sm"
+                            />
+                            <span className="text-slate-500 text-sm">-</span>
+                            <input
+                              type="time"
+                              value={slot.endTime}
+                              onChange={(e) => updateSlotTime(day, idx, 'endTime', e.target.value)}
+                              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-1 border rounded-md text-xs sm:text-sm"
+                            />
+                          </div>
+                          <button type="button" onClick={() => removeTimeSlot(day, idx)} className="w-full sm:w-auto text-xs sm:text-sm px-3 py-1.5 sm:py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-md">Remove</button>
                         </div>
                       ))}
                     </div>
@@ -2021,50 +2276,69 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Document Upload */}
-          <div className="mt-8 p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-            <h2 className="block text-slate-700 font-semibold mb-2 text-lg">3. Proof Documents</h2>
-            <div className="mb-6">
-              <label className="block text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
+          <div className="mt-6 sm:mt-8 p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
+            <h2 className="block text-base sm:text-lg text-slate-700 font-semibold mb-2">3. Proof Documents</h2>
+            <div className="mb-4 sm:mb-6">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
               <input type="file" 
                accept="image/*" 
                onChange={handleProfileImageChange} 
                disabled={isAnalyzingImage}
-               className={`w-full px-4 py-2 border border-slate-300 rounded-lg ${isAnalyzingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+               className={`w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg ${isAnalyzingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
                />
               {isAnalyzingImage && (
                 <div className="flex items-center mt-2 text-blue-600">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-2 h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="text-sm">Analyzing image content...</span>
+                  <span className="text-xs sm:text-sm">Analyzing image content...</span>
                 </div>
               )}
-              {profileImage && <p className="text-xs text-slate-500 mt-1">Selected: {profileImage.name}</p>}
+              {profileImage && <p className="text-xs text-slate-500 mt-1 truncate">Selected: {profileImage.name}</p>}
             </div>
-            <div className="mb-6">
-              <label className="block text-slate-700 font-semibold mb-1">GCash QR Code (optional)</label>
+            <div className="mb-4 sm:mb-6">
+              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">GCash QR Code (optional)</label>
               <input type="file" 
                accept="image/*" 
                onChange={handleGcashQRImageChange} 
                disabled={isAnalyzingImage}
-               className={`w-full px-4 py-2 border border-slate-300 rounded-lg ${isAnalyzingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+               className={`w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg ${isAnalyzingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
                />
               {isAnalyzingImage && (
                 <div className="flex items-center mt-2 text-blue-600">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-2 h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="text-sm">Analyzing image content...</span>
+                  <span className="text-xs sm:text-sm">Analyzing image content...</span>
                 </div>
               )}
-              {gcashQRImage && <p className="text-xs text-slate-500 mt-1">Selected: {gcashQRImage.name}</p>}
+              {gcashQRImage && <p className="text-xs text-slate-500 mt-1 truncate">Selected: {gcashQRImage.name}</p>}
               <p className="text-xs text-slate-500 mt-1">Upload your GCash QR code for payment processing</p>
             </div>
             {/* Supporting Documents Upload Section */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700">
+            <div 
+              className="space-y-2"
+              onClick={(e) => {
+                // Only prevent default if not interacting with file input
+                const target = e.target as HTMLElement;
+                const isFileInput = target.id === 'file-upload-drag' || target.closest('input[type="file"]') || target.closest('[id^="file-input-"]');
+                
+                if (!isFileInput) {
+                  e.stopPropagation();
+                }
+              }}
+              onMouseDown={(e) => {
+                const target = e.target as HTMLElement;
+                const isFileInput = target.id === 'file-upload-drag' || target.closest('input[type="file"]') || target.closest('[id^="file-input-"]');
+                
+                if (!isFileInput) {
+                  e.stopPropagation();
+                }
+              }}
+            >
+              <label className="block text-xs sm:text-sm font-medium text-slate-700">
                 Supporting Documents <span className="text-red-500">*</span>
               </label>
               <p className="text-xs text-slate-500">
@@ -2073,63 +2347,85 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
 
               {/* Drag and Drop Area */}
               <div 
-                className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-md hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors cursor-pointer"
+                className="mt-1 relative flex justify-center px-3 sm:px-6 pt-4 sm:pt-5 pb-4 sm:pb-6 border-2 border-slate-300 border-dashed rounded-md hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors cursor-pointer"
                 onDragOver={handleDragOver}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                onClick={() => document.getElementById('file-upload-drag')?.click()}
               > 
-                <div className="space-y-1 text-center">
-                  <DocumentArrowUpIcon className="mx-auto h-12 w-12 text-slate-400" />
-                  <div className="text-sm text-slate-600">
+                {/* File input overlay - covers entire area for mobile compatibility */}
+                <input 
+                  id="file-upload-drag"
+                  type="file" 
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                  multiple 
+                  accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg" 
+                  onChange={handleFileChange}
+                  onClick={(e) => {
+                    // Don't prevent default - we need the file picker to open
+                    e.stopPropagation();
+                    setIsFileSelecting(true);
+                  }}
+                  onFocus={(e) => {
+                    e.stopPropagation();
+                    setIsFileSelecting(true);
+                  }}
+                  onBlur={(e) => {
+                    e.stopPropagation();
+                    // Delay resetting the flag to ensure file selection completes
+                    setTimeout(() => setIsFileSelecting(false), 300);
+                  }}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    setIsFileSelecting(true);
+                  }}
+                  form="" // Explicitly disassociate from any parent form
+                />
+                {/* Visual content - positioned behind the input */}
+                <div 
+                  className="space-y-1 text-center relative z-0 pointer-events-none"
+                >
+                  <DocumentArrowUpIcon className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-slate-400" />
+                  <div className="text-xs sm:text-sm text-slate-600">
                     <p>Drag and drop your files here</p>
                     <p className="text-xs text-slate-500 mt-1">or click to browse</p>
                   </div>
                   <p className="text-xs text-slate-500">PDF, DOCX, PNG, JPG, JPEG up to 10MB</p>
-                  <input 
-                    id="file-upload-drag"
-                    type="file" 
-                    className="sr-only" 
-                    multiple 
-                    accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/jpg" 
-                    onChange={handleFileChange} 
-                  />
                 </div>
               </div>
             </div>
 
             {uploadedFiles.length > 0 && (
-              <div className="mt-4">
-                <h4 className="font-semibold text-slate-700">Selected files:</h4>
-                <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-slate-600">
-                  {uploadedFiles.map((file, index) => <li key={index}>{file.name}</li>)}
+              <div className="mt-3 sm:mt-4">
+                <h4 className="font-semibold text-sm sm:text-base text-slate-700">Selected files:</h4>
+                <ul className="list-disc list-inside mt-2 space-y-1 text-xs sm:text-sm text-slate-600">
+                  {uploadedFiles.map((file, index) => <li key={index} className="truncate">{file.name}</li>)}
                 </ul>
               </div>
             )}
           </div>
           </div>
           
-          <div className="pt-4">
-            <div className="flex items-start gap-2 text-sm text-slate-700">
+          <div className="pt-3 sm:pt-4">
+            <div className="flex items-start gap-2 text-xs sm:text-sm text-slate-700">
               <input
                 id="accept-terms"
                 type="checkbox"
                 checked={acceptedTerms}
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
                 disabled={!termsViewed}
-                className={`mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 ${
+                className={`mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0 ${
                   !termsViewed ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
               />
-              <label htmlFor="accept-terms" className="leading-5">
+              <label htmlFor="accept-terms" className="leading-5 break-words">
                 {termsViewed 
                   ? 'I have read and agree to the Tutor Terms and Conditions.'
                   : 'I agree to the Tutor Terms and Conditions (please read the terms first).'
                 }
                 <button 
                   type="button" 
-                  className="ml-2 text-indigo-600 hover:text-indigo-700 underline" 
+                  className="ml-1 sm:ml-2 text-indigo-600 hover:text-indigo-700 underline whitespace-nowrap" 
                   onClick={() => {
                     setShowTermsModal(true);
                     setTermsScrollProgress(0); // Reset progress when opening modal
@@ -2140,22 +2436,61 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               </label>
             </div>
             {!termsViewed && (
-              <p className="text-xs text-amber-600 mt-1 ml-6 flex items-center">
-                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <p className="text-xs text-amber-600 mt-1 ml-6 sm:ml-7 flex items-start sm:items-center">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5 sm:mt-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
-                Please open and read the Terms and Conditions before accepting.
+                <span className="break-words">Please open and read the Terms and Conditions before accepting.</span>
               </p>
             )}
-            <div className="sticky bottom-0 mt-3 bg-gradient-to-t from-white/80 to-transparent pt-3">
+            <div className="sticky bottom-0 mt-3 bg-gradient-to-t from-white/80 to-transparent pt-3 pb-2 z-50 pointer-events-auto">
               <button 
                 type="submit" 
-                className={`w-full font-bold py-3 px-6 rounded-lg transition-colors ${
-                  isEmailVerified && acceptedTerms && termsViewed
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-700' 
+                className={`w-full font-bold py-2.5 sm:py-3 px-4 sm:px-6 text-sm sm:text-base rounded-lg transition-colors relative z-50 ${
+                  isEmailVerified && acceptedTerms && termsViewed && !isFileSelecting
+                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2' 
                     : 'bg-gray-400 text-gray-600 cursor-not-allowed'
                 }`}
-                disabled={!isEmailVerified || !acceptedTerms || !termsViewed}
+                disabled={!isEmailVerified || !acceptedTerms || !termsViewed || isFileSelecting}
+                onClick={(e) => {
+                  // Only prevent if conditions aren't met or file selection is in progress
+                  if (!isEmailVerified || !acceptedTerms || !termsViewed || isFileSelecting) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                  }
+                  
+                  // For mobile devices: directly call handleSubmit to ensure it works
+                  // This is a fallback in case native form submission doesn't trigger on mobile
+                  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+                  
+                  if (isMobile) {
+                    // On mobile, explicitly call handleSubmit
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Create a synthetic form event
+                    const form = e.currentTarget.form || document.getElementById('tutor-registration-form') as HTMLFormElement;
+                    if (form) {
+                      const syntheticEvent = {
+                        preventDefault: () => {},
+                        stopPropagation: () => {},
+                        target: form,
+                        currentTarget: form
+                      } as React.FormEvent<HTMLFormElement>;
+                      handleSubmit(syntheticEvent);
+                    }
+                  }
+                  // On desktop, let the native form submission work (don't prevent default)
+                }}
+                style={{
+                  WebkitTapHighlightColor: 'rgba(99, 102, 241, 0.3)',
+                  touchAction: 'manipulation',
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none',
+                  position: 'relative',
+                  zIndex: 50,
+                  minHeight: '44px' // Ensure minimum touch target size for mobile
+                }}
                 title={
                   !isEmailVerified 
                     ? 'Please verify your email first' 
@@ -2163,6 +2498,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     ? 'Please read the Terms and Conditions first' 
                     : !acceptedTerms 
                     ? 'Please accept the Terms and Conditions' 
+                    : isFileSelecting
+                    ? 'Please wait for file selection to complete'
                     : 'Submit your tutor application'
                 }
               >

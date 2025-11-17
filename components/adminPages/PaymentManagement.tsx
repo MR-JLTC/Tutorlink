@@ -21,6 +21,8 @@ const PaymentManagement: React.FC = () => {
     const [approveModalPayment, setApproveModalPayment] = useState<Payment | null>(null);
     const [approveProofFile, setApproveProofFile] = useState<File | null>(null);
     const [selectedProofModalPayment, setSelectedProofModalPayment] = useState<Payment | null>(null);
+    const [rejectModalPayment, setRejectModalPayment] = useState<Payment | null>(null);
+    const [rejectionReason, setRejectionReason] = useState('');
 
     useEffect(() => {
         const fetchPayments = async () => {
@@ -38,7 +40,7 @@ const PaymentManagement: React.FC = () => {
         fetchPayments();
     }, []);
 
-    const verify = async (paymentId: number, status: 'confirmed' | 'rejected', adminFile?: File | null) => {
+    const verify = async (paymentId: number, status: 'confirmed' | 'rejected', adminFile?: File | null, rejectionReasonText?: string) => {
         try {
             setVerifyingId(paymentId);
             const formData = new FormData();
@@ -50,6 +52,11 @@ const PaymentManagement: React.FC = () => {
                 formData.append('adminProof', adminProofToUse);
             }
             
+            // If rejecting and a rejection reason is provided, include it
+            if (status === 'rejected' && rejectionReasonText) {
+                formData.append('rejection_reason', rejectionReasonText);
+            }
+            
             // Let the browser set the multipart Content-Type (including boundary).
             // Manually setting it can prevent the file from being sent correctly.
             await apiClient.patch(`/payments/${paymentId}/verify`, formData);
@@ -58,6 +65,8 @@ const PaymentManagement: React.FC = () => {
             setPayments(response.data);
             setApproveModalPayment(null);
             setApproveProofFile(null);
+            setRejectModalPayment(null);
+            setRejectionReason('');
             setSelectedProofModalPayment(null);
         } finally {
             setVerifyingId(null);
@@ -92,8 +101,8 @@ const PaymentManagement: React.FC = () => {
 
     return (
         <div>
-            <div className="flex items-center gap-4 mb-6">
-                <h1 className="text-3xl font-bold text-slate-800">Payment Management</h1>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Payment Management</h1>
                 {pendingCount > 0 && (
                     <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
                         {pendingCount} pending
@@ -101,7 +110,8 @@ const PaymentManagement: React.FC = () => {
                 )}
             </div>
             <Card>
-                <div className="overflow-x-auto">
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
@@ -120,7 +130,7 @@ const PaymentManagement: React.FC = () => {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">#{payment.payment_id}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.student?.user?.name || 'N/A'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.tutor?.user?.name || 'N/A'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${Number(payment.amount).toFixed(2)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₱{Number(payment.amount).toFixed(2)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(payment.created_at).toLocaleDateString()}</td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[payment.status]}`}>
@@ -129,7 +139,7 @@ const PaymentManagement: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right">
                                         <div className="inline-flex items-center gap-2">
-                                            <Button variant="secondary" onClick={() => { setSelectedPayment(payment); setDisputeStatus(payment.dispute_status || 'none'); setAdminNote(payment.admin_note || ''); }}>Dispute</Button>
+                                            {/* <Button variant="secondary" onClick={() => { setSelectedPayment(payment); setDisputeStatus(payment.dispute_status || 'none'); setAdminNote(payment.admin_note || ''); }}>Dispute</Button> */}
                                                 {/* View student's uploaded proof (opens modal) */}
                                                 {payment.dispute_proof_url && (
                                                     <Button variant="secondary" onClick={() => { setSelectedProofModalPayment(payment); }}>View Proof</Button>
@@ -142,7 +152,7 @@ const PaymentManagement: React.FC = () => {
                                                     >
                                                         Approve
                                                     </Button>
-                                                    <Button variant="danger" onClick={() => verify(payment.payment_id, 'rejected')} disabled={verifyingId === payment.payment_id}>Reject</Button>
+                                                    <Button variant="danger" onClick={() => setRejectModalPayment(payment)} disabled={verifyingId === payment.payment_id}>Reject</Button>
                                                 </>
                                             )}
                                             {payment.status === 'confirmed' && (payment as any).admin_payment_proof_url && (
@@ -161,6 +171,92 @@ const PaymentManagement: React.FC = () => {
                             ))}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                    {payments.map((payment) => (
+                        <Card key={payment.payment_id} className="p-4">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-xs text-slate-500">Payment ID</p>
+                                        <p className="font-semibold text-slate-900">#{payment.payment_id}</p>
+                                    </div>
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusColors[payment.status]}`}>
+                                        {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <p className="text-slate-500 text-xs mb-1">Student</p>
+                                        <p className="font-medium text-slate-900 truncate">{payment.student?.user?.name || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500 text-xs mb-1">Tutor</p>
+                                        <p className="font-medium text-slate-900 truncate">{payment.tutor?.user?.name || 'N/A'}</p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <p className="text-slate-500 text-xs mb-1">Amount</p>
+                                        <p className="font-medium text-slate-900">${Number(payment.amount).toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500 text-xs mb-1">Date</p>
+                                        <p className="font-medium text-slate-900">{new Date(payment.created_at).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
+                                    {/* <Button 
+                                        variant="secondary" 
+                                        onClick={() => { setSelectedPayment(payment); setDisputeStatus(payment.dispute_status || 'none'); setAdminNote(payment.admin_note || ''); }} 
+                                        className="text-xs flex-1 sm:flex-none"
+                                    >
+                                        Dispute
+                                    </Button> */}
+                                    {payment.dispute_proof_url && (
+                                        <Button 
+                                            variant="secondary" 
+                                            onClick={() => { setSelectedProofModalPayment(payment); }} 
+                                            className="text-xs flex-1 sm:flex-none"
+                                        >
+                                            View Proof
+                                        </Button>
+                                    )}
+                                    {payment.status === 'pending' && (
+                                        <>
+                                            <Button 
+                                                onClick={() => setApproveModalPayment(payment)} 
+                                                disabled={verifyingId === payment.payment_id}
+                                                className="text-xs flex-1 sm:flex-none"
+                                            >
+                                                Approve
+                                            </Button>
+                                            <Button 
+                                                variant="danger" 
+                                                onClick={() => setRejectModalPayment(payment)} 
+                                                disabled={verifyingId === payment.payment_id}
+                                                className="text-xs flex-1 sm:flex-none"
+                                            >
+                                                Reject
+                                            </Button>
+                                        </>
+                                    )}
+                                    {payment.status === 'confirmed' && (payment as any).admin_payment_proof_url && (
+                                        <a 
+                                            href={getFileUrl((payment as any).admin_payment_proof_url)} 
+                                            target="_blank" 
+                                            rel="noreferrer"
+                                            className="text-xs text-green-600 hover:text-green-700 underline flex-1 sm:flex-none text-center"
+                                        >
+                                            View proof
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </Card>
+                    ))}
                 </div>
             </Card>
 
@@ -255,6 +351,57 @@ const PaymentManagement: React.FC = () => {
                 </Modal>
             )}
 
+            {/* Reject Payment Modal */}
+            {rejectModalPayment && (
+                <Modal 
+                    isOpen={true} 
+                    onClose={() => { setRejectModalPayment(null); setRejectionReason(''); }} 
+                    title={`Reject Payment #${rejectModalPayment.payment_id}`}
+                    footer={
+                        <div className="flex items-center gap-2">
+                            <Button variant="secondary" onClick={() => { setRejectModalPayment(null); setRejectionReason(''); }}>Cancel</Button>
+                            <Button 
+                                variant="danger"
+                                onClick={() => {
+                                    if (!rejectionReason.trim()) {
+                                        alert('Please provide a rejection reason');
+                                        return;
+                                    }
+                                    verify(rejectModalPayment.payment_id, 'rejected', null, rejectionReason.trim());
+                                }} 
+                                disabled={verifyingId === rejectModalPayment.payment_id || !rejectionReason.trim()}
+                            >
+                                Confirm Reject
+                            </Button>
+                        </div>
+                    }
+                >
+                    <div className="space-y-4">
+                        <div className="text-sm text-slate-700">
+                            <p><strong>Student:</strong> {rejectModalPayment.student?.user?.name || 'N/A'}</p>
+                            <p><strong>Tutor:</strong> {rejectModalPayment.tutor?.user?.name || 'N/A'}</p>
+                            <p><strong>Amount:</strong> ₱{Number(rejectModalPayment.amount).toFixed(2)}</p>
+                            <p><strong>Subject:</strong> {(rejectModalPayment as any).subject || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                                Rejection Reason <span className="text-red-500">*</span>
+                            </label>
+                            <textarea 
+                                className="w-full border border-slate-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500" 
+                                rows={4} 
+                                value={rejectionReason} 
+                                onChange={(e) => setRejectionReason(e.target.value)}
+                                placeholder="Please provide a reason for rejecting this payment (e.g., Payment proof is unclear, Amount mismatch, etc.)"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                                This reason will be shown to the student to help them understand why their payment was rejected.
+                            </p>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
             {/* Student proof modal: lets admin view the tutee-uploaded proof and Approve/Reject from the same modal */}
             {selectedProofModalPayment && (
                 <Modal
@@ -266,7 +413,7 @@ const PaymentManagement: React.FC = () => {
                         <div className="text-sm text-slate-700">
                             <p><strong>Student:</strong> {selectedProofModalPayment.student?.user?.name || 'N/A'}</p>
                             <p><strong>Tutor:</strong> {selectedProofModalPayment.tutor?.user?.name || 'N/A'}</p>
-                            <p><strong>Amount:</strong> ${Number(selectedProofModalPayment.amount).toFixed(2)}</p>
+                            <p><strong>Amount:</strong> ₱{Number(selectedProofModalPayment.amount).toFixed(2)}</p>
                         </div>
                         <div className="flex justify-center">
                             <img src={getFileUrl((selectedProofModalPayment as any).dispute_proof_url || (selectedProofModalPayment as any).dispute_proof_url)} alt="Payment proof" className="max-h-[70vh] object-contain border rounded" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=No+Image'; }} />

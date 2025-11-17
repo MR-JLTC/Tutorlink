@@ -338,56 +338,54 @@ const SessionHandlingContent: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6">
       <ToastContainer />
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-1 flex items-center gap-3">
-              <MessageSquare className="h-8 w-8" />
-              Session Handling
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-2.5 md:gap-3">
+              <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+              <span className="truncate">Session Handling</span>
             </h1>
-            <p className="text-blue-100">Manage booking requests and payment confirmations</p>
+            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Manage booking requests and payment confirmations</p>
           </div>
         </div>
       </div>
 
-    
-
   {/* Stats Cards */}
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-5 shadow">
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3 md:gap-4">
+        <Card className="p-3 sm:p-4 md:p-5 shadow -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-2.5 bg-blue-100 rounded-lg mr-3">
-              <MessageSquare className="h-5 w-5 text-blue-600" />
+            <div className="p-1.5 sm:p-2 md:p-2.5 bg-blue-100 rounded-lg mr-2 sm:mr-3 flex-shrink-0">
+              <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-blue-600" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total Requests</p>
-              <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Total Requests</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">{stats.total}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-5 shadow">
+        <Card className="p-3 sm:p-4 md:p-5 shadow -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-2.5 bg-yellow-100 rounded-lg mr-3">
-              <Clock className="h-5 w-5 text-yellow-600" />
+            <div className="p-1.5 sm:p-2 md:p-2.5 bg-yellow-100 rounded-lg mr-2 sm:mr-3 flex-shrink-0">
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-yellow-600" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Pending</p>
-              <p className="text-2xl font-bold text-slate-800">{stats.pending}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Pending</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">{stats.pending}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-5 shadow">
+        <Card className="p-3 sm:p-4 md:p-5 shadow -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-2.5 bg-orange-100 rounded-lg mr-3">
-              <AlertCircle className="h-5 w-5 text-orange-600" />
+            <div className="p-1.5 sm:p-2 md:p-2.5 bg-orange-100 rounded-lg mr-2 sm:mr-3 flex-shrink-0">
+              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-orange-600" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Awaiting Payment</p>
-              <p className="text-2xl font-bold text-slate-800">{stats.awaiting_payment}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Awaiting Payment</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">{stats.awaiting_payment}</p>
             </div>
           </div>
         </Card>
@@ -396,8 +394,8 @@ const SessionHandlingContent: React.FC = () => {
       </div>
 
       {/* Filter Tabs */}
-      <Card className="p-4">
-        <div className="flex space-x-1">
+      <Card className="p-2.5 sm:p-3 md:p-4 -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex flex-wrap gap-1 sm:gap-1.5">
           {[
             { key: 'all', label: 'All Requests' },
             { key: 'pending', label: 'Pending' },
@@ -407,21 +405,22 @@ const SessionHandlingContent: React.FC = () => {
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key as any)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 rounded-lg text-[10px] sm:text-xs md:text-sm font-medium transition-colors touch-manipulation ${
                 filter === tab.key
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
               }`}
+              style={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              <span className="inline-flex items-center space-x-2">
+              <span className="inline-flex items-center space-x-1 sm:space-x-1.5 md:space-x-2">
                 <span>{tab.label}</span>
                 {tab.key === 'pending' && hasUnreviewedBookings && (
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                  <span className="inline-flex items-center justify-center px-1 sm:px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">
                     {stats.pending}
                   </span>
                 )}
                 {tab.key === 'awaiting_payment' && hasUnreviewedPaymentProof && (
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">
+                  <span className="inline-flex items-center justify-center px-1 sm:px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200">
                     New
                   </span>
                 )}
@@ -432,12 +431,12 @@ const SessionHandlingContent: React.FC = () => {
       </Card>
 
       {/* Booking Requests */}
-      <div className="space-y-4">
+      <div className="space-y-3 sm:space-y-4">
         {filteredRequests.length === 0 ? (
-          <Card className="p-8 text-center">
-            <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No booking requests</h3>
-            <p className="text-gray-500">
+          <Card className="p-6 sm:p-8 text-center">
+            <MessageSquare className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No booking requests</h3>
+            <p className="text-sm sm:text-base text-gray-500">
               {filter === 'all' 
                 ? "You haven't received any booking requests yet."
                 : `No ${filter.replace('_', ' ')} requests found.`
@@ -446,11 +445,11 @@ const SessionHandlingContent: React.FC = () => {
           </Card>
         ) : (
           filteredRequests.map(request => (
-            <Card key={request.id} className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-lg font-semibold text-slate-800">
+            <Card key={request.id} className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0 mb-2.5 sm:mb-3 md:mb-4">
+                <div className="flex-1 min-w-0 w-full sm:w-auto">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 mb-2">
+                        <h3 className="text-sm sm:text-base md:text-lg font-semibold text-slate-800 break-words">
                           {request.student.name}
                         </h3>
                         <button
@@ -499,22 +498,23 @@ const SessionHandlingContent: React.FC = () => {
                               setTuteeProfileLoading(false);
                             }
                           }}
-                          className="inline-flex items-center justify-center p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600"
+                          className="inline-flex items-center justify-center p-1 rounded-md bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 touch-manipulation"
                           title="View tutee profile"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
-                          <Eye className="h-4 w-4" />
+                          <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </button>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(request.status)}`}>
-                      <div className="flex items-center space-x-1">
+                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium border flex-shrink-0 ${getStatusColor(request.status)}`}>
+                      <div className="flex items-center space-x-0.5 sm:space-x-1">
                         {getStatusIcon(request.status)}
-                        <span>{request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}</span>
+                        <span className="whitespace-nowrap">{request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}</span>
                       </div>
                     </span>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-600">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 md:gap-4 text-[10px] sm:text-xs md:text-sm text-slate-600 mt-2">
                     <div>
-                      <p><strong>Subject:</strong> {request.subject}</p>
+                      <p className="break-words"><strong>Subject:</strong> {request.subject}</p>
                       <p><strong>Date:</strong> {new Date(request.date).toLocaleDateString()}</p>
                     </div>
                     <div>
@@ -524,8 +524,8 @@ const SessionHandlingContent: React.FC = () => {
                   </div>
                   
                   {request.student_notes && (
-                    <div className="mt-3 p-3 bg-slate-50 rounded-lg">
-                      <p className="text-sm text-slate-700">
+                    <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
+                      <p className="text-[10px] sm:text-xs md:text-sm text-slate-700 break-words">
                         <strong>Student Notes:</strong> {request.student_notes}
                       </p>
                     </div>
@@ -536,18 +536,18 @@ const SessionHandlingContent: React.FC = () => {
               {/* Payment proof review moved to admin. Tutors cannot view or approve payment proofs. */}
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-200">
-                <div className="text-xs text-slate-500">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 pt-2.5 sm:pt-3 md:pt-4 border-t border-slate-200">
+                <div className="text-[10px] sm:text-xs text-slate-500">
                   Requested on {new Date(request.created_at).toLocaleDateString()}
                 </div>
                 
-                <div className="flex space-x-2">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   {request.status === 'pending' && (
                     <>
                       <Button
                         onClick={() => { setAcceptTarget(request); setAcceptConfirmOpen(true); }}
                         disabled={loading}
-                        className="flex items-center space-x-1"
+                        className="flex items-center justify-center space-x-1 w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
                       >
                         <CheckCircle className="h-4 w-4" />
                         <span>Accept</span>
@@ -556,9 +556,9 @@ const SessionHandlingContent: React.FC = () => {
                         variant="secondary"
                         onClick={() => handleBookingAction(request.id, 'decline')}
                         disabled={loading}
-                        className="flex items-center space-x-1"
+                        className="flex items-center justify-center space-x-1 w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         <span>Decline</span>
                       </Button>
                     </>

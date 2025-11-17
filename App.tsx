@@ -14,6 +14,8 @@ import AdminProfile from './components/adminPages/AdminProfile';
 import LandingPage from './components/Tutor_TuteePages/LandingPage';
 import TuteeRegistrationPage from './components/Tutor_TuteePages/TuteeRegistrationPage';
 import TutorRegistrationPage from './components/Tutor_TuteePages/TutorRegistrationPage';
+import TuteeRegistrationPageFull from './components/Tutor_TuteePages/TuteeRegistrationPageFull';
+import TutorRegistrationPageFull from './components/Tutor_TuteePages/TutorRegistrationPageFull';
 import TutorDashboard from './components/Tutor_TuteePages/TutorDashboard';
 import TuteeDashboard from './components/Tutor_TuteePages/TuteeDashboard';
 import UnifiedLoginPage from './components/auth/UnifiedLoginPage';
@@ -26,8 +28,9 @@ const App: React.FC = () => {
       {/* Public routes */}
       <Route path="/" element={<Navigate to="/LandingPage" replace />} />
       <Route path="/LandingPage" element={<LandingPage />} />
-      <Route path="/TuteeRegistrationPage" element={<TuteeRegistrationPage />} />
-      <Route path="/TutorRegistrationPage" element={<TutorRegistrationPage />} />
+      <Route path="/landingpage" element={<LandingPage />} />
+      <Route path="/TuteeRegistrationPage" element={<TuteeRegistrationPageFull />} />
+      <Route path="/TutorRegistrationPage" element={<TutorRegistrationPageFull />} />
       <Route path="/login" element={<UnifiedLoginPage />} />
       <Route path="/password-reset" element={<PasswordResetPage />} />
       <Route path="/admin-login" element={<LoginPage />} />

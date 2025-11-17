@@ -113,6 +113,29 @@ export class PaymentsService {
         await this.notificationRepository.save(notifications as any);
         console.log(`submitProof: Notified ${notifications.length} admin(s) of new payment proof`);
       }
+      // Additionally, create a summary notification for admins about pending/unreviewed payments
+      try {
+        const pendingCount = await this.paymentsRepository.count({ where: { status: 'pending' } as any });
+        for (const admin of admins) {
+          const existing = await this.notificationRepository.findOne({ where: { receiver_id: admin.user_id, subjectName: 'Unreviewed Payments', read: false } as any });
+          if (!existing) {
+            const summary = this.notificationRepository.create({
+              userId: String(admin.user_id),
+              receiver_id: admin.user_id,
+              userType: 'admin',
+              message: `There are currently ${pendingCount} unreviewed payment proof(s) awaiting review.`,
+              timestamp: new Date(),
+              read: false,
+              sessionDate: new Date(),
+              subjectName: 'Unreviewed Payments'
+            } as any);
+            await this.notificationRepository.save(summary as any);
+            console.log(`submitProof: Created unreviewed payments summary notification for admin user_id=${admin.user_id}`);
+          }
+        }
+      } catch (e) {
+        console.warn('submitProof: Failed to create unreviewed payments summary notifications', e);
+      }
     } catch (e) {
       console.warn('submitProof: Failed to notify admins of payment submission', e);
     }
@@ -120,7 +143,7 @@ export class PaymentsService {
     return { success: true, payment_id: savedId, booking_id: (booking as any).id };
   }
 
-  async verifyPayment(id: number, status: 'confirmed' | 'rejected', adminProofFile?: any) {
+  async verifyPayment(id: number, status: 'confirmed' | 'rejected', adminProofFile?: any, rejectionReason?: string) {
     const payment = await this.paymentsRepository.findOne({ 
       where: { payment_id: id },
       relations: ['tutor', 'tutor.user', 'student', 'student.user']
@@ -138,28 +161,104 @@ export class PaymentsService {
       console.log(`verifyPayment: Admin proof uploaded: ${fileUrl}`);
     }
 
+    // If rejection reason is provided, save it
+    if (status === 'rejected' && rejectionReason) {
+      (payment as any).rejection_reason = rejectionReason;
+      console.log(`verifyPayment: Rejection reason saved: ${rejectionReason}`);
+    }
+
     await this.paymentsRepository.save(payment);
 
+    // If there are no more pending payments, mark any 'Unreviewed Payments' summary notifications as read
+    try {
+      const pendingNow = await this.paymentsRepository.count({ where: { status: 'pending' } as any });
+      if (pendingNow === 0) {
+        await this.notificationRepository.update({ subjectName: 'Unreviewed Payments' } as any, { read: true } as any);
+        console.log('verifyPayment: No pending payments remain - marked Unreviewed Payments notifications as read');
+      }
+    } catch (e) {
+      console.warn('verifyPayment: Failed to update Unreviewed Payments summary notifications', e);
+    }
     // Do NOT update the booking to 'upcoming' here - wait for tutor confirmation
 
-    // Notify the tutor that admin approved and that they must confirm the payment to finalize
-    if (status === 'confirmed' && (payment as any).tutor?.user) {
-      const tutorUserId = ((payment as any).tutor.user as any).user_id;
-      const amount = (payment as any).amount;
-      const studentName = ((payment as any).student?.user as any)?.name || 'Student';
+    // Get payment details for notifications
+    const amount = (payment as any).amount;
+    const studentUserId = ((payment as any).student?.user as any)?.user_id;
+    const tutorUserId = ((payment as any).tutor?.user as any)?.user_id;
+    const studentName = ((payment as any).student?.user as any)?.name || 'Student';
+    const tutorName = ((payment as any).tutor?.user as any)?.name || 'Tutor';
+    const subject = (payment as any).subject || 'session';
 
-      const notification = this.notificationRepository.create({
-        userId: tutorUserId.toString(),
-        receiver_id: tutorUserId,
-        userType: 'tutor',
-        message: `Admin approved a payment of $${Number(amount).toFixed(2)} from ${studentName}. View admin proof and confirm to finalize.`,
-        timestamp: new Date(),
-        read: false,
-        sessionDate: new Date(),
-        subjectName: 'Payment Approved (Awaiting Your Confirmation)'
-      });
-      await this.notificationRepository.save(notification);
-      console.log(`verifyPayment: Sent notification to tutor user_id=${tutorUserId} for admin-approved payment awaiting tutor confirmation`);
+    // Notify the tutee (student) about the payment decision
+    if (studentUserId) {
+      try {
+        let tuteeMessage = '';
+        let tuteeSubjectName = '';
+
+        if (status === 'confirmed') {
+          tuteeMessage = `Your payment of ₱${Number(amount).toFixed(2)} for ${subject} with ${tutorName} has been approved by the admin. Waiting for tutor confirmation.`;
+          tuteeSubjectName = 'Payment Approved by Admin';
+        } else if (status === 'rejected') {
+          const reasonText = rejectionReason ? ` Reason: ${rejectionReason}` : '';
+          tuteeMessage = `Your payment of ₱${Number(amount).toFixed(2)} for ${subject} with ${tutorName} has been rejected by the admin.${reasonText} Please check your payment proof and resubmit if needed.`;
+          tuteeSubjectName = 'Payment Rejected';
+        }
+
+        if (tuteeMessage) {
+          // Try to find associated booking for session date
+          let sessionDate = new Date();
+          try {
+            const booking = await this.bookingRepository.findOne({
+              where: {
+                student: { user_id: studentUserId } as any,
+                tutor: { tutor_id: (payment as any).tutor_id } as any,
+                status: 'payment_pending' as any
+              } as any,
+              order: { created_at: 'DESC' }
+            });
+            if (booking && (booking as any).date) {
+              sessionDate = new Date((booking as any).date);
+            }
+          } catch (e) {
+            console.warn('verifyPayment: Could not find booking for session date, using current date');
+          }
+
+          const tuteeNotification = this.notificationRepository.create({
+            userId: studentUserId.toString(),
+            receiver_id: studentUserId,
+            userType: 'tutee',
+            message: tuteeMessage,
+            timestamp: new Date(),
+            read: false,
+            sessionDate: sessionDate,
+            subjectName: tuteeSubjectName
+          });
+          await this.notificationRepository.save(tuteeNotification);
+          console.log(`verifyPayment: Sent notification to tutee user_id=${studentUserId} for payment ${status}`);
+        }
+      } catch (e) {
+        console.error('verifyPayment: Failed to create notification for tutee', e);
+      }
+    }
+
+    // Notify the tutor that admin approved and that they must confirm the payment to finalize
+    if (status === 'confirmed' && tutorUserId) {
+      try {
+        const tutorNotification = this.notificationRepository.create({
+          userId: tutorUserId.toString(),
+          receiver_id: tutorUserId,
+          userType: 'tutor',
+          message: `Admin approved a payment of ₱${Number(amount).toFixed(2)} from ${studentName}. View admin proof and confirm to finalize.`,
+          timestamp: new Date(),
+          read: false,
+          sessionDate: new Date(),
+          subjectName: 'Payment Approved (Awaiting Your Confirmation)'
+        });
+        await this.notificationRepository.save(tutorNotification);
+        console.log(`verifyPayment: Sent notification to tutor user_id=${tutorUserId} for admin-approved payment awaiting tutor confirmation`);
+      } catch (e) {
+        console.error('verifyPayment: Failed to create notification for tutor', e);
+      }
     }
 
     return { success: true };

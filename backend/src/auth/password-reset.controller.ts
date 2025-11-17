@@ -64,6 +64,33 @@ export class PasswordResetController {
     }
   }
 
+  @Post('admin/request')
+  async requestAdminPasswordReset(@Body() requestPasswordResetDto: RequestPasswordResetDto) {
+    try {
+      if (!requestPasswordResetDto.email) {
+        throw new HttpException(
+          {
+            message: 'Email is required',
+            statusCode: HttpStatus.BAD_REQUEST,
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      return await this.passwordResetService.requestPasswordReset(requestPasswordResetDto.email, {
+        requiredUserType: 'admin',
+      });
+    } catch (error) {
+      throw new HttpException(
+        {
+          message: error.message || 'Failed to process admin password reset request',
+          statusCode: error.status || HttpStatus.BAD_REQUEST,
+        },
+        error.status || HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
   @Post('verify-and-reset')
   async verifyCodeAndResetPassword(@Body() verifyCodeAndResetPasswordDto: VerifyCodeAndResetPasswordDto) {
     try {
@@ -115,6 +142,56 @@ export class PasswordResetController {
       throw new HttpException(
         {
           message: error.message || 'Failed to reset password',
+          statusCode: error.status || HttpStatus.BAD_REQUEST,
+        },
+        error.status || HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  @Post('admin/verify-and-reset')
+  async verifyAdminCodeAndResetPassword(@Body() verifyCodeAndResetPasswordDto: VerifyCodeAndResetPasswordDto) {
+    try {
+      if (!verifyCodeAndResetPasswordDto.email) {
+        throw new HttpException(
+          {
+            message: 'Email is required',
+            statusCode: HttpStatus.BAD_REQUEST,
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (!verifyCodeAndResetPasswordDto.code) {
+        throw new HttpException(
+          {
+            message: 'Verification code is required',
+            statusCode: HttpStatus.BAD_REQUEST,
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (!verifyCodeAndResetPasswordDto.newPassword) {
+        throw new HttpException(
+          {
+            message: 'New password is required',
+            statusCode: HttpStatus.BAD_REQUEST,
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      return await this.passwordResetService.verifyCodeAndResetPassword(
+        verifyCodeAndResetPasswordDto.email,
+        verifyCodeAndResetPasswordDto.code,
+        verifyCodeAndResetPasswordDto.newPassword,
+        { requiredUserType: 'admin' }
+      );
+    } catch (error) {
+      throw new HttpException(
+        {
+          message: error.message || 'Failed to reset admin password',
           statusCode: error.status || HttpStatus.BAD_REQUEST,
         },
         error.status || HttpStatus.BAD_REQUEST

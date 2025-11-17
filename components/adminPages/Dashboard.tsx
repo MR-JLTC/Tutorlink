@@ -16,13 +16,13 @@ interface Stats {
 
 const StatCard: React.FC<{ icon: React.ElementType, title: string, value: string | number, color: string }> = ({ icon: Icon, title, value, color }) => {
     return (
-        <Card className="flex items-center p-4">
-            <div className={`p-3 rounded-full mr-4 ${color}`}>
-                <Icon className="h-6 w-6 text-white" />
+        <Card className="flex items-center p-3 sm:p-4">
+            <div className={`p-2 sm:p-3 rounded-full mr-3 sm:mr-4 flex-shrink-0 ${color}`}>
+                <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <div>
-                <p className="text-sm font-medium text-gray-500">{title}</p>
-                <p className="text-2xl font-semibold text-gray-800">{value}</p>
+            <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 truncate">{title}</p>
+                <p className="text-xl sm:text-2xl font-semibold text-gray-800 truncate">{value}</p>
             </div>
         </Card>
     );
@@ -38,6 +38,7 @@ const DashboardContent: React.FC = () => {
   const [userTypeTotals, setUserTypeTotals] = useState<{ tutors: number; tutees: number } | null>(null);
   const [courseDistribution, setCourseDistribution] = useState<{ courseName: string; tutors: number; tutees: number }[]>([]);
   const [subjectSessions, setSubjectSessions] = useState<{ subjectName: string; sessions: number }[]>([]);
+  const [universityMap, setUniversityMap] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -53,6 +54,26 @@ const DashboardContent: React.FC = () => {
       }
     };
     fetchStats();
+  }, []);
+
+  useEffect(() => {
+    // Fetch universities to get acronyms
+    const fetchUniversities = async () => {
+      try {
+        const response = await apiClient.get('/universities');
+        const universities = response.data || [];
+        const map = new Map<string, string>();
+        universities.forEach((uni: any) => {
+          if (uni.name && uni.acronym) {
+            map.set(uni.name, uni.acronym);
+          }
+        });
+        setUniversityMap(map);
+      } catch (e) {
+        console.error('Failed to fetch universities:', e);
+      }
+    };
+    fetchUniversities();
   }, []);
 
   useEffect(() => {
@@ -200,8 +221,8 @@ const DashboardContent: React.FC = () => {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-slate-800 mb-6">Admin Dashboard</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">Admin Dashboard</h1>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
         {stats && (
           <>
             <StatCard 
@@ -238,11 +259,11 @@ const DashboardContent: React.FC = () => {
         )}
       </div>
 
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Most In-demand Subjects</h2>
-            <TrendingUp className="h-5 w-5 text-slate-400" />
+      <div className="mt-6 sm:mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h2 className="text-lg sm:text-xl font-semibold">Most In-demand Subjects</h2>
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
           </div>
           {stats && stats.mostInDemandSubjects && stats.mostInDemandSubjects.length > 0 ? (
             <ul className="divide-y divide-slate-200">
@@ -258,16 +279,16 @@ const DashboardContent: React.FC = () => {
           )}
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Payment Activity Overview</h2>
-            <CreditCard className="h-5 w-5 text-slate-400" />
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h2 className="text-lg sm:text-xl font-semibold">Payment Activity Overview</h2>
+            <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
           </div>
           {stats && stats.paymentOverview ? (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div>
-                <p className="text-sm text-slate-500 mb-2">By status</p>
-                <div className="grid grid-cols-2 gap-3">
+                <p className="text-xs sm:text-sm text-slate-500 mb-2">By status</p>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   {Object.entries(stats.paymentOverview.byStatus).map(([status, count]) => (
                     <div key={status} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
                       <span className="capitalize text-slate-700">{status}</span>
@@ -277,8 +298,8 @@ const DashboardContent: React.FC = () => {
                 </div>
               </div>
               <div className="pt-2 border-t border-slate-200">
-                <p className="text-sm text-slate-500">Confirmed revenue (last 30 days)</p>
-                <p className="text-2xl font-semibold text-slate-800">₱{stats.paymentOverview.recentConfirmedRevenue.toLocaleString()}</p>
+                <p className="text-xs sm:text-sm text-slate-500">Confirmed revenue (last 30 days)</p>
+                <p className="text-xl sm:text-2xl font-semibold text-slate-800">₱{stats.paymentOverview.recentConfirmedRevenue.toLocaleString()}</p>
               </div>
             </div>
           ) : (
@@ -288,28 +309,57 @@ const DashboardContent: React.FC = () => {
       </div>
 
       {/* University distribution: tutors vs tutees */}
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold">Top Universities (Total Users)</h2>
+      <div className="mt-6 sm:mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <h2 className="text-lg sm:text-xl font-semibold truncate">Top Universities (Total Users)</h2>
             </div>
-            <University className="h-5 w-5 text-slate-400" />
+            <University className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
           </div>
           {uniDistribution.length > 0 ? (
             (() => {
-              const { items, total } = buildTopN(uniDistribution, r => r.university, r => (r.tutors + r.tutees), 6);
+              // Build items with acronyms included in labels
+              const itemsWithAcronyms = uniDistribution
+                .map(r => {
+                  const acronym = universityMap.get(r.university);
+                  const displayLabel = acronym ? `${r.university} (${acronym})` : r.university;
+                  return {
+                    ...r,
+                    displayLabel,
+                    value: r.tutors + r.tutees
+                  };
+                })
+                .sort((a, b) => b.value - a.value)
+                .slice(0, 6);
+              
+              const total = itemsWithAcronyms.reduce((sum, r) => sum + r.value, 0);
+              const colors = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+              const items = itemsWithAcronyms.map((r, i) => ({
+                label: r.displayLabel,
+                value: r.value,
+                color: colors[i % colors.length]
+              }));
+              
               return (
-                <div className="flex items-center gap-6 flex-wrap">
-                  <Donut items={items} centerLabel={String(total)} centerSub={'Total Users'} />
-                  <div className="min-w-[260px] space-y-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+                  <div className="flex-shrink-0 mx-auto sm:mx-0">
+                    <Donut items={items} size={180} centerLabel={String(total)} centerSub={'Total Users'} />
+                  </div>
+                  <div className="w-full sm:flex-1 space-y-2 min-w-0">
                     {items.map((it, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                        <span className="flex items-center gap-2 truncate"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: it.color }} /> <span className="truncate" title={it.label}>{it.label}</span></span>
-                        <span className="text-slate-700 font-semibold">{it.value} <span className="text-slate-400 font-normal">({Math.round((it.value / (total || 1)) * 100)}%)</span></span>
+                      <div key={i} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:py-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: it.color }} />
+                          <span className="text-sm text-slate-900 font-medium break-words" title={it.label}>{it.label}</span>
+                        </div>
+                        <div className="flex items-center justify-end sm:justify-start gap-1.5 sm:ml-auto flex-shrink-0">
+                          <span className="text-sm sm:text-base text-slate-700 font-semibold whitespace-nowrap">{it.value}</span>
+                          <span className="text-xs sm:text-sm text-slate-400 font-normal whitespace-nowrap">({Math.round((it.value / (total || 1)) * 100)}%)</span>
+                        </div>
                       </div>
                     ))}
-                    <p className="text-xs text-slate-500">Total: {total}</p>
+                    <p className="text-xs text-slate-500 pt-1">Total: {total}</p>
                   </div>
                 </div>
               );
@@ -320,10 +370,10 @@ const DashboardContent: React.FC = () => {
         </Card>
 
         {/* Overall user type totals */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Overall Users by Type</h2>
-            <BarChart3 className="h-5 w-5 text-slate-400" />
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h2 className="text-lg sm:text-xl font-semibold">Overall Users by Type</h2>
+            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
           </div>
           {userTypeTotals ? (
             (() => {
@@ -333,16 +383,24 @@ const DashboardContent: React.FC = () => {
               ];
               const total = Math.max(1, items[0].value + items[1].value);
               return (
-                <div className="flex items-center gap-6 flex-wrap">
-                  <Donut items={items} centerLabel={String(total)} centerSub={'Users'} />
-                  <div className="min-w-[260px] space-y-2">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+                  <div className="flex-shrink-0 mx-auto sm:mx-0">
+                    <Donut items={items} size={180} centerLabel={String(total)} centerSub={'Users'} />
+                  </div>
+                  <div className="w-full sm:flex-1 space-y-2 min-w-0">
                     {items.map((it, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                        <span className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: it.color }} /> {it.label}</span>
-                        <span className="text-slate-700 font-semibold">{it.value} <span className="text-slate-400 font-normal">({Math.round((it.value / total) * 100)}%)</span></span>
+                      <div key={i} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:py-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: it.color }} />
+                          <span className="text-sm text-slate-900 font-medium">{it.label}</span>
+                        </div>
+                        <div className="flex items-center justify-end sm:justify-start gap-1.5 sm:ml-auto flex-shrink-0">
+                          <span className="text-sm sm:text-base text-slate-700 font-semibold whitespace-nowrap">{it.value}</span>
+                          <span className="text-xs sm:text-sm text-slate-400 font-normal whitespace-nowrap">({Math.round((it.value / total) * 100)}%)</span>
+                        </div>
                       </div>
                     ))}
-                    <p className="text-xs text-slate-500">Total: {total}</p>
+                    <p className="text-xs text-slate-500 pt-1">Total: {total}</p>
                   </div>
                 </div>
               );
@@ -354,21 +412,23 @@ const DashboardContent: React.FC = () => {
       </div>
 
       {/* Course distribution chart + Sessions per subject side-by-side */}
-      <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h2 className="text-xl font-semibold">Top Courses (Total Users)</h2>
+      <div className="mt-6 sm:mt-8 grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <h2 className="text-lg sm:text-xl font-semibold truncate">Top Courses (Total Users)</h2>
             </div>
-            <Layers className="h-5 w-5 text-slate-400" />
+            <Layers className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
           </div>
           {courseDistribution.length > 0 ? (
             (() => {
               const { items, total } = buildTopN(courseDistribution, r => r.courseName, r => (r.tutors + r.tutees), 10);
               return (
-                <div className="flex items-start gap-6 flex-wrap">
-                  <Donut items={items} size={220} thickness={22} centerLabel={String(total)} centerSub={'Users'} />
-                  <div className="min-w-[360px] max-w-[520px] space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+                  <div className="flex-shrink-0 mx-auto sm:mx-0">
+                    <Donut items={items} size={180} thickness={20} centerLabel={String(total)} centerSub={'Users'} />
+                  </div>
+                  <div className="w-full sm:min-w-[280px] sm:max-w-[520px] space-y-2 max-h-[260px] overflow-y-auto pr-1">
                     {items.map((it, i) => (
                       <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                         <span className="flex items-start gap-2 flex-1 min-w-0"><span className="mt-1 inline-block h-2.5 w-2.5 rounded-sm" style={{ background: it.color }} /> <span className="whitespace-normal break-words" title={it.label}>{it.label}</span></span>
@@ -384,18 +444,20 @@ const DashboardContent: React.FC = () => {
             <p className="text-slate-500">No course distribution data.</p>
           )}
         </Card>
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Sessions per Subject</h2>
-            <TrendingUp className="h-5 w-5 text-slate-400" />
+        <Card className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h2 className="text-lg sm:text-xl font-semibold">Sessions per Subject</h2>
+            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
           </div>
           {subjectSessions.length > 0 ? (
             (() => {
               const { items, total } = buildTopN(subjectSessions, r => r.subjectName, r => r.sessions, 8);
               return (
-                <div className="flex items-center gap-6 flex-wrap">
-                  <Donut items={items} size={220} thickness={22} centerLabel={String(total)} centerSub={'Sessions'} />
-                  <div className="min-w-[300px] grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+                  <div className="flex-shrink-0 mx-auto sm:mx-0">
+                    <Donut items={items} size={180} thickness={20} centerLabel={String(total)} centerSub={'Sessions'} />
+                  </div>
+                  <div className="w-full sm:min-w-[300px] grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {items.map((it, i) => (
                       <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                         <span className="flex items-center gap-2 truncate"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: it.color }} /> <span className="truncate" title={it.label}>{it.label}</span></span>

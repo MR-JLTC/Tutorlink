@@ -118,13 +118,14 @@ const CourseManagement: React.FC = () => {
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-slate-800 mb-6">Course & Subject Management</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">Course & Subject Management</h1>
             <Card>
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold">Courses</h2>
-                    <Button onClick={openAddCourse}>Add Course</Button>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4">
+                    <h2 className="text-lg sm:text-xl font-semibold">Courses</h2>
+                    <Button onClick={openAddCourse} className="w-full sm:w-auto">Add Course</Button>
                 </div>
-                <div className="overflow-x-auto">
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
@@ -155,7 +156,7 @@ const CourseManagement: React.FC = () => {
                                             <td colSpan={4} className="p-0">
                                                 <div className="px-6 py-4 bg-gray-50">
                                                     <h4 className="text-sm font-semibold mb-2 ml-12">Subjects:</h4>
-                                                    <div className="ml-12 mb-3 grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                                                    <div className="ml-0 sm:ml-12 mb-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 items-center">
                                                         <input className="border border-slate-300 rounded px-2 py-1" placeholder="New subject name" value={form?.subject_name || ''} onChange={(e) => setForm(prev => ({ ...(prev ?? { course_name: '', university_id: 0 }), subject_name: e.target.value }))} />
                                                         <Button variant="secondary" onClick={() => addSubject(course.course_id)}>Add Subject</Button>
                                                     </div>
@@ -184,6 +185,63 @@ const CourseManagement: React.FC = () => {
                             ))}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                    {courses.map((course) => (
+                        <Card key={course.course_id} className="p-4">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="font-semibold text-slate-900 truncate">{course.course_name}</h3>
+                                        <p className="text-sm text-slate-500 truncate">{course.university?.name || 'N/A'}</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => toggleSubjects(course.course_id)}
+                                        className="p-2 text-slate-500 hover:text-slate-800 flex-shrink-0"
+                                    >
+                                        {openCourseId === course.course_id ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                    </button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button variant="secondary" onClick={() => openEditCourse(course)} className="flex-1 text-sm">Edit</Button>
+                                    <Button variant="danger" onClick={async () => { await apiClient.delete(`/courses/${course.course_id}`); const res = await apiClient.get('/courses'); setCourses(res.data); }} className="flex-1 text-sm">Delete</Button>
+                                </div>
+                                {openCourseId === course.course_id && (
+                                    <div className="pt-3 border-t border-slate-200 space-y-3">
+                                        <h4 className="text-sm font-semibold">Subjects:</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <input 
+                                                className="border border-slate-300 rounded px-2 py-1 text-sm flex-1" 
+                                                placeholder="New subject name" 
+                                                value={form?.subject_name || ''} 
+                                                onChange={(e) => setForm(prev => ({ ...(prev ?? { course_name: '', university_id: 0 }), subject_name: e.target.value }))} 
+                                            />
+                                            <Button variant="secondary" onClick={() => addSubject(course.course_id)} className="text-sm">Add Subject</Button>
+                                        </div>
+                                        {course.subjects && course.subjects.length > 0 ? (
+                                            <ul className="space-y-2">
+                                                {[...(course.subjects || [])]
+                                                    .sort((a, b) => a.subject_name.localeCompare(b.subject_name))
+                                                    .map(subject => (
+                                                    <li key={subject.subject_id} className="text-sm text-gray-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2 bg-slate-50 rounded">
+                                                        <span className="flex-1">{subject.subject_name}</span>
+                                                        <div className="flex gap-2 w-full sm:w-auto">
+                                                            <Button variant="secondary" onClick={() => openEditSubject(subject)} className="flex-1 sm:flex-none text-xs">Edit</Button>
+                                                            <Button variant="danger" onClick={async () => { await apiClient.delete(`/courses/${course.course_id}/subjects/${subject.subject_id}`); const res = await apiClient.get(`/courses/${course.course_id}/subjects`); setCourses(prev => prev.map(c => c.course_id === course.course_id ? { ...c, subjects: res.data } as CourseWithDetails : c)); }} className="flex-1 sm:flex-none text-xs">Delete</Button>
+                                                        </div>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-sm text-gray-500">No subjects found for this course.</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    ))}
                 </div>
             </Card>
 

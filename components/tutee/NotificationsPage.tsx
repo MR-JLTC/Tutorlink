@@ -63,12 +63,13 @@ const NotificationsPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Notifications</h1>
+    <div className="max-w-3xl mx-auto p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 sm:gap-3 md:gap-0 mb-4 sm:mb-5 md:mb-6">
+        <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">Notifications</h1>
         <button
           onClick={() => markAllAsRead()}
-          className="text-sm text-blue-600 hover:text-blue-700"
+          className="text-xs sm:text-sm text-blue-600 hover:text-blue-700 active:text-blue-800 font-medium touch-manipulation w-full sm:w-auto text-left sm:text-right"
+          style={{ WebkitTapHighlightColor: 'transparent' }}
         >
           Mark all as read
         </button>
@@ -76,39 +77,41 @@ const NotificationsPage: React.FC = () => {
 
       {groups.today.length > 0 && (
         <>
-          <h2 className="font-medium text-slate-900 mb-3">Today</h2>
-          <div className="space-y-2 mb-6">
+          <h2 className="font-medium text-sm sm:text-base md:text-lg text-slate-900 mb-2 sm:mb-3">Today</h2>
+          <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-5 md:mb-6">
             {groups.today.map((notif) => (
               <div
                 key={notif.notification_id}
-                className={`p-4 rounded-lg border ${
+                className={`p-3 sm:p-4 rounded-lg border -mx-2 sm:-mx-3 md:mx-0 ${
                   notif.is_read ? 'bg-white' : 'bg-blue-50'
                 }`}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-900">{notif.title}</p>
-                    <p className="text-slate-600 mt-1">{notif.message}</p>
-                    <p className="text-sm text-slate-500 mt-2">
+                <div className="flex items-start justify-between gap-2 sm:gap-3 md:gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm sm:text-base md:text-lg text-slate-900 break-words">{notif.title}</p>
+                    <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1 break-words">{notif.message}</p>
+                    <p className="text-[10px] sm:text-xs md:text-sm text-slate-500 mt-1.5 sm:mt-2">
                       {formatDate(notif.created_at)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                     {!notif.is_read && (
                       <button
                         onClick={() => markAsRead(notif.notification_id)}
-                        className="p-1 text-slate-600 hover:text-blue-600"
+                        className="p-1.5 sm:p-2 text-slate-600 hover:text-blue-600 active:text-blue-700 rounded-md hover:bg-blue-50 active:bg-blue-100 touch-manipulation"
                         title="Mark as read"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
-                        <Check className="h-4 w-4" />
+                        <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </button>
                     )}
                     <button
                       onClick={() => deleteNotification(notif.notification_id)}
-                      className="p-1 text-slate-600 hover:text-red-600"
+                      className="p-1.5 sm:p-2 text-slate-600 hover:text-red-600 active:text-red-700 rounded-md hover:bg-red-50 active:bg-red-100 touch-manipulation"
                       title="Delete notification"
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </button>
                   </div>
                 </div>
@@ -120,39 +123,41 @@ const NotificationsPage: React.FC = () => {
 
       {groups.earlier.length > 0 && (
         <>
-          <h2 className="font-medium text-slate-900 mb-3">Earlier</h2>
-          <div className="space-y-2">
+          <h2 className="font-medium text-sm sm:text-base md:text-lg text-slate-900 mb-2 sm:mb-3">Earlier</h2>
+          <div className="space-y-2 sm:space-y-3">
             {groups.earlier.map((notif) => (
               <div
                 key={notif.notification_id}
-                className={`p-4 rounded-lg border ${
+                className={`p-3 sm:p-4 rounded-lg border -mx-2 sm:-mx-3 md:mx-0 ${
                   notif.is_read ? 'bg-white' : 'bg-blue-50'
                 }`}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-900">{notif.title}</p>
-                    <p className="text-slate-600 mt-1">{notif.message}</p>
-                    <p className="text-sm text-slate-500 mt-2">
+                <div className="flex items-start justify-between gap-2 sm:gap-3 md:gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm sm:text-base md:text-lg text-slate-900 break-words">{notif.title}</p>
+                    <p className="text-xs sm:text-sm md:text-base text-slate-600 mt-1 break-words">{notif.message}</p>
+                    <p className="text-[10px] sm:text-xs md:text-sm text-slate-500 mt-1.5 sm:mt-2">
                       {formatDate(notif.created_at)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                     {!notif.is_read && (
                       <button
                         onClick={() => markAsRead(notif.notification_id)}
-                        className="p-1 text-slate-600 hover:text-blue-600"
+                        className="p-1.5 sm:p-2 text-slate-600 hover:text-blue-600 active:text-blue-700 rounded-md hover:bg-blue-50 active:bg-blue-100 touch-manipulation"
                         title="Mark as read"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
-                        <Check className="h-4 w-4" />
+                        <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                       </button>
                     )}
                     <button
                       onClick={() => deleteNotification(notif.notification_id)}
-                      className="p-1 text-slate-600 hover:text-red-600"
+                      className="p-1.5 sm:p-2 text-slate-600 hover:text-red-600 active:text-red-700 rounded-md hover:bg-red-50 active:bg-red-100 touch-manipulation"
                       title="Delete notification"
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </button>
                   </div>
                 </div>

@@ -229,11 +229,12 @@ const TutorManagement: React.FC = () => {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-slate-800 mb-6">Tutor Application Management</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">Tutor Application Management</h1>
       
       <Card>
-        <h2 className="text-xl font-semibold mb-4">Pending Applications ({tutors.length})</h2>
-        <div className="overflow-x-auto">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Pending Applications ({tutors.length})</h2>
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -287,15 +288,65 @@ const TutorManagement: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Card View for Applications */}
+        <div className="md:hidden space-y-3 mt-4">
+          {tutors.length === 0 ? (
+            <p className="text-center text-slate-500 py-4">No pending applications found.</p>
+          ) : (
+            tutors.map((tutor) => (
+              <Card key={tutor.tutor_id} className="p-4">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    {tutor.user?.profile_image_url ? (
+                      <img 
+                        src={getFileUrl(tutor.user.profile_image_url)} 
+                        alt="Tutor" 
+                        className="h-12 w-12 rounded-full object-cover border flex-shrink-0"
+                        style={{ aspectRatio: '1 / 1' }}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.user?.name || 'Tutor')}&background=random`;
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.user?.name || 'Tutor')}&background=random`}
+                        alt="Tutor"
+                        className="h-12 w-12 rounded-full object-cover border flex-shrink-0"
+                        style={{ aspectRatio: '1 / 1' }}
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-slate-900 truncate">{tutor.user?.name}</h3>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-slate-500 text-xs mb-1">University</p>
+                      <p className="font-medium text-slate-900 truncate">{(tutor as any).university?.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 text-xs mb-1">Course</p>
+                      <p className="font-medium text-slate-900 truncate">{(tutor as any).course?.course_name || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <Button onClick={() => handleViewDetails(tutor)} className="w-full">View Details</Button>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
       </Card>
 
       {/* Tutor Subjects Section */}
-      <Card className="mt-8">
-        <h2 className="text-xl font-semibold mb-4">Pending Subject Expertise ({tutorSubjects.length})</h2>
+      <Card className="mt-6 sm:mt-8">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Pending Subject Expertise ({tutorSubjects.length})</h2>
         {subjectLoading ? (
-          <div className="text-center py-4">Loading tutor subjects...</div>
+          <div className="text-center py-4 text-sm">Loading tutor subjects...</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -347,6 +398,49 @@ const TutorManagement: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Card View for Tutor Subjects */}
+          <div className="md:hidden space-y-3 mt-4">
+            {tutorSubjects.length === 0 ? (
+              <p className="text-center text-slate-500 py-4">No pending subject expertise found.</p>
+            ) : (
+              tutorSubjects.map((tutorSubject) => (
+                <Card key={tutorSubject.tutor_subject_id} className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      {(tutorSubject.tutor.user as any)?.profile_image_url ? (
+                        <img 
+                          src={getFileUrl((tutorSubject.tutor.user as any).profile_image_url)} 
+                          alt="Tutor" 
+                          className="h-12 w-12 rounded-full object-cover border flex-shrink-0"
+                          style={{ aspectRatio: '1 / 1' }}
+                        />
+                      ) : (
+                        <div className="h-12 w-12 rounded-full bg-slate-200 border flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-slate-900 truncate">{(tutorSubject.tutor as any)?.user?.name}</h3>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <p className="text-slate-500 text-xs mb-1">Subject</p>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {(tutorSubject.subject as any)?.subject_name}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 text-xs mb-1">Applied Date</p>
+                        <p className="font-medium text-slate-900">{new Date(tutorSubject.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <Button onClick={() => handleViewSubjectDetails(tutorSubject)} className="w-full">View Details</Button>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+          </>
         )}
       </Card>
 
@@ -423,6 +517,19 @@ const TutorManagement: React.FC = () => {
               </div>
 
               <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold">Session Rate</h4>
+                  <div className="mt-2">
+                    <div className="bg-gray-50 p-3 rounded-md">
+                      <span className="text-xs text-gray-500">Rate per hour:</span>
+                      <p className="text-gray-700 font-semibold text-lg">
+                        {(selectedTutor as any).session_rate_per_hour 
+                          ? `₱${Number((selectedTutor as any).session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
+                          : 'Not specified'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <div>
                   <h4 className="font-semibold">Submitted Documents</h4>
                   <ul className="mt-2 space-y-2">

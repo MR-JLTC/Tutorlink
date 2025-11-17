@@ -92,7 +92,7 @@ export class EmailVerificationService {
     return { message: 'Verification code sent to your email' };
   }
 
-  async getEmailVerificationStatus(email: string, user_type: 'tutor' | 'tutee' | 'admin'): Promise<{ is_verified: number; user_id?: number }> {
+  async getEmailVerificationStatus(email: string, user_type: 'tutor' | 'tutee' | 'admin'): Promise<{ is_verified: number; user_id?: number; verification_expires?: Date }> {
     console.log('=== EMAIL STATUS CHECK DEBUG ===');
     console.log('Checking verification status for:', email);
     console.log('Email type:', typeof email);
@@ -126,9 +126,22 @@ export class EmailVerificationService {
       return { is_verified: 0 };
     }
 
-    return {
+    const result: { is_verified: number; user_id?: number; verification_expires?: Date } = {
       is_verified: verificationEntry.is_verified ? 1 : 0,
     };
+
+    // Include verification_expires if there's an active code (not verified and code exists and not expired)
+    if (!verificationEntry.is_verified && verificationEntry.verification_code && verificationEntry.verification_expires) {
+      const now = new Date();
+      const expiresAt = new Date(verificationEntry.verification_expires);
+      
+      // Only return expiration if code hasn't expired yet
+      if (expiresAt > now) {
+        result.verification_expires = verificationEntry.verification_expires;
+      }
+    }
+
+    return result;
   }
 
   async verifyEmailCode(email: string, code: string, user_type: 'tutor' | 'tutee' | 'admin'): Promise<{ message: string; user_id?: number }> {

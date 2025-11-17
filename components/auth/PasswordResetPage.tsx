@@ -17,8 +17,12 @@ const PasswordResetPage: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Get email from URL parameters
+  // Get email and determine flow type (default vs admin)
   const email = searchParams.get('email') || '';
+  const flowType = searchParams.get('type') === 'admin' ? 'admin' : 'default';
+  const resetEndpoint =
+    flowType === 'admin' ? '/auth/password-reset/admin/verify-and-reset' : '/auth/password-reset/verify-and-reset';
+  const redirectRoute = flowType === 'admin' ? '/admin/login' : '/login';
 
   // Online images related to tutoring/learning concepts
   const slideshowImages = [
@@ -60,9 +64,9 @@ const PasswordResetPage: React.FC = () => {
   // Redirect to login if no email provided
   useEffect(() => {
     if (!email) {
-      navigate('/login');
+      navigate(redirectRoute);
     }
-  }, [email, navigate]);
+  }, [email, navigate, redirectRoute]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -89,7 +93,7 @@ const PasswordResetPage: React.FC = () => {
     }
 
     try {
-      const response = await api.post('/auth/password-reset/verify-and-reset', {
+      const response = await api.post(resetEndpoint, {
         email,
         code: formData.code,
         newPassword: formData.newPassword,
@@ -98,7 +102,7 @@ const PasswordResetPage: React.FC = () => {
       if (response.data) {
         // Show success message and redirect to login
         alert('Password reset successful! You can now log in with your new password.');
-        navigate('/login');
+        navigate(redirectRoute);
       }
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to reset password. Please try again.';
@@ -193,7 +197,7 @@ const PasswordResetPage: React.FC = () => {
               
               <div className="text-center">
                 <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-slate-900 via-sky-800 to-indigo-800 bg-clip-text text-transparent mb-2">
-                  Reset Your Password
+                  {flowType === 'admin' ? 'Reset Admin Password' : 'Reset Your Password'}
                 </h1>
                 <p className="text-sm text-slate-600 font-medium mb-3">
                   Enter the verification code sent to <strong>{email}</strong>
@@ -229,7 +233,7 @@ const PasswordResetPage: React.FC = () => {
                   {/* Welcome text centered below logo */}
                   <div className="text-center">
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 via-sky-800 to-indigo-800 bg-clip-text text-transparent mb-1">
-                      Reset Your Password
+                      {flowType === 'admin' ? 'Reset Admin Password' : 'Reset Your Password'}
                     </h1>
                     <p className="text-slate-600 font-medium text-sm">
                       Enter the verification code sent to <strong>{email}</strong>

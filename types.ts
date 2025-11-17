@@ -94,6 +94,7 @@ export interface Payment {
   dispute_proof_url?: string;
   admin_note?: string;
   admin_payment_proof_url?: string;
+  rejection_reason?: string;
 
   // Joined data from backend
   student?: { user?: { name: string } };

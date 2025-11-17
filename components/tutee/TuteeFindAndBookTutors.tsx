@@ -494,30 +494,43 @@ const TuteeFindAndBookTutors: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-3">
-        <Search className="h-8 w-8 text-blue-600" />
-        <h1 className="text-3xl font-bold text-slate-800">Find & Book Tutors</h1>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-        <p className="text-slate-600">
-          Browse tutors filtered by your course subjects, view their profiles,
-          ratings, and availability to book a session.
-        </p>
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-800 overflow-hidden">
+      <div className="absolute -top-24 -left-10 h-72 w-72 bg-sky-100 blur-3xl opacity-70 pointer-events-none" />
+      <div className="absolute top-32 -right-16 h-80 w-80 bg-indigo-100 blur-[120px] opacity-70 pointer-events-none" />
+      <div className="relative max-w-6xl mx-auto px-2 sm:px-4 lg:px-0 py-4 sm:py-6 md:py-10 space-y-4 sm:space-y-6 md:space-y-8 lg:space-y-10">
+      <div className="relative overflow-hidden bg-gradient-to-r from-sky-600 via-indigo-600 to-indigo-700 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl">
+        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.4),_transparent)]" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center shadow-lg">
+              <Search className="h-6 w-6 md:h-8 md:w-8" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Find & Book Tutors</h1>
+              <p className="text-xs sm:text-sm md:text-base text-white/80">Discover verified tutors, explore profiles, and secure your ideal session.</p>
+            </div>
+          </div>
+          <div className="flex items-center text-[11px] sm:text-xs md:text-sm text-white/80 gap-3">
+            <span className="inline-flex items-center gap-1 font-semibold">
+              <span className="h-2 w-2 rounded-full bg-emerald-300" />
+              Live availability
+            </span>
+            <span className="hidden sm:inline text-white/70">100% verified tutors</span>
+          </div>
+        </div>
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-white/80 backdrop-blur-sm border border-slate-100 shadow-sm rounded-2xl p-3 sm:p-4 md:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
         <div className="w-full md:w-2/3">
           <label htmlFor="tutor-search" className="sr-only">Search tutors</label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-slate-400" />
+              <Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
             </div>
             <input
               id="tutor-search"
-              placeholder="Search subjects or tutor name (e.g. calculus, John Doe)"
+              placeholder="Search subjects or tutor name..."
               value={searchDraft}
               onChange={e => setSearchDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -526,28 +539,33 @@ const TuteeFindAndBookTutors: React.FC = () => {
                   setSearchQuery(searchDraft.trim());
                 }
               }}
-              className="w-full bg-white border border-slate-200 rounded-full pl-10 pr-10 py-2 shadow-sm focus:shadow-md transition-shadow duration-150 outline-none placeholder:text-slate-400"
+              className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-12 py-2 sm:py-2.5 text-sm md:text-base shadow-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-300 transition duration-150 placeholder:text-slate-400"
             />
             {searchDraft ? (
               <button
                 type="button"
                 aria-label="Clear search"
                 onClick={() => { setSearchDraft(''); setSearchQuery(''); }}
-                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition touch-manipulation"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
                   <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </button>
             ) : (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">Press Enter</div>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs text-slate-400 hidden sm:block">Press Enter</div>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-1/3">
-          <label className="text-sm text-slate-600">Filter:</label>
-          <select value={filterOption} onChange={e => setFilterOption(e.target.value as any)} className="border rounded-md px-3 py-2 w-full">
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <label className="text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap">Filter:</label>
+          <select
+            value={filterOption}
+            onChange={e => setFilterOption(e.target.value as any)}
+            className="border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-200 bg-white w-full md:w-48"
+          >
             <option value="all">All</option>
             <option value="has_subjects">Has subjects</option>
             <option value="top_rated">Top rated</option>
@@ -559,24 +577,27 @@ const TuteeFindAndBookTutors: React.FC = () => {
 
       {/* My Bookings */}
       {showMyBookings && (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
-          <h2 className="text-lg font-semibold">My Bookings</h2>
+        <div className="bg-white/90 backdrop-blur rounded-2xl shadow-lg border border-slate-100 p-4 sm:p-5 md:p-6">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-900">My Bookings</h2>
+            <span className="text-xs sm:text-sm text-slate-500">{myBookings.length} total</span>
+          </div>
           {myBookingsLoading ? (
-            <div className="text-slate-600">Loading your bookings...</div>
+            <div className="text-xs sm:text-sm md:text-base text-slate-600">Loading your bookings...</div>
           ) : myBookingsError ? (
-            <div className="text-red-500">{myBookingsError}</div>
+            <div className="text-xs sm:text-sm md:text-base text-red-500">{myBookingsError}</div>
           ) : myBookings.length === 0 ? (
-            <div className="text-slate-600">You have no bookings yet.</div>
+            <div className="text-xs sm:text-sm md:text-base text-slate-600">You have no bookings yet.</div>
           ) : (
-            <div className="mt-2 space-y-2">
+            <div className="mt-2 sm:mt-3 space-y-2 sm:space-y-3">
               {myBookings.map(b => (
-                <div key={b.id} className="border rounded p-2 flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">{b.subject} with {b.tutor?.user?.name || 'Tutor'}</div>
-                    <div className="text-sm text-slate-600">{new Date(b.date).toLocaleDateString()} · {b.time} · {b.duration}h</div>
-                    {b.student_notes && <div className="text-sm text-slate-500">Notes: {b.student_notes}</div>}
+                <div key={b.id} className="border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-sky-200 hover:shadow-md transition">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-xs sm:text-sm md:text-base text-slate-800 break-words">{b.subject} with {b.tutor?.user?.name || 'Tutor'}</div>
+                    <div className="text-[10px] sm:text-xs md:text-sm text-slate-600 mt-1">{new Date(b.date).toLocaleDateString()} · {b.time} · {b.duration}h</div>
+                    {b.student_notes && <div className="text-[10px] sm:text-xs md:text-sm text-slate-500 mt-1 break-words">Notes: {b.student_notes}</div>}
                   </div>
-                  <div className="text-sm font-medium">{b.status}</div>
+                  <div className="text-xs sm:text-sm md:text-base font-semibold px-3 py-1 rounded-full bg-sky-50 text-sky-700 whitespace-nowrap capitalize">{b.status}</div>
                 </div>
               ))}
             </div>
@@ -592,25 +613,28 @@ const TuteeFindAndBookTutors: React.FC = () => {
         ) : tutors.length === 0 ? (
           <div className="text-slate-600">No tutors found.</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTutors.map(t => (
-              <div key={t.user_id} className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+            {filteredTutors.map(t => {
+              const profileSubjects: string[] = (t as any).profile?.subjects || (t as any).tutor_profile?.subjects || [];
+              return (
+              <div key={t.user_id} className="group relative bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-xl hover:border-sky-200 transition-all duration-200">
+                <div className="absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-sky-400 via-indigo-400 to-sky-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                 <div className="flex items-start gap-3">
                   <img
                     src={getFileUrl(t.profile_image_url || '')}
                     alt={t.name}
-                    className="h-14 w-14 rounded-full object-cover"
+                    className="h-14 w-14 sm:h-16 sm:w-16 rounded-full object-cover flex-shrink-0 ring-4 ring-slate-50 shadow-md"
                     onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(t.name)}`; }}
                   />
-                  <div>
-                    <div className="font-semibold text-slate-800">{t.name}</div>
-                    <div className="text-sm text-slate-500">{t.university_name || 'N/A'}</div>
-                    <div className="flex items-center gap-1 mt-1">
-                      <div className="flex items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-xs sm:text-sm md:text-base text-slate-800 truncate">{t.name}</div>
+                    <div className="text-[10px] sm:text-xs md:text-sm text-slate-500 truncate">{t.university_name || 'N/A'}</div>
+                    <div className="flex items-center gap-1 mt-2 flex-wrap">
+                      <div className="flex items-center flex-shrink-0">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <svg
                             key={star}
-                            className={`w-4 h-4 ${star <= (t.tutor_profile?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
+                            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${star <= (t.tutor_profile?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
                             fill="currentColor"
                             viewBox="0 0 20 20"
                           >
@@ -618,27 +642,37 @@ const TuteeFindAndBookTutors: React.FC = () => {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-sm text-slate-600">
+                      <span className="text-[10px] sm:text-xs md:text-sm text-slate-600 truncate">
                         {t.tutor_profile?.rating?.toFixed(1) || 'No ratings'} 
-                        {t.tutor_profile?.total_reviews ? ` (${t.tutor_profile.total_reviews} reviews)` : ''}
+                        {t.tutor_profile?.total_reviews ? ` (${t.tutor_profile.total_reviews})` : ''}
                       </span>
+                      {profileSubjects.length ? (
+                        <span className="text-[10px] sm:text-xs text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-full">
+                          {profileSubjects[0]}
+                          {profileSubjects.length > 1 ? ' +' + (profileSubjects.length - 1) : ''}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="text-sm text-slate-600">Status: <span className="font-medium text-slate-800">{t.tutor_profile?.status || 'pending'}</span></div>
-                  <div className="flex items-center gap-2">
+                <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs md:text-sm text-slate-600">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                    <span className="font-medium capitalize">{t.tutor_profile?.status || 'pending'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button
                       onClick={() => openProfile(t)}
-                      className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700"
+                      className="px-3 sm:px-4 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-xl text-sm md:text-base font-semibold hover:shadow-lg transition-all w-full sm:w-auto touch-manipulation"
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       View Profile
                     </button>
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>
@@ -718,21 +752,22 @@ const TuteeFindAndBookTutors: React.FC = () => {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
               <div className="text-slate-600 font-medium">Loading profile...</div>
-            </div>
+      </div>
           ) : (
-            <div className="space-y-6">
+            <div className="max-h-[82vh] sm:max-h-[85vh] overflow-y-auto pr-1 sm:pr-3 lg:pr-4">
+              <div className="space-y-6">
               {/* Enhanced Header Section */}
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl">
-                <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-8 text-white relative overflow-hidden">
+              <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl">
+                <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-4 sm:p-6 md:p-8 text-white relative overflow-hidden">
                   {/* Decorative background pattern */}
                   <div className="absolute inset-0 opacity-10">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32"></div>
-                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24"></div>
+                    <div className="absolute top-0 right-0 w-32 h-32 sm:w-48 sm:h-48 md:w-64 md:h-64 bg-white rounded-full -mr-16 sm:-mr-24 md:-mr-32 -mt-16 sm:-mt-24 md:-mt-32"></div>
+                    <div className="absolute bottom-0 left-0 w-24 h-24 sm:w-36 sm:h-36 md:w-48 md:h-48 bg-white rounded-full -ml-12 sm:-ml-18 md:-ml-24 -mb-12 sm:-mb-18 md:-mb-24"></div>
                   </div>
                   
-                  <div className="relative flex items-start gap-6">
-                    <div className="relative">
-                      <div className="h-28 w-28 rounded-2xl ring-4 ring-white/30 shadow-2xl overflow-hidden flex-shrink-0 bg-white/10 backdrop-blur-sm">
+                  <div className="relative flex flex-col sm:flex-row items-start sm:items-start gap-3 sm:gap-4 md:gap-6">
+                    <div className="relative flex-shrink-0">
+                      <div className="h-20 w-20 sm:h-24 sm:w-24 md:h-28 md:w-28 rounded-xl sm:rounded-2xl ring-2 sm:ring-4 ring-white/30 shadow-2xl overflow-hidden bg-white/10 backdrop-blur-sm">
                         <img 
                           src={getFileUrl(selectedTutorProfile?.user?.profile_image_url || '')} 
                           alt={selectedTutorProfile?.user?.name} 
@@ -741,32 +776,32 @@ const TuteeFindAndBookTutors: React.FC = () => {
                         />
                       </div>
                       {selectedTutorProfile?.profile?.is_verified && (
-                        <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-1.5 ring-4 ring-white shadow-lg">
-                          <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <div className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-green-500 rounded-full p-1 sm:p-1.5 ring-2 sm:ring-4 ring-white shadow-lg">
+                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                           </svg>
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div>
-                          <h2 className="text-3xl font-bold leading-tight mb-1">{selectedTutorProfile?.user?.name}</h2>
-                          <div className="flex items-center gap-2 text-white/90">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex-1 min-w-0 w-full">
+                      <div className="flex items-start justify-between gap-2 sm:gap-3 md:gap-4 mb-2 sm:mb-3">
+                        <div className="min-w-0 flex-1">
+                          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight mb-1 truncate">{selectedTutorProfile?.user?.name}</h2>
+                          <div className="flex items-center gap-1.5 sm:gap-2 text-white/90">
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0v-5.5a2.5 2.5 0 015 0V21m-5 0h5m-5 0v-5.5a2.5 2.5 0 015 0V21" />
                             </svg>
-                            <span className="text-sm font-medium">{selectedTutorProfile?.user?.university_name || 'N/A'}</span>
+                            <span className="text-xs sm:text-sm font-medium truncate">{selectedTutorProfile?.user?.university_name || 'N/A'}</span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white text-sm rounded-full px-4 py-2 shadow-lg">
-                          <svg className="w-5 h-5 mr-2 text-yellow-300" fill="currentColor" viewBox="0 0 20 20">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm rounded-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 shadow-lg">
+                          <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-yellow-300 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                           </svg>
-                          <span className="font-bold text-lg">{selectedTutorProfile?.user?.tutor_profile?.rating?.toFixed(1) || '—'}</span>
-                          <span className="text-xs opacity-90 ml-2">
+                          <span className="font-bold text-sm sm:text-base md:text-lg">{selectedTutorProfile?.user?.tutor_profile?.rating?.toFixed(1) || '—'}</span>
+                          <span className="text-[10px] sm:text-xs opacity-90 ml-1.5 sm:ml-2">
                             {selectedTutorProfile?.user?.tutor_profile?.total_reviews 
                               ? `(${selectedTutorProfile.user.tutor_profile.total_reviews} ${selectedTutorProfile.user.tutor_profile.total_reviews === 1 ? 'review' : 'reviews'})` 
                               : 'No reviews'}
@@ -779,31 +814,34 @@ const TuteeFindAndBookTutors: React.FC = () => {
               </div>
 
               {/* Content Sections */}
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-5 md:space-y-6">
                 {/* About Section */}
-                <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-indigo-100 rounded-lg">
-                      <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {!showBookingForm && (
+                <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 shadow-md border border-slate-200">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-2.5 sm:mb-3 md:mb-4">
+                    <div className="p-1.5 sm:p-2 bg-indigo-100 rounded-lg flex-shrink-0">
+                      <svg className="w-4 h-4 sm:w-5 sm:w-5 md:w-6 md:h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800">About</h3>
+                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-slate-800">About</h3>
                   </div>
-                  <p className="text-slate-700 leading-relaxed text-base">{selectedTutorProfile?.profile?.bio || 'No bio provided.'}</p>
+                  <p className="text-xs sm:text-sm md:text-base text-slate-700 leading-relaxed break-words">{selectedTutorProfile?.profile?.bio || 'No bio provided.'}</p>
                 </div>
+                )}
 
                 {/* Subjects Section */}
-                <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-purple-100 rounded-lg">
-                      <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {!showBookingForm && (
+                <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 shadow-md border border-slate-200">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-2.5 sm:mb-3 md:mb-4">
+                    <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg flex-shrink-0">
+                      <svg className="w-4 h-4 sm:w-5 sm:w-5 md:w-6 md:h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                       </svg>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-800">Subjects</h3>
+                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-slate-800">Subjects</h3>
                   </div>
-                  <div className="flex flex-wrap gap-3">
+                  <div className="flex flex-wrap gap-2 sm:gap-3">
                     {(selectedTutorProfile?.profile?.subjects || []).map((s: string, i: number) => (
                       <button
                         key={i}
@@ -812,32 +850,34 @@ const TuteeFindAndBookTutors: React.FC = () => {
                           setSearchQuery(String(s));
                           setIsProfileOpen(false);
                         }}
-                        className="group relative px-4 py-2 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-800 rounded-lg hover:from-indigo-200 hover:to-purple-200 transition-all duration-200 font-medium text-sm shadow-sm hover:shadow-md border border-indigo-200 hover:border-indigo-300"
+                        className="group relative px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-800 rounded-lg hover:from-indigo-200 hover:to-purple-200 active:from-indigo-300 active:to-purple-300 transition-all duration-200 font-medium text-xs sm:text-sm shadow-sm hover:shadow-md border border-indigo-200 hover:border-indigo-300 touch-manipulation"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
-                        <span className="relative z-10">{s}</span>
+                        <span className="relative z-10 break-words">{s}</span>
                         <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg opacity-0 group-hover:opacity-10 transition-opacity"></div>
                       </button>
                     ))}
                   </div>
                 </div>
+                )}
 
                 {/* Availability Section */}
-                <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 rounded-xl p-6 shadow-lg border border-indigo-100">
-                  <div className="flex items-center gap-2 mb-4">
-                    <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 shadow-lg border border-indigo-100">
+                  <div className="flex items-center gap-1.5 sm:gap-2 mb-2.5 sm:mb-3 md:mb-4">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <h4 className="font-semibold text-indigo-900 text-lg">Availability</h4>
+                    <h4 className="font-semibold text-indigo-900 text-sm sm:text-base md:text-lg">Availability</h4>
                   </div>
                   {(selectedTutorProfile?.availability || []).length === 0 ? (
-                    <div className="text-center py-6">
-                      <svg className="w-12 h-12 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="text-center py-4 sm:py-5 md:py-6">
+                      <svg className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <div className="text-slate-500 text-sm">No availability provided.</div>
+                      <div className="text-xs sm:text-sm text-slate-500">No availability provided.</div>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
                       {(selectedTutorProfile?.availability || []).map((a: any, index: number) => {
                         const dayColors: Record<string, { bg: string; border: string; text: string; icon: string }> = {
                           'Monday': { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-800', icon: '📅' },
@@ -856,35 +896,35 @@ const TuteeFindAndBookTutors: React.FC = () => {
                         return (
                           <div 
                             key={a.availability_id || a.day_of_week || index} 
-                            className={`${colors.bg} ${colors.border} border-2 rounded-lg p-3 transition-all duration-200 hover:shadow-md hover:scale-[1.02]`}
+                            className={`${colors.bg} ${colors.border} border-2 rounded-lg p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md hover:scale-[1.01] sm:hover:scale-[1.02]`}
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg">{colors.icon}</span>
-                                <div className={`font-bold ${colors.text} text-sm uppercase tracking-wide`}>
+                            <div className="flex items-center justify-between mb-1.5 sm:mb-2 gap-2">
+                              <div className="flex items-center gap-1.5 sm:gap-2">
+                                <span className="text-base sm:text-lg">{colors.icon}</span>
+                                <div className={`font-bold ${colors.text} text-xs sm:text-sm uppercase tracking-wide`}>
                                   {dayName.substring(0, 3)}
                                 </div>
                               </div>
                               {isUpcoming && (
-                                <span className="text-xs bg-white/70 text-slate-600 px-2 py-0.5 rounded-full font-medium">
+                                <span className="text-[10px] sm:text-xs bg-white/70 text-slate-600 px-1.5 sm:px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
                                   Next: {new Date(nextDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2">
-                              <svg className={`w-4 h-4 ${colors.text}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="flex items-center gap-1.5 sm:gap-2">
+                              <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${colors.text} flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <div className={`${colors.text} font-semibold text-sm`}>
+                              <div className={`${colors.text} font-semibold text-xs sm:text-sm`}>
                                 {a.start_time?.substring(0, 5) || a.start_time} - {a.end_time?.substring(0, 5) || a.end_time}
                               </div>
                             </div>
-                            <div className="mt-2 pt-2 border-t border-white/50">
+                            <div className="mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-white/50">
                               <div className="flex items-center gap-1">
-                                <svg className="w-3 h-3 text-slate-500" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                                 </svg>
-                                <span className="text-xs text-slate-600">
+                                <span className="text-[10px] sm:text-xs text-slate-600">
                                   {(() => {
                                     const start = new Date(`1970-01-01T${a.start_time}`);
                                     const end = new Date(`1970-01-01T${a.end_time}`);
@@ -897,7 +937,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                           </div>
                         );
                       })}
-                      <div className="mt-4 pt-3 border-t border-indigo-200">
+                      {/* <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-indigo-200">
                         <button
                           onClick={() => {
                             if (selectedTutorProfile?.availability?.length > 0) {
@@ -909,14 +949,15 @@ const TuteeFindAndBookTutors: React.FC = () => {
                               }
                             }
                           }}
-                          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-medium py-2 px-4 rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs sm:text-sm font-medium py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg hover:from-indigo-700 hover:to-purple-700 active:from-indigo-800 active:to-purple-800 transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 sm:gap-2 touch-manipulation"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                           Book Next Available Slot
                         </button>
-                      </div>
+                      </div> */}
                     </div>
                   )}
                 </div>
@@ -924,193 +965,242 @@ const TuteeFindAndBookTutors: React.FC = () => {
 
               {/* Booking Form (hidden initially; revealed when the user clicks Book) */}
               {showBookingForm && (
-                <div className="mt-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-6 shadow-lg border-2 border-blue-200">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2.5 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-md">
-                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="overflow-hidden rounded-3xl border border-slate-100 shadow-2xl bg-white">
+                  <div className="bg-gradient-to-r from-sky-600 via-indigo-600 to-indigo-700 px-4 sm:px-6 py-4 text-white flex flex-wrap items-center gap-3">
+                    <div className="p-2 bg-white/15 rounded-xl">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                     </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-slate-800">Book a Session</h3>
-                      <p className="text-sm text-slate-600">Fill in the details below to request a tutoring session</p>
+                    <div className="flex-1 min-w-[200px]">
+                      <h3 className="text-xl sm:text-2xl font-bold leading-tight">Book a Session</h3>
+                      <p className="text-xs sm:text-sm text-white/80">Choose your subject, schedule, and leave notes for your tutor.</p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs sm:text-sm text-white/80">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-1">
+                        <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                        Step 1 · Details
+                      </span>
+                      <span className="hidden sm:inline">Step 2 · Review & Confirm</span>
                     </div>
                   </div>
 
-                  <div className="space-y-5">
-                    {/* Subject selector */}
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                        <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                        </svg>
-                        Subject
-                      </label>
-                      <select
-                        className={`w-full border-2 ${bookingErrors.subject ? 'border-red-300 bg-red-50' : 'border-slate-300 bg-white'} px-4 py-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium`}
-                        value={bookingForm.subject}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setBookingForm(prev => ({ ...prev, subject: value }));
-                          setBookingErrors(prev => { const p = { ...prev }; delete (p as any).subject; return p; });
-                        }}
-                      >
-                        <option value="">Select a subject</option>
-                        {(selectedTutorProfile?.profile?.subjects || []).map((s: string, i: number) => (
-                          <option key={i} value={s}>{s}</option>
-                        ))}
-                      </select>
-                      {bookingErrors.subject && (
-                        <div className="mt-1.5 flex items-center gap-1.5 text-sm text-red-600">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          {bookingErrors.subject}
-                        </div>
-                      )}
-                    </div>
+                  <div className="px-4 sm:px-6 py-6 sm:py-8">
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.8fr)_minmax(280px,1fr)]">
+                      <div className="space-y-5">
+                        <section className="p-4 sm:p-5 border border-slate-100 rounded-2xl shadow-sm bg-white/80 backdrop-blur">
+                          <div className="flex items-center justify-between gap-2 mb-3">
+                            <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-sky-200 to-blue-200 text-sky-700 font-bold text-base shadow-md">1</span>
+                              Subject Selection
+                            </h4>
+                            <button
+                              type="button"
+                              className="px-3 py-1.5 rounded-lg border border-sky-300 text-sky-600 hover:bg-sky-50 text-xs font-medium transition-colors"
+                              onClick={() => {
+                                if ((selectedTutorProfile?.profile?.subjects || []).length > 0) {
+                                  setSearchDraft(selectedTutorProfile.profile.subjects[0]);
+                                  setSearchQuery(selectedTutorProfile.profile.subjects[0]);
+                                }
+                              }}
+                            >
+                              View subject list
+                            </button>
+                          </div>
+                          <select
+                            className={`w-full border-2 ${bookingErrors.subject ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'} px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all font-medium`}
+                            value={bookingForm.subject}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setBookingForm(prev => ({ ...prev, subject: value }));
+                              setBookingErrors(prev => { const p = { ...prev }; delete (p as any).subject; return p; });
+                            }}
+                          >
+                            <option value="">Select a subject</option>
+                            {(selectedTutorProfile?.profile?.subjects || []).map((s: string, i: number) => (
+                              <option key={i} value={s}>{s}</option>
+                            ))}
+                          </select>
+                          {bookingErrors.subject && (
+                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1.5">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                              {bookingErrors.subject}
+                            </p>
+                          )}
+                        </section>
 
-                    {/* Date and Time Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                          <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          Date
-                        </label>
-                        <input
-                          type="date"
-                          className={`w-full border-2 ${bookingErrors.date ? 'border-red-300 bg-red-50' : 'border-slate-300 bg-white'} px-4 py-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium`}
-                          value={bookingForm.date}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setBookingForm(prev => ({ ...prev, date: value }));
-                            setBookingErrors(prev => { const p = { ...prev }; delete (p as any).date; delete (p as any).time; return p; });
-                          }}
-                          min={new Date().toISOString().split('T')[0]}
-                        />
-                        {bookingErrors.date && (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-sm text-red-600">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            {bookingErrors.date}
+                        <section className="p-4 sm:p-5 border border-slate-100 rounded-2xl shadow-sm bg-white/80 backdrop-blur space-y-4">
+                          <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-200 to-purple-200 text-indigo-700 font-bold text-base shadow-md">2</span>
+                            Schedule & Duration
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <label className="block text-sm font-semibold text-slate-700">Date</label>
+                              <input
+                                type="date"
+                                className={`w-full border-2 ${bookingErrors.date ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'} px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all font-medium`}
+                                value={bookingForm.date}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setBookingForm(prev => ({ ...prev, date: value }));
+                                  setBookingErrors(prev => { const p = { ...prev }; delete (p as any).date; delete (p as any).time; return p; });
+                                }}
+                                min={new Date().toISOString().split('T')[0]}
+                              />
+                              {bookingErrors.date && (
+                                <p className="text-sm text-red-600 flex items-center gap-1.5">
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {bookingErrors.date}
+                                </p>
+                              )}
+                              {bookingForm.date && !availableTimeSlots.length && (
+                                <div className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg flex items-center gap-2">
+                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  No available times on this date
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="block text-sm font-semibold text-slate-700">
+                                Time {availableTimeSlots.length > 0 && <span className="text-xs font-normal text-slate-500">({availableTimeSlots.length} slots)</span>}
+                              </label>
+                              <select
+                                className={`w-full border-2 ${bookingErrors.time ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'} ${!bookingForm.date ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''} px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all font-medium`}
+                                value={bookingForm.time}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setBookingForm(prev => ({ ...prev, time: value }));
+                                  setBookingErrors(prev => { const p = { ...prev }; delete (p as any).time; return p; });
+                                }}
+                                disabled={!bookingForm.date}
+                              >
+                                <option value="">Select time</option>
+                                {availableTimeSlots.map(time => (
+                                  <option key={time} value={time}>{time}</option>
+                                ))}
+                              </select>
+                              {bookingErrors.time && (
+                                <p className="text-sm text-red-600 flex items-center gap-1.5">
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {bookingErrors.time}
+                                </p>
+                              )}
+                              {!bookingForm.date && (
+                                <p className="text-xs text-slate-500">Please select a date first</p>
+                              )}
+                            </div>
+
+                            <div className="space-y-2 md:col-span-2">
+                              <label className="block text-sm font-semibold text-slate-700">Duration</label>
+                              <select
+                                className={`w-full border-2 ${bookingErrors.duration ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'} ${allowedDurations.length === 0 ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''} px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all font-medium`}
+                                value={bookingForm.duration}
+                                onChange={(e) => {
+                                  const value = Number(e.target.value);
+                                  if (!isNaN(value)) setBookingForm(prev => ({ ...prev, duration: value }));
+                                  setBookingErrors(prev => { const p = { ...prev }; delete (p as any).duration; return p; });
+                                }}
+                                disabled={allowedDurations.length === 0}
+                              >
+                                <option value={0}>Select duration</option>
+                                {allowedDurations.map(d => (
+                                  <option key={d} value={d}>{d} {d === 1 ? 'hour' : 'hours'}</option>
+                                ))}
+                              </select>
+                              {bookingErrors.duration && (
+                                <p className="text-sm text-red-600 flex items-center gap-1.5">
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  {bookingErrors.duration}
+                                </p>
+                              )}
+                              <div className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
+                                Choose a duration that fits within the tutor's availability window
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        {bookingForm.date && !availableTimeSlots.length && (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
-                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            No available times on this date
-                          </div>
-                        )}
+                        </section>
+
+                        <section className="p-4 sm:p-5 border border-slate-100 rounded-2xl shadow-sm bg-white/80 backdrop-blur">
+                          <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-3">
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-purple-200 to-pink-200 text-purple-700 font-bold text-base shadow-md">3</span>
+                            Notes & Requests
+                          </h4>
+                          <textarea
+                            className="w-full border-2 border-slate-200 bg-white px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all resize-none min-h-[120px]"
+                            placeholder="Share learning goals or special instructions for the tutor..."
+                            value={bookingForm.student_notes}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setBookingForm(prev => ({ ...prev, student_notes: value }));
+                              setBookingErrors(prev => { const p = { ...prev }; delete (p as any).student_notes; return p; });
+                            }}
+                          />
+                          {bookingErrors.student_notes && (
+                            <p className="mt-2 text-sm text-red-600 flex items-center gap-1.5">
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                              {bookingErrors.student_notes}
+                            </p>
+                          )}
+                        </section>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                          <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Time {availableTimeSlots.length > 0 && <span className="text-xs font-normal text-slate-500">({availableTimeSlots.length} slots)</span>}
-                        </label>
-                        <select
-                          className={`w-full border-2 ${bookingErrors.time ? 'border-red-300 bg-red-50' : 'border-slate-300 bg-white'} ${!bookingForm.date ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''} px-4 py-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium`}
-                          value={bookingForm.time}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setBookingForm(prev => ({ ...prev, time: value }));
-                            setBookingErrors(prev => { const p = { ...prev }; delete (p as any).time; return p; });
-                          }}
-                          disabled={!bookingForm.date}
-                        >
-                          <option value="">Select time</option>
-                          {availableTimeSlots.map(time => (
-                            <option key={time} value={time}>{time}</option>
+                      <aside className="bg-slate-50 border border-slate-100 rounded-2xl p-4 sm:p-5 space-y-4 h-fit">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={getFileUrl(selectedTutorProfile?.user?.profile_image_url || '')}
+                            onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedTutorProfile?.user?.name || 'Tutor')}`; }}
+                            alt={selectedTutorProfile?.user?.name}
+                            className="h-12 w-12 rounded-full object-cover border border-white shadow"
+                          />
+                          <div>
+                            <p className="text-sm text-slate-500">Tutoring with</p>
+                            <p className="text-base font-semibold text-slate-900">{selectedTutorProfile?.user?.name}</p>
+                            <p className="text-xs text-slate-500">{selectedTutorProfile?.user?.university_name}</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 text-sm">
+                          {[
+                            { label: 'Subject', value: bookingForm.subject || 'Select subject' },
+                            { label: 'Date', value: bookingForm.date ? new Date(bookingForm.date).toLocaleDateString() : 'Select date' },
+                            { label: 'Time', value: bookingForm.time || 'Select time' },
+                            { label: 'Duration', value: bookingForm.duration ? `${bookingForm.duration} hour${bookingForm.duration !== 1 ? 's' : ''}` : 'Select duration' },
+                          ].map((item) => (
+                            <div key={item.label} className="flex items-center justify-between rounded-xl bg-white px-3 py-2 border border-slate-100">
+                              <span className="text-slate-500">{item.label}</span>
+                              <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{item.value}</span>
+                            </div>
                           ))}
-                        </select>
-                        {bookingErrors.time && (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-sm text-red-600">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                            </svg>
-                            {bookingErrors.time}
-                          </div>
-                        )}
-                        {!bookingForm.date && (
-                          <div className="mt-1.5 text-xs text-slate-500">Please select a date first</div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Duration */}
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                        <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Duration
-                      </label>
-                      <select
-                        className={`w-full border-2 ${bookingErrors.duration ? 'border-red-300 bg-red-50' : 'border-slate-300 bg-white'} ${allowedDurations.length === 0 ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''} px-4 py-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium`}
-                        value={bookingForm.duration}
-                        onChange={(e) => {
-                          const value = Number(e.target.value);
-                          if (!isNaN(value)) setBookingForm(prev => ({ ...prev, duration: value }));
-                          setBookingErrors(prev => { const p = { ...prev }; delete (p as any).duration; return p; });
-                        }}
-                        disabled={allowedDurations.length === 0}
-                      >
-                        <option value={0}>Select duration</option>
-                        {allowedDurations.map(d => (
-                          <option key={d} value={d}>{d} {d === 1 ? 'hour' : 'hours'}</option>
-                        ))}
-                      </select>
-                      {bookingErrors.duration && (
-                        <div className="mt-1.5 flex items-center gap-1.5 text-sm text-red-600">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          {bookingErrors.duration}
                         </div>
-                      )}
-                      <div className="mt-1.5 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
-                        Choose a duration that fits within the tutor's availability window
-                      </div>
-                    </div>
 
-                    {/* Notes */}
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                        <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Notes <span className="text-xs font-normal text-slate-500">(optional)</span>
-                      </label>
-                      <textarea
-                        className="w-full border-2 border-slate-300 bg-white px-4 py-3 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none"
-                        placeholder="Add any special requests or notes for the tutor..."
-                        rows={4}
-                        value={bookingForm.student_notes}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setBookingForm(prev => ({ ...prev, student_notes: value }));
-                          setBookingErrors(prev => { const p = { ...prev }; delete (p as any).student_notes; return p; });
-                        }}
-                      />
-                      {bookingErrors.student_notes && (
-                        <div className="mt-1.5 flex items-center gap-1.5 text-sm text-red-600">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                          {bookingErrors.student_notes}
+                        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/60 p-4 text-sm space-y-2">
+                          <p className="font-semibold text-slate-800">Need to remember:</p>
+                          <ul className="text-slate-600 list-disc pl-5 space-y-1">
+                            <li>GCash confirmation is required after tutor approval.</li>
+                            <li>You’ll get email + in-app updates.</li>
+                            <li>Booking can be cancelled before tutor approval.</li>
+                          </ul>
                         </div>
-                      )}
+                      </aside>
                     </div>
                   </div>
                 </div>
               )}
+              </div>
             </div>
           )}
         </Modal>
@@ -1233,9 +1323,10 @@ const TuteeFindAndBookTutors: React.FC = () => {
       )}
 
       {/* Toast Container */}
-      <ToastContainer position="top-center" />
+      <ToastContainer position="top-center" {...{ 'aria-label': 'Notification center' }} />
       
     </div>
+  </div>
   );
 };
 

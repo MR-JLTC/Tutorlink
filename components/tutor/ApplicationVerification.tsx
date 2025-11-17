@@ -680,20 +680,20 @@ const ApplicationVerification: React.FC = () => {
 
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-1 flex items-center gap-3">
-              <FileText className="h-8 w-8" />
-              Application & Verification
+    <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-2.5 md:gap-3">
+              <FileText className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+              <span className="truncate">Application & Verification</span>
             </h1>
-            <p className="text-blue-100">Manage your tutor application and subject expertise</p>
+            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Manage your tutor application and subject expertise</p>
           </div>
-          <div className={`px-4 py-2 rounded-full text-sm font-semibold bg-white text-slate-800 shadow ${getStatusColor(applicationStatus).replace('bg-', 'border-').replace(' text-', ' ')}`}>
-            <div className="flex items-center space-x-2">
+          <div className={`px-2.5 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 rounded-full text-[10px] sm:text-xs md:text-sm font-semibold bg-white text-slate-800 shadow flex-shrink-0 ${getStatusColor(applicationStatus).replace('bg-', 'border-').replace(' text-', ' ')}`}>
+            <div className="flex items-center space-x-1 sm:space-x-1.5 md:space-x-2">
               {getStatusIcon(applicationStatus)}
-              <span>{applicationStatus.charAt(0).toUpperCase() + applicationStatus.slice(1)}</span>
+              <span className="whitespace-nowrap">{applicationStatus.charAt(0).toUpperCase() + applicationStatus.slice(1)}</span>
             </div>
           </div>
         </div>
@@ -701,19 +701,19 @@ const ApplicationVerification: React.FC = () => {
 
       {/* Error message for users without tutor profiles */}
       {tutorIdError && (
-        <Card className="p-6 border-red-200 bg-red-50">
-          <div className="flex items-center space-x-3">
-            <X className="h-6 w-6 text-red-600 flex-shrink-0" />
-            <div>
-              <h3 className="text-lg font-semibold text-red-800">Tutor Profile Not Found</h3>
-              <p className="text-red-700 mt-1">{tutorIdError}</p>
-              <p className="text-sm text-red-600 mt-2">
+        <Card className="p-3 sm:p-4 md:p-6 border-red-200 bg-red-50 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex items-start space-x-2 sm:space-x-3">
+            <X className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm sm:text-base md:text-lg font-semibold text-red-800">Tutor Profile Not Found</h3>
+              <p className="text-xs sm:text-sm md:text-base text-red-700 mt-1 break-words">{tutorIdError}</p>
+              <p className="text-[10px] sm:text-xs md:text-sm text-red-600 mt-2">
                 If you believe this is an error, please contact support or try logging out and logging back in.
               </p>
-              <div className="mt-4">
+              <div className="mt-2.5 sm:mt-3 md:mt-4">
                 <Button 
                   onClick={() => window.location.href = '/tutor-registration'}
-                  className="bg-white text-blue-700 hover:bg-blue-50 border-2 border-blue-600 font-semibold"
+                  className="w-full sm:w-auto bg-white text-blue-700 hover:bg-blue-50 border-2 border-blue-600 font-semibold text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
                 >
                   Complete Tutor Registration
                 </Button>
@@ -724,50 +724,50 @@ const ApplicationVerification: React.FC = () => {
       )}
 
       {/* Main Application Status */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold flex items-center">
-            <FileText className="h-5 w-5 mr-2 text-blue-600" />
-            Main Application Status
+      <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex items-center justify-between mb-2.5 sm:mb-3 md:mb-4">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center">
+            <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 mr-1.5 sm:mr-2 text-blue-600 flex-shrink-0" />
+            <span className="truncate">Main Application Status</span>
           </h2>
         </div>
         
         {applicationStatus?.toLowerCase() === 'approved' ? (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <CheckCircle className="h-6 w-6 text-green-600 mr-3" />
-              <div>
-                <p className="font-medium text-green-800">Your application has been approved!</p>
-                <p className="text-sm text-green-600 mt-1">You can now start accepting tutoring sessions.</p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 sm:p-3 md:p-4">
+            <div className="flex items-start sm:items-center">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-green-600 mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm md:text-base font-medium text-green-800">Your application has been approved!</p>
+                <p className="text-[10px] sm:text-xs md:text-sm text-green-600 mt-1">You can now start accepting tutoring sessions.</p>
               </div>
             </div>
           </div>
         ) : applicationStatus?.toLowerCase() === 'rejected' ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 sm:p-3 md:p-4">
             <div className="flex items-start">
-              <X className="h-6 w-6 text-red-600 mr-3 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-red-800">Your application has been rejected</p>
-                <p className="text-sm text-red-600 mt-1">Your application did not meet the requirements. Please review the feedback below and resubmit if needed.</p>
+              <X className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-red-600 mr-2 sm:mr-3 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm md:text-base font-medium text-red-800">Your application has been rejected</p>
+                <p className="text-[10px] sm:text-xs md:text-sm text-red-600 mt-1">Your application did not meet the requirements. Please review the feedback below and resubmit if needed.</p>
                 
                 {/* Admin Rejection Reason - Always show this section when rejected */}
-                <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-md">
-                  <p className="text-sm font-medium text-red-800 mb-1">Rejection Reason:</p>
+                <div className="mt-2.5 sm:mt-3 p-2 sm:p-3 bg-red-100 border border-red-300 rounded-md">
+                  <p className="text-[10px] sm:text-xs md:text-sm font-medium text-red-800 mb-1">Rejection Reason:</p>
                   {adminNotes ? (
-                    <p className="text-sm text-red-700 leading-relaxed whitespace-pre-wrap">{adminNotes}</p>
+                    <p className="text-[10px] sm:text-xs md:text-sm text-red-700 leading-relaxed whitespace-pre-wrap break-words">{adminNotes}</p>
                   ) : (
-                    <p className="text-sm text-red-600 italic">No specific rejection reason was provided. Please review your application and ensure all requirements are met before resubmitting.</p>
+                    <p className="text-[10px] sm:text-xs md:text-sm text-red-600 italic">No specific rejection reason was provided. Please review your application and ensure all requirements are met before resubmitting.</p>
                   )}
                 </div>
                 
-                <div className="mt-4">
+                <div className="mt-2.5 sm:mt-3 md:mt-4">
                   <Button 
                     onClick={async () => {
                       // Fetch fresh data before showing form
                       await fetchFullTutorDataForReapplication();
                       setShowReapplicationForm(true);
                     }}
-                    className="bg-blue-600 hover:bg-blue-700"
+                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
                   >
                     Reapply - Update Application
                   </Button>
@@ -776,12 +776,12 @@ const ApplicationVerification: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <Clock className="h-6 w-6 text-yellow-600 mr-3" />
-              <div>
-                <p className="font-medium text-yellow-800">⏳ Your application is pending review</p>
-                <p className="text-sm text-yellow-600 mt-1">An admin will review your documents and approve your account.</p>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2.5 sm:p-3 md:p-4">
+            <div className="flex items-start sm:items-center">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-yellow-600 mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm md:text-base font-medium text-yellow-800">⏳ Your application is pending review</p>
+                <p className="text-[10px] sm:text-xs md:text-sm text-yellow-600 mt-1">An admin will review your documents and approve your account.</p>
               </div>
             </div>
           </div>
@@ -789,38 +789,38 @@ const ApplicationVerification: React.FC = () => {
       </Card>
 
       {/* Current Approved Subjects */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Approved Subjects of Expertise</h2>
+      <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0 mb-2.5 sm:mb-3 md:mb-4">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold">Approved Subjects of Expertise</h2>
           {isVerified && (
             <Button 
               onClick={() => setShowNewSubjectForm(true)}
-              className="flex items-center space-x-2"
+              className="w-full sm:w-auto flex items-center justify-center space-x-1.5 sm:space-x-2 text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               <span>Apply for New Subject</span>
             </Button>
           )}
         </div>
         
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           {subjectApplications
             .filter(app => app.status === 'approved')
             .map(app => (
               <span
                 key={app.id}
-                className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm flex items-center gap-2"
+                className="px-2 sm:px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2"
               >
-                <CheckCircle className="h-3 w-3" />
-                {app.subject_name}
+                <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
+                <span className="break-words">{app.subject_name}</span>
               </span>
             ))}
           {subjectApplications.filter(app => app.status === 'approved').length === 0 && (
-            <div className="w-full text-center py-4">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <Clock className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
-                <p className="text-yellow-800 font-medium">No approved subjects yet</p>
-                <p className="text-sm text-yellow-700 mt-1">
+            <div className="w-full text-center py-3 sm:py-4">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
+                <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-600 mx-auto mb-2" />
+                <p className="text-xs sm:text-sm md:text-base text-yellow-800 font-medium">No approved subjects yet</p>
+                <p className="text-[10px] sm:text-xs md:text-sm text-yellow-700 mt-1">
                   Your subject expertise applications are being reviewed by our admin team.
                 </p>
               </div>
@@ -831,27 +831,28 @@ const ApplicationVerification: React.FC = () => {
 
       {/* New Subject Application Form */}
       {showNewSubjectForm && (
-        <Card className="p-6 border-2 border-blue-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-blue-800">Apply for Additional Subject</h3>
+        <Card className="p-3 sm:p-4 md:p-6 border-2 border-blue-200 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex items-center justify-between mb-2.5 sm:mb-3 md:mb-4">
+            <h3 className="text-sm sm:text-base md:text-lg font-semibold text-blue-800">Apply for Additional Subject</h3>
             <button
               onClick={() => setShowNewSubjectForm(false)}
-              className="text-slate-500 hover:text-slate-700"
+              className="text-slate-500 hover:text-slate-700 flex-shrink-0 ml-2 p-1"
+              aria-label="Close form"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           </div>
           
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Select Subject
               </label>
-              <p className="text-xs text-slate-500 mb-2">
+              <p className="text-[10px] sm:text-xs text-slate-500 mb-1.5 sm:mb-2">
                 Subjects are filtered based on your course. You can apply for new subjects or reapply for previously rejected subjects.
               </p>
               <select
-                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm"
                 value={subjectToAdd}
                 onChange={handleSubjectDropdownChange}
               >
@@ -888,10 +889,10 @@ const ApplicationVerification: React.FC = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Custom Subject (Optional)
               </label>
-              <p className="text-xs text-slate-500 mb-2">
+              <p className="text-[10px] sm:text-xs text-slate-500 mb-1.5 sm:mb-2">
                 If your desired subject is not in the dropdown above, you can type a custom subject name here.
                 {isCustomInputDisabled && (
                   <span className="text-blue-600 font-medium ml-1">
@@ -901,7 +902,7 @@ const ApplicationVerification: React.FC = () => {
               </p>
               <input
                 type="text"
-                className={`w-full border rounded-lg px-3 py-2 ${
+                className={`w-full border rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm ${
                   isCustomInputDisabled 
                     ? 'border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed' 
                     : 'border-slate-300 bg-white'
@@ -918,7 +919,7 @@ const ApplicationVerification: React.FC = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Supporting Documents
               </label>
               <input
@@ -926,12 +927,12 @@ const ApplicationVerification: React.FC = () => {
                 multiple
                 accept=".pdf,.png,.jpg,.jpeg"
                 onChange={handleNewSubjectDocsChange}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
               />
               {newSubjectDocuments.length > 0 && (
-                <ul className="list-disc list-inside text-sm text-slate-600 mt-2">
+                <ul className="list-disc list-inside text-xs sm:text-sm text-slate-600 mt-2 space-y-1">
                   {newSubjectDocuments.map((f, i) => (
-                    <li key={i}>{f.name}</li>
+                    <li key={i} className="break-words">{f.name}</li>
                   ))}
                 </ul>
               )}
@@ -939,17 +940,17 @@ const ApplicationVerification: React.FC = () => {
             
             {/* Subject Preview */}
             {(subjectToAdd || otherSubject.trim()) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <h4 className="text-sm font-medium text-blue-800 mb-1">Subject to be submitted:</h4>
-                <p className="text-blue-700">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 sm:p-3">
+                <h4 className="text-xs sm:text-sm font-medium text-blue-800 mb-1">Subject to be submitted:</h4>
+                <p className="text-xs sm:text-sm text-blue-700 break-words">
                   {subjectToAdd || otherSubject.trim()}
                   {subjectToAdd && otherSubject.trim() && (
-                    <span className="text-xs text-blue-600 ml-2">
+                    <span className="text-[10px] sm:text-xs text-blue-600 ml-2">
                       (Using dropdown selection)
                     </span>
                   )}
                   {!subjectToAdd && otherSubject.trim() && (
-                    <span className="text-xs text-blue-600 ml-2">
+                    <span className="text-[10px] sm:text-xs text-blue-600 ml-2">
                       (Custom subject)
                     </span>
                   )}
@@ -957,14 +958,15 @@ const ApplicationVerification: React.FC = () => {
               </div>
             )}
             
-            <div className="flex space-x-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <Button 
                 onClick={submitNewSubjectApplication}
                 disabled={(!subjectToAdd && !otherSubject.trim()) || newSubjectDocuments.length === 0}
+                className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
               >
                 Submit Application
               </Button>
-              <Button variant="secondary" onClick={() => setShowNewSubjectForm(false)}>
+              <Button variant="secondary" onClick={() => setShowNewSubjectForm(false)} className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2">
                 Cancel
               </Button>
             </div>
@@ -974,47 +976,47 @@ const ApplicationVerification: React.FC = () => {
 
       {/* Subject Applications History */}
       {subjectApplications.length > 0 && (
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Subject Application History</h2>
-          <div className="space-y-4">
+        <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-2.5 sm:mb-3 md:mb-4">Subject Application History</h2>
+          <div className="space-y-2.5 sm:space-y-3 md:space-y-4">
             {subjectApplications.map(app => (
-              <div key={app.id} className="p-4 bg-slate-50 rounded-lg border">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-3">
-                    <span className="font-medium text-slate-800">{app.subject_name}</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(app.status)}`}>
-                      <div className="flex items-center space-x-1">
+              <div key={app.id} className="p-2.5 sm:p-3 md:p-4 bg-slate-50 rounded-lg border">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-2">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 min-w-0 flex-1">
+                    <span className="font-medium text-xs sm:text-sm md:text-base text-slate-800 break-words">{app.subject_name}</span>
+                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium border flex-shrink-0 ${getStatusColor(app.status)}`}>
+                      <div className="flex items-center space-x-0.5 sm:space-x-1">
                         {getStatusIcon(app.status)}
                         <span>{app.status.charAt(0).toUpperCase() + app.status.slice(1)}</span>
                       </div>
                     </span>
                   </div>
-                  <span className="text-sm text-slate-500">
+                  <span className="text-xs sm:text-sm text-slate-500 whitespace-nowrap">
                     Applied: {new Date(app.created_at).toLocaleDateString()}
                   </span>
                 </div>
                 
                 {app.status === 'rejected' && (
-                  <div className="mt-3 p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <div className="flex items-start space-x-3">
-                      <X className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm font-semibold text-red-800">❌ Application Rejected</p>
-                          <span className="text-xs text-red-600">
+                  <div className="mt-3 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-start space-x-2 sm:space-x-3">
+                      <X className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0 mb-2">
+                          <p className="text-xs sm:text-sm font-semibold text-red-800">❌ Application Rejected</p>
+                          <span className="text-xs text-red-600 whitespace-nowrap">
                             Rejected: {new Date(app.updated_at).toLocaleDateString()}
                           </span>
                         </div>
                         {app.admin_notes ? (
                           <div>
-                            <p className="text-sm font-medium text-red-700 mb-1">Admin Feedback:</p>
-                            <div className="bg-red-100 border border-red-300 rounded-md p-3">
-                              <p className="text-sm text-red-800 leading-relaxed">{app.admin_notes}</p>
+                            <p className="text-xs sm:text-sm font-medium text-red-700 mb-1">Admin Feedback:</p>
+                            <div className="bg-red-100 border border-red-300 rounded-md p-2 sm:p-3">
+                              <p className="text-xs sm:text-sm text-red-800 leading-relaxed break-words">{app.admin_notes}</p>
                             </div>
                           </div>
                         ) : (
                           <div>
-                            <p className="text-sm font-medium text-red-700 mb-1">No specific feedback provided</p>
+                            <p className="text-xs sm:text-sm font-medium text-red-700 mb-1">No specific feedback provided</p>
                             <p className="text-xs text-red-600">
                               The application was rejected based on current requirements and standards. 
                               You can reapply with additional documentation or qualifications.
@@ -1032,10 +1034,10 @@ const ApplicationVerification: React.FC = () => {
                 )}
                 
                 {app.status === 'approved' && (
-                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="mt-3 p-2 sm:p-3 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <p className="text-sm text-green-800 font-medium">
+                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      <p className="text-xs sm:text-sm text-green-800 font-medium">
                         This subject is now part of your approved expertise areas!
                       </p>
                     </div>
@@ -1043,10 +1045,10 @@ const ApplicationVerification: React.FC = () => {
                 )}
                 
                 {app.status === 'pending' && (
-                  <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <div className="mt-3 p-2 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-yellow-600" />
-                      <p className="text-sm text-yellow-800">
+                      <Clock className="h-4 w-4 text-yellow-600 flex-shrink-0" />
+                      <p className="text-xs sm:text-sm text-yellow-800">
                         Your application is being reviewed by our admin team.
                       </p>
                     </div>
@@ -1056,26 +1058,26 @@ const ApplicationVerification: React.FC = () => {
                 {/* Supporting Documents */}
                 {app.documents && app.documents.length > 0 && (
                   <div className="mt-3">
-                    <h5 className="text-sm font-medium text-slate-700 mb-2">Supporting Documents:</h5>
-                    <ul className="space-y-1">
+                    <h5 className="text-xs sm:text-sm font-medium text-slate-700 mb-2">Supporting Documents:</h5>
+                    <ul className="space-y-1.5 sm:space-y-2">
                       {app.documents.map((doc) => (
-                        <li key={doc.id} className="flex items-center justify-between bg-slate-50 rounded p-2">
-                          <div className="flex items-center min-w-0">
+                        <li key={doc.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-50 rounded p-2">
+                          <div className="flex items-center min-w-0 flex-1">
                             <FileText className="h-4 w-4 mr-2 text-primary-600 flex-shrink-0"/>
                             <button
                               type="button"
                               onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
-                              className="text-primary-600 hover:underline truncate text-left text-sm"
+                              className="text-primary-600 hover:underline truncate text-left text-xs sm:text-sm"
                               title="Open file"
                             >
                               {doc.file_name}
                             </button>
                           </div>
-                          <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-0 sm:ml-4 w-full sm:w-auto">
                             <button
                               type="button"
                               onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
-                              className="text-xs text-slate-600 hover:text-slate-900"
+                              className="text-xs text-slate-600 hover:text-slate-900 px-2 py-1 bg-white rounded border border-slate-200 hover:bg-slate-50"
                             >
                               Open
                             </button>
@@ -1093,31 +1095,31 @@ const ApplicationVerification: React.FC = () => {
 
       {/* Reapplication Form (only show if rejected and user wants to reapply) */}
       {applicationStatus === 'rejected' && showReapplicationForm && (
-        <Card className="p-6 border-2 border-blue-200">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-blue-800 whitespace-nowrap">
+        <Card className="p-3 sm:p-4 md:p-6 border-2 border-blue-200 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0 mb-2.5 sm:mb-3 md:mb-4">
+            <h2 className="text-base sm:text-lg md:text-xl font-semibold text-blue-800">
               Update & Resubmit Your Application
             </h2>
             <Button
               variant="secondary"
               onClick={() => setShowReapplicationForm(false)}
-              className="flex items-center"
+              className="w-full sm:w-auto flex items-center justify-center text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
             >
-              <X className="h-4 w-4 mr-2" />
+              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
               Cancel
             </Button>
           </div>
 
           
-          <div className="space-y-6">
+          <div className="space-y-3 sm:space-y-4 md:space-y-6">
             {/* Full Name */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Full Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm md:text-base"
                 value={fullName}
                 onChange={(e) => {
                   // Only allow letters, spaces, hyphens, and apostrophes
@@ -1130,11 +1132,11 @@ const ApplicationVerification: React.FC = () => {
 
             {/* Year Level */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Year Level <span className="text-red-500">*</span>
               </label>
               <select
-                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm md:text-base"
                 value={yearLevel}
                 onChange={(e) => setYearLevel(e.target.value)}
                 required
@@ -1150,12 +1152,12 @@ const ApplicationVerification: React.FC = () => {
 
             {/* GCash Number */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 GCash Number <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm md:text-base"
                 placeholder="09XX XXX XXXX"
                 value={gcashNumber}
                 onChange={(e) => {
@@ -1198,12 +1200,12 @@ const ApplicationVerification: React.FC = () => {
 
             {/* Session Rate */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Session Rate Per Hour (PHP) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm md:text-base"
                 placeholder="e.g., 300"
                 value={sessionRate}
                 onChange={(e) => setSessionRate(e.target.value)}
@@ -1215,11 +1217,11 @@ const ApplicationVerification: React.FC = () => {
 
             {/* Bio */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Bio <span className="text-red-500">*</span>
               </label>
               <textarea
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 min-h-[100px]"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 min-h-[80px] sm:min-h-[100px] text-xs sm:text-sm md:text-base"
                 value={bio}
                 onChange={(e) => {
                   // Only allow letters and spaces
@@ -1233,11 +1235,11 @@ const ApplicationVerification: React.FC = () => {
 
             {/* Profile Photo */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Profile Photo
               </label>
-              <div className="flex items-center space-x-4">
-                <div className="relative w-24 h-24 rounded-full overflow-hidden bg-slate-200 flex items-center justify-center border-4 border-white shadow-lg">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3 md:gap-4">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden bg-slate-200 flex items-center justify-center border-2 sm:border-4 border-white shadow-lg flex-shrink-0 mx-auto sm:mx-0">
                   {profilePhoto ? (
                     <img src={URL.createObjectURL(profilePhoto)} alt="Profile Preview" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
                   ) : existingProfilePhotoUrl ? (
@@ -1258,38 +1260,41 @@ const ApplicationVerification: React.FC = () => {
                       }}
                     />
                   ) : (
-                    <User className="h-12 w-12 text-slate-400" />
+                    <User className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 text-slate-400" />
                   )}
                 </div>
-                <label className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 transition-colors">
-                  <Camera className="h-5 w-5" />
-                  <span>Upload Photo</span>
-                  <input type="file" accept="image/*" onChange={handleProfilePhotoChange} className="hidden" />
-                </label>
-                {profilePhoto && (
-                  <button
-                    onClick={() => setProfilePhoto(null)}
-                    className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4 flex-1 w-full sm:w-auto">
+                  <label className="flex items-center justify-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 active:bg-blue-800 transition-colors text-xs sm:text-sm md:text-base w-full sm:w-auto touch-manipulation" style={{ WebkitTapHighlightColor: 'transparent' }}>
+                    <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
+                    <span>Upload Photo</span>
+                    <input type="file" accept="image/*" onChange={handleProfilePhotoChange} className="hidden" />
+                  </label>
+                  {profilePhoto && (
+                    <button
+                      onClick={() => setProfilePhoto(null)}
+                      className="bg-red-600 text-white px-3 py-1.5 sm:py-2 rounded-lg hover:bg-red-700 active:bg-red-800 transition-colors flex items-center justify-center text-xs sm:text-sm w-full sm:w-auto touch-manipulation"
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
+                    >
+                      <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Subjects of Expertise with Files */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Subjects of Expertise <span className="text-red-500">*</span>
               </label>
-              <p className="text-xs text-slate-500 mb-2">
+              <p className="text-[10px] sm:text-xs text-slate-500 mb-1.5 sm:mb-2">
                 You can add new subjects or reapply for previously rejected subjects. Each subject requires supporting documents.
               </p>
               
               {/* Subject selector */}
-              <div className="mb-4">
+              <div className="mb-3 sm:mb-4">
                 <select
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 mb-2"
+                  className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 mb-2 text-xs sm:text-sm"
                   value={subjectToAdd}
                   onChange={handleSubjectDropdownChange}
                 >
@@ -1313,7 +1318,7 @@ const ApplicationVerification: React.FC = () => {
                     }
                   }}
                   disabled={!subjectToAdd}
-                  className="w-full"
+                  className="w-full text-xs sm:text-sm py-1.5 sm:py-2"
                 >
                   Add Subject
                 </Button>
@@ -1321,7 +1326,7 @@ const ApplicationVerification: React.FC = () => {
                 <div className="mt-2">
                   <input
                     type="text"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                    className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm"
                     placeholder="Or enter a custom subject name"
                     value={otherSubject}
                     onChange={(e) => {
@@ -1355,7 +1360,7 @@ const ApplicationVerification: React.FC = () => {
                     }}
                     disabled={!otherSubject.trim()}
                     variant="secondary"
-                    className="w-full mt-2"
+                    className="w-full mt-2 text-xs sm:text-sm py-1.5 sm:py-2"
                   >
                     Add Custom Subject
                   </Button>
@@ -1364,21 +1369,23 @@ const ApplicationVerification: React.FC = () => {
 
               {/* Selected subjects with files */}
               {Array.from(reapplicationSubjects).length > 0 && (
-                <div className="space-y-4 mt-4">
+                <div className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
                   {Array.from(reapplicationSubjects).map(subject => (
-                    <div key={subject} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                    <div key={subject} className="border border-slate-200 rounded-lg p-2.5 sm:p-3 md:p-4 bg-slate-50">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-slate-800">{subject}</span>
+                        <span className="font-medium text-xs sm:text-sm md:text-base text-slate-800 break-words flex-1 min-w-0 pr-2">{subject}</span>
                         <button
                           type="button"
                           onClick={() => removeReapplicationSubject(subject)}
-                          className="text-red-600 hover:text-red-800"
+                          className="text-red-600 hover:text-red-800 active:text-red-900 flex-shrink-0 p-1 touch-manipulation"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
+                          aria-label="Remove subject"
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </button>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-700 mb-1">
+                        <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
                           Supporting Documents for {subject}
                         </label>
                         <input
@@ -1386,19 +1393,21 @@ const ApplicationVerification: React.FC = () => {
                           multiple
                           accept=".pdf,.png,.jpg,.jpeg"
                           onChange={(e) => handleSubjectFileChange(subject, e)}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                          className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                         />
                         {(subjectFilesMap[subject] || []).length > 0 && (
                           <ul className="mt-2 space-y-1">
                             {(subjectFilesMap[subject] || []).map((file, idx) => (
-                              <li key={idx} className="flex items-center justify-between text-sm text-slate-600 bg-white p-2 rounded">
-                                <span>{file.name}</span>
+                              <li key={idx} className="flex items-center justify-between text-xs sm:text-sm text-slate-600 bg-white p-1.5 sm:p-2 rounded">
+                                <span className="break-words flex-1 min-w-0 pr-2">{file.name}</span>
                                 <button
                                   type="button"
                                   onClick={() => removeSubjectFile(subject, idx)}
-                                  className="text-red-600 hover:text-red-800"
+                                  className="text-red-600 hover:text-red-800 active:text-red-900 flex-shrink-0 p-1 touch-manipulation"
+                                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                                  aria-label="Remove file"
                                 >
-                                  <X className="h-3 w-3" />
+                                  <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                                 </button>
                               </li>
                             ))}
@@ -1413,7 +1422,7 @@ const ApplicationVerification: React.FC = () => {
 
             {/* Documents */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Proof Documents <span className="text-red-500">*</span>
               </label>
               <input
@@ -1425,12 +1434,12 @@ const ApplicationVerification: React.FC = () => {
                     setReapplicationDocuments(Array.from(e.target.files));
                   }
                 }}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
               />
               {reapplicationDocuments.length > 0 && (
-                <ul className="list-disc list-inside text-sm text-slate-600 mt-2">
+                <ul className="list-disc list-inside text-xs sm:text-sm text-slate-600 mt-2 space-y-1">
                   {reapplicationDocuments.map((f, i) => (
-                    <li key={i}>{f.name}</li>
+                    <li key={i} className="break-words">{f.name}</li>
                   ))}
                 </ul>
               )}
@@ -1438,17 +1447,17 @@ const ApplicationVerification: React.FC = () => {
 
             {/* Weekly Availability */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Weekly Availability
               </label>
-              <p className="text-xs text-slate-500 mb-2">
+              <p className="text-[10px] sm:text-xs text-slate-500 mb-1.5 sm:mb-2">
                 Select the days and time slots when you're available for tutoring sessions.
               </p>
               
               {/* Day selector */}
-              <div className="mb-4">
+              <div className="mb-3 sm:mb-4">
                 <select
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2"
+                  className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm"
                   value={dayToAdd}
                   onChange={(e) => setDayToAdd(e.target.value)}
                 >
@@ -1465,7 +1474,7 @@ const ApplicationVerification: React.FC = () => {
                       addReapplicationDay(dayToAdd);
                       setDayToAdd('');
                     }}
-                    className="w-full mt-2"
+                    className="w-full mt-2 text-xs sm:text-sm py-1.5 sm:py-2"
                   >
                     Add Day
                   </Button>
@@ -1474,50 +1483,54 @@ const ApplicationVerification: React.FC = () => {
 
               {/* Availability display */}
               {Object.keys(reapplicationAvailability).length > 0 && (
-                <div className="space-y-4 mt-4">
+                <div className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
                   {Object.entries(reapplicationAvailability).map(([day, dayAvail]) => (
-                    <div key={day} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-medium text-slate-800">{day}</h4>
-                        <div className="flex gap-2">
+                    <div key={day} className="border border-slate-200 rounded-lg p-2.5 sm:p-3 md:p-4 bg-slate-50">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-2 sm:mb-3">
+                        <h4 className="font-medium text-xs sm:text-sm md:text-base text-slate-800">{day}</h4>
+                        <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto">
                           <button
                             type="button"
                             onClick={() => addReapplicationTimeSlot(day)}
-                            className="text-sm px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md"
+                            className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 active:bg-blue-300 rounded-md flex-1 sm:flex-none touch-manipulation"
+                            style={{ WebkitTapHighlightColor: 'transparent' }}
                           >
                             Add Time Slot
                           </button>
                           <button
                             type="button"
                             onClick={() => removeReapplicationDay(day)}
-                            className="text-sm px-3 py-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-md"
+                            className="text-xs sm:text-sm px-2 sm:px-3 py-1 text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200 rounded-md flex-1 sm:flex-none touch-manipulation"
+                            style={{ WebkitTapHighlightColor: 'transparent' }}
                           >
                             Remove Day
                           </button>
                         </div>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1.5 sm:space-y-2">
                         {dayAvail.slots.map((slot, idx) => (
-                          <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded">
+                          <div key={idx} className="flex flex-wrap items-center gap-1.5 sm:gap-2 bg-white p-1.5 sm:p-2 rounded">
                             <input
                               type="time"
                               value={slot.startTime}
                               onChange={(e) => updateReapplicationSlotTime(day, idx, 'startTime', e.target.value)}
-                              className="border border-slate-300 rounded px-2 py-1 text-sm"
+                              className="border border-slate-300 rounded px-1.5 sm:px-2 py-1 text-xs sm:text-sm flex-1 min-w-[100px]"
                             />
-                            <span className="text-slate-500">-</span>
+                            <span className="text-slate-500 text-xs sm:text-sm">-</span>
                             <input
                               type="time"
                               value={slot.endTime}
                               onChange={(e) => updateReapplicationSlotTime(day, idx, 'endTime', e.target.value)}
-                              className="border border-slate-300 rounded px-2 py-1 text-sm"
+                              className="border border-slate-300 rounded px-1.5 sm:px-2 py-1 text-xs sm:text-sm flex-1 min-w-[100px]"
                             />
                             <button
                               type="button"
                               onClick={() => removeReapplicationTimeSlot(day, idx)}
-                              className="ml-2 text-sm text-red-600 hover:text-red-800"
+                              className="text-xs sm:text-sm text-red-600 hover:text-red-800 active:text-red-900 p-1 touch-manipulation"
+                              style={{ WebkitTapHighlightColor: 'transparent' }}
+                              aria-label="Remove time slot"
                             >
-                              <X className="h-4 w-4" />
+                              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </button>
                           </div>
                         ))}
@@ -1528,10 +1541,11 @@ const ApplicationVerification: React.FC = () => {
               )}
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4 border-t">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-3 sm:pt-4 border-t">
               <Button 
                 variant="secondary" 
                 onClick={() => setShowReapplicationForm(false)}
+                className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2 order-2 sm:order-1"
               >
                 Cancel
               </Button>
@@ -1647,6 +1661,7 @@ const ApplicationVerification: React.FC = () => {
                   }
                 }}
                 disabled={isSubmittingReapplication}
+                className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2 order-1 sm:order-2"
               >
                 {isSubmittingReapplication ? 'Submitting...' : 'Submit Reapplication'}
               </Button>

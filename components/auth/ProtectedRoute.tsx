@@ -25,7 +25,8 @@ const ProtectedRoute: React.FC = () => {
   const path = location.pathname;
   if (path.startsWith('/admin')) {
     if (user.role !== 'admin' && user.user_type !== 'admin') {
-      return <Navigate to="/login" replace />;
+      // If a non-admin tries to access admin routes, send them to the admin login
+      return <Navigate to="/admin-login" replace />;
     }
   } else if (path.startsWith('/tutor')) {
     if (user.role !== 'tutor' && user.user_type !== 'tutor') {

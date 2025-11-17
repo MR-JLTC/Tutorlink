@@ -18,7 +18,7 @@ const TuteeDashboard: React.FC = () => {
 
   return (
     <TuteeLayout>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
+      <div className="w-full">
         <div className={isMyBookingsRoute ? "lg:col-span-3" : "lg:col-span-4"}>
           <Routes>
             <Route path="/" element={<Navigate to="/tutee-dashboard/become-tutor" replace />} />
@@ -26,7 +26,7 @@ const TuteeDashboard: React.FC = () => {
             <Route path="/find-tutors" element={<TuteeFindAndBookTutors />} />
             <Route path="/my-bookings" element={<TuteeMyBookings />} />
             <Route path="/profile" element={<TuteeProfile />} />
-              <Route path="/upcoming-sessions" element={<UpcomingSessionsPage />} />
+            <Route path="/upcoming-sessions" element={<UpcomingSessionsPage />} />
             <Route path="/payment" element={<TuteePayment />} />
             <Route path="/after-session" element={<TuteeAfterSession />} />
             <Route path="*" element={<Navigate to="/tutee-dashboard/become-tutor" replace />} />

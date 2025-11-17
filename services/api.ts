@@ -2,7 +2,8 @@ import axios from 'axios';
 import { getActiveToken, getRoleForContext, clearRoleAuth } from '../utils/authRole';
 
 // The base URL for your NestJS backend
-const API_BASE_URL = 'http://localhost:3000/api';
+const BACKEND_IP = import.meta.env.VITE_BACKEND_LAPTOP_IP || 'localhost';
+const API_BASE_URL = `http://${BACKEND_IP}:3000/api`;
 const API_ORIGIN = API_BASE_URL.replace(/\/?api$/, '');
 
 const apiClient = axios.create({
@@ -12,7 +13,9 @@ const apiClient = axios.create({
   // can let the browser/axios set the correct boundary automatically.
   headers: {},
   validateStatus: function (status) {
-    return status >= 200 && status < 500; // Accept all status codes between 200 and 499
+    // Reject 4xx and 5xx status codes (client and server errors) so they go to the error handler
+    // Only treat 2xx and 3xx as successful responses
+    return status >= 200 && status < 400;
   }
 });
 
@@ -20,15 +23,43 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = getActiveToken();
+    const requestUrl = config.url || '';
+    
+    // Check if this is an auth endpoint (login, register, password reset, etc.)
+    const isAuthEndpoint = requestUrl.includes('/auth/login') || 
+                          requestUrl.includes('/auth/register') || 
+                          requestUrl.includes('/auth/login-tutor-tutee') ||
+                          requestUrl.includes('/auth/forgot-password') ||
+                          requestUrl.includes('/auth/reset-password');
+    
+    // Check if this is a public endpoint that doesn't require authentication
+    // Public endpoints: landing stats, and GET /universities (list all universities)
+    const normalizedUrl = requestUrl.split('?')[0]; // Remove query params for comparison
+    const isPublicEndpoint = normalizedUrl.includes('/landing/stats') ||
+                            normalizedUrl === '/universities' || 
+                            normalizedUrl.endsWith('/universities'); // Only GET /universities list, not nested routes
+    
     if (token) {
+      // Always add token if available
       config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      // If no token and trying to access protected route, redirect to login
-      const path = window.location.pathname;
-      if (!path.includes('/login') && !path.includes('/LandingPage')) {
-        window.location.href = '/login';
+    } else if (!isAuthEndpoint && !isPublicEndpoint) {
+      // If no token and trying to access protected route (not an auth or public endpoint), redirect to login
+      // But don't redirect if we're already on a login/registration/landing page
+      const path = window.location.pathname.toLowerCase();
+      const isAuthPage = path.includes('/login') || 
+                        path.includes('/admin-login') || 
+                        path.includes('/landingpage') ||
+                        path.includes('/tuteeregistrationpage') ||
+                        path.includes('/tutorregistrationpage') ||
+                        path.includes('/register') ||
+                        path.includes('/password-reset');
+      if (!isAuthPage) {
+        // Determine which login page to redirect to based on the route being accessed
+        const isTutorOrTuteeRoute = path.startsWith('/tutor') || path.startsWith('/tutee');
+        window.location.href = isTutorOrTuteeRoute ? '/login' : '/admin-login';
       }
     }
+    // If no token but it's an auth or public endpoint, allow the request to proceed
     return config;
   },
   (error) => {
@@ -72,7 +103,14 @@ apiClient.interceptors.response.use(
 
     // Skip Toast messages for authentication endpoints and tutor ID lookup - let the pages handle their own error display
     const reqUrl: string | undefined = error?.config?.url;
-    const isAuthEndpoint = reqUrl?.includes('/auth/login') || reqUrl?.includes('/auth/register') || reqUrl?.includes('/auth/login-tutor-tutee');
+    // Check both the relative URL and full URL to ensure we catch auth endpoints correctly
+    const fullUrl = error?.config?.baseURL ? `${error.config.baseURL}${reqUrl || ''}` : reqUrl || '';
+    const urlToCheck = (reqUrl || '') + ' ' + fullUrl;
+    const isAuthEndpoint = urlToCheck.includes('/auth/login') || 
+                          urlToCheck.includes('/auth/register') || 
+                          urlToCheck.includes('/auth/login-tutor-tutee') ||
+                          urlToCheck.includes('/auth/forgot-password') ||
+                          urlToCheck.includes('/auth/reset-password');
     const isTutorIdEndpoint = reqUrl?.includes('/tutors/by-user/') && reqUrl?.includes('/tutor-id');
 
     const suppressByMessage = typeof rawMessage === 'string' && rawMessage.toLowerCase().includes('tutor not found');
@@ -88,18 +126,29 @@ apiClient.interceptors.response.use(
     }
 
     if (status === 401) {
-      if (!isAuthEndpoint) {
+      // Never redirect on auth endpoint errors - let the login pages handle the error display
+      // Also don't redirect if we're already on a login page or public page to prevent navigation loops
+      const currentPath = window.location.pathname.toLowerCase();
+      const isOnLoginPage = currentPath === '/login' || 
+                            currentPath === '/admin-login' || 
+                            currentPath.includes('/password-reset');
+      const isOnPublicPage = currentPath.includes('/landingpage') ||
+                             currentPath.includes('/tuteeregistrationpage') ||
+                             currentPath.includes('/tutorregistrationpage');
+      
+      if (!isAuthEndpoint && !isOnLoginPage && !isOnPublicPage) {
         const role = getRoleForContext();
         if (role) {
           clearRoleAuth(role);
         }
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        const path = window.location.pathname;
+        const path = window.location.pathname.toLowerCase();
         const isTutorOrTutee = path.startsWith('/tutor') || path.startsWith('/tutee');
         window.location.href = isTutorOrTutee ? '/login' : '/admin-login';
       }
-      // For auth endpoints, do not redirect; allow the page (e.g., admin-login) to remain
+      // For auth endpoints or when already on a login/public page, do not redirect
+      // The error will be caught and displayed by the login page component
     }
     // Forward the error so it can be handled by the calling component
     return Promise.reject(error);

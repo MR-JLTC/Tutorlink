@@ -5,16 +5,25 @@ import api from '../../services/api';
 interface ForgotPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (email: string) => void;
+  onSuccess?: (email: string) => void;
+  mode?: 'default' | 'admin';
 }
 
-const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClose, onSuccess }) => {
+const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  mode = 'default',
+}) => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [showProceedButton, setShowProceedButton] = useState(false);
+
+  const isAdminMode = mode === 'admin';
+  const requestEndpoint = isAdminMode ? '/auth/password-reset/admin/request' : '/auth/password-reset/request';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +38,7 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
       const requestBody = { email };
       console.log('Frontend: Request body:', requestBody);
       
-      const response = await api.post('/auth/password-reset/request', requestBody);
+      const response = await api.post(requestEndpoint, requestBody);
       console.log('Frontend: Response received:', response.data);
       
       if (response.data) {
@@ -56,7 +65,13 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
   };
 
   const handleProceedToReset = () => {
-    navigate(`/password-reset?email=${encodeURIComponent(email)}`);
+    const params = new URLSearchParams();
+    if (email) params.set('email', email);
+    if (isAdminMode) params.set('type', 'admin');
+    navigate(`/password-reset?${params.toString()}`);
+    if (onSuccess) {
+      onSuccess(email);
+    }
     onClose();
   };
 
@@ -82,7 +97,7 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({ isOpen, onClo
               Forgot Password?
             </h2>
             <p className="text-slate-600 text-sm">
-              Enter your email address and we'll send you a verification code to reset your password.
+              Enter your {isAdminMode ? 'admin' : 'account'} email address and we'll send you a verification code to reset your password.
             </p>
           </div>
 

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { logoBase64 } from '../../assets/logo';
 import { useVerification } from '../../context/VerificationContext';
+import apiClient from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 const tutorNavLinks = [
   { 
@@ -42,7 +44,7 @@ const tutorNavLinks = [
   { 
     to: '/tutor-dashboard/sessions', 
     icon: MessageSquare, 
-    label: 'Session Handling',
+    label: 'Booking',
     description: 'Manage incoming booking requests, accept or decline sessions, and communicate with students.',
     requiresApproval: true,
     isFirstStep: false
@@ -51,7 +53,7 @@ const tutorNavLinks = [
     // Make this route consistent with other tutor dashboard links so it highlights/behaves like the rest
     to: '/tutor-dashboard/upcoming-sessions',
     icon: Calendar,
-    label: 'Upcoming Sessions',
+    label: 'Session Handling',
     description: 'View and manage your upcoming scheduled sessions in one place.',
     requiresApproval: true,
     isFirstStep: false
@@ -68,6 +70,8 @@ const tutorNavLinks = [
 
 const TutorSidebar: React.FC = () => {
   const { isVerified, applicationStatus, isLoading } = useVerification();
+  const { user } = useAuth();
+  const [upcomingCount, setUpcomingCount] = useState<number>(0);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
@@ -102,6 +106,32 @@ const TutorSidebar: React.FC = () => {
       }
     };
   }, [timeoutId]);
+
+  // Fetch number of upcoming sessions for current tutor user and refresh on focus
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (!user?.user_id) {
+        if (mounted) setUpcomingCount(0);
+        return;
+      }
+      try {
+        const res = await apiClient.get('/users/upcoming-sessions/list');
+        const items = res.data?.data || [];
+        if (mounted) setUpcomingCount(Array.isArray(items) ? items.length : 0);
+      } catch (err) {
+        console.error('Failed to load upcoming sessions count:', err);
+        if (mounted) setUpcomingCount(0);
+      }
+    };
+    load();
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      mounted = false;
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [user?.user_id]);
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
@@ -143,18 +173,24 @@ const TutorSidebar: React.FC = () => {
                   onMouseLeave={handleMouseLeave}
                 >
                   <div className="flex items-center space-x-3">
-                    <Icon className={`h-5 w-5 ${hoveredItem === to ? 'text-blue-600' : 'text-slate-500'}`} />
-                    <span className="font-medium text-sm">{label}</span>
-                    {isFirstStep && (
-                      <div className="ml-auto">
-                        {applicationStatus === 'approved' ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <Clock className="h-4 w-4 text-yellow-500" />
-                        )}
-                      </div>
-                    )}
-                  </div>
+                      <Icon className={`h-5 w-5 ${hoveredItem === to ? 'text-blue-600' : 'text-slate-500'}`} />
+                      <span className="font-medium text-sm">{label}</span>
+                      {/* Numeric badge for Upcoming Sessions */}
+                      {to === '/tutor-dashboard/upcoming-sessions' && upcomingCount > 0 && (
+                        <span className="ml-auto inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-600 text-white">
+                          {upcomingCount > 99 ? '99+' : upcomingCount}
+                        </span>
+                      )}
+                      {isFirstStep && (
+                        <div className="ml-auto">
+                          {applicationStatus === 'approved' ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <Clock className="h-4 w-4 text-yellow-500" />
+                          )}
+                        </div>
+                      )}
+                    </div>
                 </NavLink>
               )}
             

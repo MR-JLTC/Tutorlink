@@ -6,6 +6,7 @@ import { useAuth } from '../../hooks/useAuth';
 import Modal from '../ui/Modal';
 import { DollarSign, TrendingUp, Clock, CheckCircle, Star, Calendar, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../ui/Toast';
 
 interface Session {
   id: number;
@@ -48,6 +49,7 @@ interface EarningsStats {
 
 const EarningsHistory: React.FC = () => {
   const { user } = useAuth();
+  const { notify } = useToast();
   const navigate = useNavigate();
   const [tutorId, setTutorId] = useState<number | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -64,6 +66,7 @@ const EarningsHistory: React.FC = () => {
   const [proofModalUrl, setProofModalUrl] = useState<string | null>(null);
   const [proofModalTitle, setProofModalTitle] = useState<string>('');
   const [viewedProofByPayment, setViewedProofByPayment] = useState<Record<number, boolean>>({});
+  const [hiddenConfirm, setHiddenConfirm] = useState<Record<number, boolean>>({});
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending'>('all');
   const [paymentsFilter, setPaymentsFilter] = useState<'all' | 'pending' | 'approved'>('all');
   const [initialized, setInitialized] = useState(false);
@@ -196,76 +199,76 @@ const EarningsHistory: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-1 flex items-center gap-3">
-              <DollarSign className="h-8 w-8" />
-              Earnings & History
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-2.5 md:gap-3">
+              <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+              <span className="truncate">Earnings & History</span>
             </h1>
-            <p className="text-blue-100">Track your completed sessions and earnings</p>
+            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Track your completed sessions and earnings</p>
           </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6 shadow">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4 lg:gap-6">
+        <Card className="p-3 sm:p-4 md:p-6 shadow -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-3 bg-green-100 rounded-full mr-4">
-              <DollarSign className="h-6 w-6 text-green-600" />
+            <div className="p-1.5 sm:p-2 md:p-3 bg-green-100 rounded-full mr-2 sm:mr-3 md:mr-4 flex-shrink-0">
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-green-600" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Total Earnings</p>
-              <p className="text-2xl font-bold text-slate-800">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Total Earnings</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">
                 ₱{stats.total_earnings.toLocaleString()}
               </p>
             </div>
           </div>
 
           {/* Bottom action row: View all payments */}
-          <div className="mt-3 flex justify-end">
-            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings/payments')}>
+          <div className="mt-2 sm:mt-3 flex justify-end">
+            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings/payments')} className="text-[10px] sm:text-xs md:text-sm py-1 sm:py-1.5">
               View all
             </Button>
           </div>
         </Card>
 
-        <Card className="p-6 shadow">
+        <Card className="p-3 sm:p-4 md:p-6 shadow -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-2 bg-yellow-100 rounded-full mr-4">
-              <Clock className="h-6 w-6 text-yellow-600" />
+            <div className="p-1.5 sm:p-2 md:p-2 bg-yellow-100 rounded-full mr-2 sm:mr-3 md:mr-4 flex-shrink-0">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-yellow-600" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Pending Earnings</p>
-              <p className="text-2xl font-bold text-slate-800">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Pending Earnings</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">
                 ₱{stats.pending_earnings.toLocaleString()}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 shadow">
+        <Card className="p-3 sm:p-4 md:p-6 shadow -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-full mr-4">
-              <CheckCircle className="h-6 w-6 text-blue-600" />
+            <div className="p-1.5 sm:p-2 md:p-2 bg-blue-100 rounded-full mr-2 sm:mr-3 md:mr-4 flex-shrink-0">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-blue-600" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Completed Sessions</p>
-              <p className="text-2xl font-bold text-slate-800">{stats.completed_sessions}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Completed Sessions</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">{stats.completed_sessions}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 shadow">
+        <Card className="p-3 sm:p-4 md:p-6 shadow -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-full mr-4">
-              <Star className="h-6 w-6 text-purple-600" />
+            <div className="p-1.5 sm:p-2 md:p-2 bg-purple-100 rounded-full mr-2 sm:mr-3 md:mr-4 flex-shrink-0">
+              <Star className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-purple-600" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Average Rating</p>
-              <p className="text-2xl font-bold text-slate-800">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Average Rating</p>
+              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">
                 {stats.average_rating > 0 ? stats.average_rating.toFixed(1) : 'N/A'}
               </p>
             </div>
@@ -274,20 +277,20 @@ const EarningsHistory: React.FC = () => {
       </div>
 
       {/* Additional Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <TrendingUp className="h-5 w-5 mr-2 text-blue-600" />
-            Performance Overview
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3 md:gap-4 lg:gap-6">
+        <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-2.5 sm:mb-3 md:mb-4 flex items-center">
+            <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 mr-1.5 sm:mr-2 text-blue-600 flex-shrink-0" />
+            <span>Performance Overview</span>
           </h2>
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-slate-600">Total Hours Tutored</span>
-              <span className="font-semibold text-slate-800">{stats.total_hours} hours</span>
+              <span className="text-[10px] sm:text-xs md:text-sm text-slate-600">Total Hours Tutored</span>
+              <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">{stats.total_hours} hours</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-600">Average Session Duration</span>
-              <span className="font-semibold text-slate-800">
+              <span className="text-[10px] sm:text-xs md:text-sm text-slate-600">Average Session Duration</span>
+              <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">
                 {stats.completed_sessions > 0 
                   ? (stats.total_hours / stats.completed_sessions).toFixed(1) 
                   : '0'
@@ -295,8 +298,8 @@ const EarningsHistory: React.FC = () => {
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-600">Average Hourly Rate</span>
-              <span className="font-semibold text-slate-800">
+              <span className="text-[10px] sm:text-xs md:text-sm text-slate-600">Average Hourly Rate</span>
+              <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">
                 ₱{stats.total_hours > 0 
                   ? (stats.total_earnings / stats.total_hours).toFixed(0) 
                   : '0'
@@ -306,20 +309,20 @@ const EarningsHistory: React.FC = () => {
           </div>
         </Card>
 
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <Calendar className="h-5 w-5 mr-2 text-green-600" />
-            Payments
+        <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-2.5 sm:mb-3 md:mb-4 flex items-center">
+            <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 mr-1.5 sm:mr-2 text-green-600 flex-shrink-0" />
+            <span>Payments</span>
           </h2>
-          <div className="flex justify-end mb-3">
-            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings/payments')}>View all</Button>
+          <div className="flex justify-end mb-2 sm:mb-3">
+            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings/payments')} className="text-[10px] sm:text-xs md:text-sm py-1 sm:py-1.5">View all</Button>
           </div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              <span className="text-sm px-2 py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">Pending: {pendingPaymentsCount}</span>
-              <span className="text-sm px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approved: {approvedPaymentsCount}</span>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-2 sm:mb-3">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="text-[10px] sm:text-xs md:text-sm px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">Pending: {pendingPaymentsCount}</span>
+              <span className="text-[10px] sm:text-xs md:text-sm px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approved: {approvedPaymentsCount}</span>
             </div>
-            <div className="flex space-x-1">
+            <div className="flex flex-wrap gap-1 sm:gap-1.5">
               {[
                 { key: 'all', label: 'All' },
                 { key: 'pending', label: 'Pending' },
@@ -328,29 +331,30 @@ const EarningsHistory: React.FC = () => {
                 <button
                   key={tab.key}
                   onClick={() => setPaymentsFilter(tab.key as any)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-2 sm:px-2.5 md:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs md:text-sm font-medium transition-colors touch-manipulation ${
                     paymentsFilter === tab.key
                       ? 'bg-green-100 text-green-700'
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                   }`}
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   {tab.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="space-y-3 max-h-80 overflow-auto">
+          <div className="space-y-2 sm:space-y-3 max-h-80 overflow-auto">
             {filteredPayments.slice(0, 5).map(payment => (
-              <div key={payment.id || payment.payment_id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-1">
-                    <span className="font-medium text-slate-800">
+              <div key={payment.id || payment.payment_id} className="flex items-center justify-between p-2 sm:p-3 bg-slate-50 rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 mb-1">
+                    <span className="text-xs sm:text-sm md:text-base font-medium text-slate-800 break-words">
                       {payment.student_name || 'Unknown Student'}
                     </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(payment.status)}`}>
-                      <div className="flex items-center space-x-1">
+                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium border flex-shrink-0 ${getStatusColor(payment.status)}`}>
+                      <div className="flex items-center space-x-0.5 sm:space-x-1">
                         {getStatusIcon(payment.status)}
-                        <span>{payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span>
+                        <span className="whitespace-nowrap">{payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span>
                       </div>
                     </span>
                   </div>
@@ -384,37 +388,49 @@ const EarningsHistory: React.FC = () => {
                         </Button>
 
                         {/* Always show a Confirm button for tutor action, but disable and explain why when necessary */}
-                        <Button
-                          className="ml-1"
-                          onClick={async () => {
-                            try {
-                              await apiClient.patch(`/payments/${payment.payment_id}/confirm`);
-                              await fetchEarningsData(false);
-                            } catch (e) {
-                              console.error('Failed to confirm payment', e);
-                            }
-                          }}
-                          variant="primary"
-                          disabled={
-                            // disabled if already confirmed or no admin proof or tutor hasn't viewed the admin proof yet
-                            payment.status === 'confirmed' ||
-                            payment.status === 'rejected' ||
-                            payment.status === 'refunded' ||
-                            !payment.admin_payment_proof_url ||
-                            !viewedProofByPayment[payment.payment_id]
-                          }
-                          title={
-                            payment.status === 'confirmed'
-                              ? 'Already confirmed'
-                              : !payment.admin_payment_proof_url
-                                ? 'Waiting for admin to upload proof'
-                                : !viewedProofByPayment[payment.payment_id]
-                                  ? 'Open the admin proof to enable Confirm'
-                                  : 'Confirm payment (mark as received)'
-                          }
-                        >
-                          Confirm
-                        </Button>
+                        {(() => {
+                          const pid = payment.payment_id || payment.id;
+                          if (hiddenConfirm[pid]) return null;
+                          return (
+                            <Button
+                              className="ml-1"
+                              onClick={async () => {
+                                try {
+                                  await apiClient.patch(`/payments/${payment.payment_id}/confirm`);
+                                  // show a success toast so the tutor gets immediate feedback
+                                  notify('Payment confirmed. Booking updated to Upcoming.', 'success', {
+                                    label: 'Hide Confirm',
+                                    onClick: () => setHiddenConfirm(prev => ({ ...prev, [pid]: true }))
+                                  });
+                                  await fetchEarningsData(false);
+                                } catch (e) {
+                                  console.error('Failed to confirm payment', e);
+                                  notify('Failed to confirm payment. Please try again.', 'error');
+                                }
+                              }}
+                              variant="primary"
+                              disabled={
+                                // disabled if already confirmed or no admin proof or tutor hasn't viewed the admin proof yet
+                                payment.status === 'confirmed' ||
+                                payment.status === 'rejected' ||
+                                payment.status === 'refunded' ||
+                                !payment.admin_payment_proof_url ||
+                                !viewedProofByPayment[payment.payment_id]
+                              }
+                              title={
+                                payment.status === 'confirmed'
+                                  ? 'Already confirmed'
+                                  : !payment.admin_payment_proof_url
+                                    ? 'Waiting for admin to upload proof'
+                                    : !viewedProofByPayment[payment.payment_id]
+                                      ? 'Open the admin proof to enable Confirm'
+                                      : 'Confirm payment (mark as received)'
+                              }
+                            >
+                              Confirm
+                            </Button>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
@@ -432,10 +448,10 @@ const EarningsHistory: React.FC = () => {
       </div>
 
       {/* Session History */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">Session History</h2>
-          <div className="flex space-x-1">
+      <Card className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
+          <h2 className="text-lg sm:text-xl font-semibold">Session History</h2>
+          <div className="flex flex-wrap gap-1 w-full sm:w-auto">
             {[
               { key: 'all', label: 'All Sessions' },
               { key: 'completed', label: 'Completed' },
@@ -444,7 +460,7 @@ const EarningsHistory: React.FC = () => {
               <button
                 key={tab.key}
                 onClick={() => setFilter(tab.key as any)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                   filter === tab.key
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
@@ -491,7 +507,7 @@ const EarningsHistory: React.FC = () => {
                       </span>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-600">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 text-xs sm:text-sm text-slate-600">
                       <div>
                         <p><strong>Subject:</strong> {session.subject}</p>
                         <p><strong>Date:</strong> {new Date(session.date).toLocaleDateString()}</p>

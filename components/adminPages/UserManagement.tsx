@@ -176,14 +176,14 @@ const UserManagement: React.FC = () => {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-slate-800 mb-6">User Management</h1>
+      <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">User Management</h1>
 
       {/* User Type Filter */}
-      <div className="mb-4 flex items-center gap-2">
-        <label htmlFor="user-type-filter" className="text-sm font-medium text-slate-700">Filter by User Type:</label>
+      <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+        <label htmlFor="user-type-filter" className="text-sm font-medium text-slate-700 whitespace-nowrap">Filter by User Type:</label>
         <select
           id="user-type-filter"
-          className="border border-slate-300 rounded-md px-3 py-2 text-sm"
+          className="border border-slate-300 rounded-md px-3 py-2 text-sm w-full sm:w-auto min-w-[150px]"
           value={userTypeFilter}
           onChange={e => setUserTypeFilter(e.target.value)}
         >
@@ -194,7 +194,8 @@ const UserManagement: React.FC = () => {
         </select>
       </div>
 
-      <Card>
+      {/* Desktop Table View */}
+      <Card className="hidden md:block">
         <div className="overflow-x-auto">
           <table className="min-w-full table-auto divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -282,6 +283,101 @@ const UserManagement: React.FC = () => {
         </div>
       </Card>
 
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {users
+          .filter(user => userTypeFilter === 'all' ? true : (user.role === userTypeFilter))
+          .map((user) => (
+          <Card key={user.user_id} className="p-4">
+            <div className="space-y-3">
+              {/* User Header */}
+              <div className="flex items-center gap-3">
+                {user.profile_image_url ? (
+                  <img 
+                    src={getFileUrl(user.profile_image_url)} 
+                    alt={user.name}
+                    className="h-12 w-12 rounded-full object-cover flex-shrink-0"
+                    style={{ aspectRatio: '1 / 1' }}
+                    onError={(e) => {
+                      const imgElement = e.target as HTMLImageElement;
+                      imgElement.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.name) + '&background=random';
+                    }}
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-slate-900 truncate">{user.name}</h3>
+                  <p className="text-sm text-slate-500 truncate">{user.email}</p>
+                </div>
+              </div>
+
+              {/* User Details */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">Role</p>
+                  <p className="font-medium text-slate-900 capitalize">{user.role}</p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">University</p>
+                  <p className="font-medium text-slate-900 truncate">{user.university_name || 'N/A'}</p>
+                </div>
+              </div>
+
+              {/* Status Badges */}
+              <div className="flex flex-wrap gap-2">
+                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${((user as any).status || 'active') === 'active' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>
+                  {((user as any).status || 'active')}
+                </span>
+                {(user.role as any) === 'tutor' && (user as any).tutor_profile && (
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    (user as any).tutor_profile.status === 'approved' 
+                      ? 'bg-green-100 text-green-800' 
+                      : (user as any).tutor_profile.status === 'rejected'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {(user as any).tutor_profile.status || 'pending'}
+                  </span>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                <button 
+                  className="flex-1 text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 border border-green-200 rounded px-3 py-2 text-sm font-medium transition-colors flex items-center justify-center gap-2" 
+                  title="Edit" 
+                  onClick={() => openEdit(user)}
+                >
+                  <Edit className="h-4 w-4" />
+                  <span>Edit</span>
+                </button>
+                <button 
+                  className="flex-1 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2" 
+                  title="Reset Password" 
+                  onClick={() => handleResetPassword(user.user_id)} 
+                  disabled={updatingUserId === user.user_id}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Reset</span>
+                </button>
+                <button 
+                  className="flex-1 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 rounded px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2" 
+                  title="Toggle Active" 
+                  onClick={() => handleStatusToggle(user.user_id, ((user as any).status || 'active'))} 
+                  disabled={updatingUserId === user.user_id}
+                >
+                  <Ban className="h-4 w-4" />
+                  <span>Status</span>
+                </button>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
       {editUser && editForm && (
         <Modal
           isOpen={true}
@@ -307,7 +403,7 @@ const UserManagement: React.FC = () => {
             </div>
             
             {/* Status and University are now paired in a grid and always visible */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700">Status</label>
                 <select className="mt-1 block w-full border border-slate-300 rounded-md px-3 py-2" value={editForm.status} onChange={(e) => setEditForm(prev => prev ? { ...prev, status: e.target.value as any } : prev)}>

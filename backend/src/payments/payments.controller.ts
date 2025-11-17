@@ -64,7 +64,7 @@ export class PaymentsController {
   }))
   async verifyPayment(
     @Param('id') id: string, 
-    @Body() body: { status: 'confirmed' | 'rejected' },
+    @Body() body: { status: 'confirmed' | 'rejected'; rejection_reason?: string },
     @UploadedFile() adminProof?: any
   ) {
     try {
@@ -73,7 +73,10 @@ export class PaymentsController {
       } else {
         console.log('PaymentsController.verifyPayment: No adminProof file received in request');
       }
-      const res = await this.paymentsService.verifyPayment(+id, body.status, adminProof);
+      if (body.status === 'rejected' && body.rejection_reason) {
+        console.log(`PaymentsController.verifyPayment: Rejection reason: ${body.rejection_reason}`);
+      }
+      const res = await this.paymentsService.verifyPayment(+id, body.status, adminProof, body.rejection_reason);
       console.log(`PaymentsController.verifyPayment: Service result:`, res);
       return res;
     } catch (err) {

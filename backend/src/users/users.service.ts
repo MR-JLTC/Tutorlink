@@ -40,7 +40,16 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { email } });
   }
 
+  async hasAdmin(): Promise<boolean> {
+    const adminCount = await this.usersRepository.count({ where: { user_type: 'admin' } });
+    return adminCount > 0;
+  }
+
   async createAdmin(registerDto: RegisterDto): Promise<User> {
+    if (await this.hasAdmin()) {
+      throw new BadRequestException('An admin account already exists. Please log in instead.');
+    }
+
     let university: University | undefined;
     if (registerDto.university_id) {
       university = await this.universitiesRepository.findOne({ where: { university_id: registerDto.university_id } });
@@ -304,7 +313,16 @@ export class UsersService {
       return { success: true, data: [] };
     }
 
-    const userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
+    // Prefer the explicit user_type column when available. It is the
+    // authoritative source of a user's role (admin/tutor/tutee/student).
+    // Map legacy/alternate values where necessary.
+    let userType: 'tutor' | 'tutee' | 'admin' = (user as any).user_type as any;
+    if (!userType) {
+      userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
+    } else {
+      // Normalize 'student' to 'tutee' for downstream consumers
+      if ((userType as any) === 'student') userType = 'tutee';
+    }
     console.log(`getNotifications: Fetching notifications for user_id=${userId}, userType=${userType}`);
     
     // For tutors, only show booking requests and admin payment notifications
@@ -376,11 +394,19 @@ export class UsersService {
     if (!user) {
       return { success: true, data: { count: 0 } };
     }
+    // Prefer explicit user_type when present and normalize 'student' -> 'tutee'
+    let userType: 'tutor' | 'tutee' | 'admin' = (user as any).user_type as any;
+    if (!userType) {
+      userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
+    } else if ((userType as any) === 'student') {
+      userType = 'tutee';
+    }
 
-    const userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
-    
+    // Count unread notifications for this receiver. Don't rely solely on
+    // userType matching because in some cases profile relations may be
+    // inconsistent; however keeping userType narrows results in normal cases.
     const count = await this.notificationRepository.count({
-      where: { receiver_id: userId, userType: userType as 'tutor' | 'tutee', read: false }
+      where: { receiver_id: userId, userType: userType as any, read: false }
     });
 
     return { success: true, data: { count } };
@@ -393,13 +419,24 @@ export class UsersService {
       relations: ['tutor_profile', 'student_profile']
     });
     if (!user) return { success: true, data: { hasUpcoming: false } };
+    // Use explicit user_type when available; fall back to profile presence
+    let isTutor = false;
+    if ((user as any).user_type) {
+      isTutor = ((user as any).user_type === 'tutor');
+    } else {
+      isTutor = !!user.tutor_profile;
+    }
+  // Use start-of-day for the lower bound so bookings scheduled for today
+  // (stored as date at 00:00:00) are included even if current time is later.
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sevenDaysFromNow = new Date(startOfDay.getTime() + 7 * 24 * 60 * 60 * 1000);
+  // Include the whole last day up to end-of-day
+  const endOfSevenDays = new Date(sevenDaysFromNow);
+  endOfSevenDays.setHours(23, 59, 59, 999);
 
-    const isTutor = !!user.tutor_profile;
-    const now = new Date();
-    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-    // Upcoming session criteria: scheduled within next 7 days and status 'upcoming'
-    const statuses: any[] = ['upcoming'];
+  // Upcoming session criteria: scheduled within next 7 days and status 'upcoming'
+  const statuses: any[] = ['upcoming'];
 
     let hasUpcoming = false;
     if (isTutor) {
@@ -409,7 +446,7 @@ export class UsersService {
           where: {
             tutor: { tutor_id: (tutor as any).tutor_id } as any,
             status: In(statuses) as any,
-            date: Between(now, sevenDaysFromNow) as any
+            date: Between(startOfDay, endOfSevenDays) as any
           } as any
         });
         hasUpcoming = count > 0;
@@ -419,7 +456,7 @@ export class UsersService {
         where: {
           student: { user_id: userId } as any,
           status: In(statuses) as any,
-          date: Between(now, sevenDaysFromNow) as any
+          date: Between(startOfDay, endOfSevenDays) as any
         } as any
       });
       hasUpcoming = count > 0;
@@ -434,36 +471,47 @@ export class UsersService {
       relations: ['tutor_profile', 'student_profile']
     });
     if (!user) return { success: true, data: [] };
-
-    const isTutor = !!user.tutor_profile;
-    const now = new Date();
-    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const statuses: any[] = ['upcoming'];
+    let isTutor = false;
+    if ((user as any).user_type) {
+      isTutor = ((user as any).user_type === 'tutor');
+    } else {
+      isTutor = !!user.tutor_profile;
+    }
+    console.log(`getUpcomingSessionsList: user_id=${userId}, resolved isTutor=${isTutor}, user_type=${(user as any).user_type}`);
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const thirtyDaysFromNow = new Date(startOfDay.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const endOfThirtyDays = new Date(thirtyDaysFromNow);
+  endOfThirtyDays.setHours(23, 59, 59, 999);
+  const statuses: any[] = ['upcoming'];
 
     let bookings: BookingRequest[] = [];
     if (isTutor) {
       const tutor = await this.tutorRepository.findOne({ where: { user: { user_id: userId } }, relations: ['user'] } as any);
+      console.log(`getUpcomingSessionsList: tutor lookup result for user_id=${userId}:`, !!tutor ? `tutor_id=${(tutor as any).tutor_id}` : 'no tutor');
       if (tutor) {
         bookings = await this.bookingRequestRepository.find({
           where: {
             tutor: { tutor_id: (tutor as any).tutor_id } as any,
             status: In(statuses) as any,
-            date: Between(now, thirtyDaysFromNow) as any
+            date: Between(startOfDay, endOfThirtyDays) as any
           } as any,
           relations: ['tutor', 'tutor.user', 'student'],
           order: { date: 'ASC' }
         });
+        console.log(`getUpcomingSessionsList: found ${bookings.length} upcoming bookings for tutor_id=${(tutor as any).tutor_id}`);
       }
     } else {
       bookings = await this.bookingRequestRepository.find({
         where: {
           student: { user_id: userId } as any,
           status: In(statuses) as any,
-          date: Between(now, thirtyDaysFromNow) as any
+          date: Between(startOfDay, endOfThirtyDays) as any
         } as any,
         relations: ['tutor', 'tutor.user', 'student'],
         order: { date: 'ASC' }
       });
+      console.log(`getUpcomingSessionsList: found ${bookings.length} upcoming bookings for student user_id=${userId}`);
     }
 
     const data = bookings.map((b: any) => ({
@@ -494,11 +542,15 @@ export class UsersService {
     if (!user) {
       return { success: true };
     }
+    let userType: 'tutor' | 'tutee' | 'admin' = (user as any).user_type as any;
+    if (!userType) {
+      userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
+    } else if ((userType as any) === 'student') {
+      userType = 'tutee';
+    }
 
-    const userType = user.tutor_profile ? 'tutor' : (user.student_profile ? 'tutee' : 'admin');
-    
     await this.notificationRepository.update(
-      { receiver_id: userId, userType: userType as 'tutor' | 'tutee' },
+      { receiver_id: userId, userType: userType as any },
       { read: true }
     );
     return { success: true };
