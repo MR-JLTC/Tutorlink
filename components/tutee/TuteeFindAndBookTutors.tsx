@@ -130,15 +130,25 @@ const TuteeFindAndBookTutors: React.FC = () => {
     if (bookingForm.date && selectedTutorProfile?.availability) {
       const date = new Date(bookingForm.date);
       const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
-      const dayAvailability = selectedTutorProfile.availability.find(
+      // Use .filter() to get all availability blocks for the day
+      const dayAvailabilityBlocks = selectedTutorProfile.availability.filter(
         (a: any) => a.day_of_week.toLowerCase() === dayOfWeek.toLowerCase()
       );
       
-      if (dayAvailability) {
-        const slots = generateTimeSlots(dayAvailability.start_time, dayAvailability.end_time);
-        setAvailableTimeSlots(slots);
+      if (dayAvailabilityBlocks.length > 0) {
+        // Generate slots for each block and combine them
+        const allSlots = dayAvailabilityBlocks.reduce((acc: string[], block: any) => {
+          const slotsForBlock = generateTimeSlots(block.start_time, block.end_time);
+          return [...acc, ...slotsForBlock];
+        }, []);
+
+        // Sort the combined slots chronologically
+        const sortedSlots = allSlots.sort();
+        
+        setAvailableTimeSlots(sortedSlots);
+        
         // Clear time if not in available slots
-        if (bookingForm.time && !slots.includes(bookingForm.time)) {
+        if (bookingForm.time && !sortedSlots.includes(bookingForm.time)) {
           setBookingForm(prev => ({ ...prev, time: '' }));
         }
       } else {
@@ -156,25 +166,42 @@ const TuteeFindAndBookTutors: React.FC = () => {
 
       const date = new Date(bookingForm.date);
       const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
-      const dayAvailability = selectedTutorProfile.availability.find(
+      const dayAvailabilityBlocks = selectedTutorProfile.availability.filter(
         (a: any) => a.day_of_week.toLowerCase() === dayOfWeek.toLowerCase()
       );
-      if (!dayAvailability) return;
 
-      // If time is selected, compute remaining minutes from that time to end_time
-      // Otherwise, compute total window length
-      const windowStart = new Date(`1970-01-01T${dayAvailability.start_time}`);
-      const windowEnd = new Date(`1970-01-01T${dayAvailability.end_time}`);
-      if (isNaN(windowStart.getTime()) || isNaN(windowEnd.getTime()) || windowEnd <= windowStart) return;
+      if (dayAvailabilityBlocks.length === 0) return;
 
-      let maxMinutes = (windowEnd.getTime() - windowStart.getTime()) / (1000 * 60);
+      let maxMinutes = 0;
 
       if (bookingForm.time) {
-        const selected = new Date(`1970-01-01T${bookingForm.time}`);
-        if (isNaN(selected.getTime())) return;
-        // If selected time is before window start, treat selected as window start
-        const effectiveStart = selected < windowStart ? windowStart : selected;
-        maxMinutes = (windowEnd.getTime() - effectiveStart.getTime()) / (1000 * 60);
+        // Find the block that contains the selected time
+        const selectedTime = new Date(`1970-01-01T${bookingForm.time}`);
+        const relevantBlock = dayAvailabilityBlocks.find((block: any) => {
+          const start = new Date(`1970-01-01T${block.start_time}`);
+          const end = new Date(`1970-01-01T${block.end_time}`);
+          return selectedTime >= start && selectedTime < end;
+        });
+
+        if (relevantBlock) {
+          const effectiveStart = selectedTime;
+          const windowEnd = new Date(`1970-01-01T${relevantBlock.end_time}`);
+          if (!isNaN(windowEnd.getTime())) {
+            maxMinutes = (windowEnd.getTime() - effectiveStart.getTime()) / (1000 * 60);
+          }
+        }
+      } else {
+        // If no time is selected, find the longest block for the day
+        dayAvailabilityBlocks.forEach((block: any) => {
+          const windowStart = new Date(`1970-01-01T${block.start_time}`);
+          const windowEnd = new Date(`1970-01-01T${block.end_time}`);
+          if (!isNaN(windowStart.getTime()) && !isNaN(windowEnd.getTime()) && windowEnd > windowStart) {
+            const blockMinutes = (windowEnd.getTime() - windowStart.getTime()) / (1000 * 60);
+            if (blockMinutes > maxMinutes) {
+              maxMinutes = blockMinutes;
+            }
+          }
+        });
       }
 
       // Allowed durations: 1, 1.5, and whole numbers 2..8 (in hours), but only those that fit in maxMinutes
@@ -965,7 +992,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
 
               {/* Booking Form (hidden initially; revealed when the user clicks Book) */}
               {showBookingForm && (
-                <div className="overflow-hidden rounded-3xl border border-slate-100 shadow-2xl bg-white">
+                <div className="overflow-hidden rounded-3xl border border-slate-200 shadow-2xl bg-gradient-to-br from-slate-50 to-sky-50">
                   <div className="bg-gradient-to-r from-sky-600 via-indigo-600 to-indigo-700 px-4 sm:px-6 py-4 text-white flex flex-wrap items-center gap-3">
                     <div className="p-2 bg-white/15 rounded-xl">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -988,7 +1015,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                   <div className="px-4 sm:px-6 py-6 sm:py-8">
                     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.8fr)_minmax(280px,1fr)]">
                       <div className="space-y-5">
-                        <section className="p-4 sm:p-5 border border-slate-100 rounded-2xl shadow-sm bg-white/80 backdrop-blur">
+                        <section className="p-4 sm:p-5 border border-slate-200 rounded-2xl shadow-sm bg-white">
                           <div className="flex items-center justify-between gap-2 mb-3">
                             <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                               <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-sky-200 to-blue-200 text-sky-700 font-bold text-base shadow-md">1</span>
@@ -1031,7 +1058,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                           )}
                         </section>
 
-                        <section className="p-4 sm:p-5 border border-slate-100 rounded-2xl shadow-sm bg-white/80 backdrop-blur space-y-4">
+                        <section className="p-4 sm:p-5 border border-slate-200 rounded-2xl shadow-sm bg-white space-y-4">
                           <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2">
                             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-200 to-purple-200 text-indigo-700 font-bold text-base shadow-md">2</span>
                             Schedule & Duration
@@ -1132,7 +1159,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                           </div>
                         </section>
 
-                        <section className="p-4 sm:p-5 border border-slate-100 rounded-2xl shadow-sm bg-white/80 backdrop-blur">
+                        <section className="p-4 sm:p-5 border border-slate-200 rounded-2xl shadow-sm bg-white">
                           <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-3">
                             <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-purple-200 to-pink-200 text-purple-700 font-bold text-base shadow-md">3</span>
                             Notes & Requests
@@ -1158,7 +1185,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                         </section>
                       </div>
 
-                      <aside className="bg-slate-50 border border-slate-100 rounded-2xl p-4 sm:p-5 space-y-4 h-fit">
+                      <aside className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4 h-fit shadow-sm">
                         <div className="flex items-center gap-3">
                           <img
                             src={getFileUrl(selectedTutorProfile?.user?.profile_image_url || '')}

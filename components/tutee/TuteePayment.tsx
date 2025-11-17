@@ -227,8 +227,34 @@ const TuteePayment: React.FC = () => {
           // Otherwise, attempt to find the latest matching payment by tutor & subject.
           const matchingPayments = userPayments
             .filter((p: Payment) => {
-              return p.tutor_id === booking.tutor?.tutor_id &&
-                     (p.subject === booking.subject || !p.subject);
+              const isBasicMatch = p.tutor_id === booking.tutor?.tutor_id &&
+                                   (p.subject === booking.subject || !p.subject);
+
+              if (!isBasicMatch) {
+                return false;
+              }
+
+              // Prevent incorrect payment-booking associations.
+              const paymentIsConfirmed = ['confirmed', 'admin_confirmed'].includes((p.status || '').toLowerCase());
+              const paymentIsPending = ['pending'].includes((p.status || '').toLowerCase());
+
+              const unpaidBookingStatuses = ['awaiting_payment', 'pending', 'payment_rejected', 'rejected'];
+              const bookingIsUnpaid = unpaidBookingStatuses.includes((booking.status || '').toLowerCase());
+              
+              const confirmedBookingStatuses = ['confirmed', 'admin_confirmed', 'payment_approved'];
+              const bookingIsConfirmed = confirmedBookingStatuses.includes((booking.status || '').toLowerCase());
+
+              // Rule 1: Don't match a confirmed payment to an unpaid booking.
+              if (paymentIsConfirmed && bookingIsUnpaid) {
+                return false;
+              }
+
+              // Rule 2: Don't match a pending payment to a confirmed booking.
+              if (paymentIsPending && bookingIsConfirmed) {
+                return false;
+              }
+
+              return true;
             })
             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -358,56 +384,65 @@ const TuteePayment: React.FC = () => {
         return {
           icon: <AlertCircle className="h-5 w-5 text-yellow-500" />,
           text: 'Pending Payment',
-          color: 'text-yellow-700 bg-yellow-50 border-yellow-200'
+          color: 'text-yellow-700 bg-yellow-50 border-yellow-200',
+          dotColor: 'bg-yellow-500'
         };
       case 'admin_confirmed':
         return {
           icon: <CheckCircle2 className="h-5 w-5 text-indigo-500" />,
           text: 'Admin Confirmed',
-          color: 'text-indigo-700 bg-indigo-50 border-indigo-200'
+          color: 'text-indigo-700 bg-indigo-50 border-indigo-200',
+          dotColor: 'bg-indigo-500'
         };
       case 'confirmed':
         return {
           icon: <CheckCircle2 className="h-5 w-5 text-green-500" />,
           text: 'Payment Confirmed',
-          color: 'text-green-700 bg-green-50 border-green-200'
+          color: 'text-green-700 bg-green-50 border-green-200',
+          dotColor: 'bg-green-500'
         };
       case 'rejected':
         return {
           icon: <Ban className="h-5 w-5 text-red-500" />,
           text: 'Payment Rejected',
-          color: 'text-red-700 bg-red-50 border-red-200'
+          color: 'text-red-700 bg-red-50 border-red-200',
+          dotColor: 'bg-red-500'
         };
       case 'refunded':
         return {
           icon: <Ban className="h-5 w-5 text-orange-500" />,
           text: 'Refunded',
-          color: 'text-orange-700 bg-orange-50 border-orange-200'
+          color: 'text-orange-700 bg-orange-50 border-orange-200',
+          dotColor: 'bg-orange-500'
         };
       // Legacy booking status mappings (for backwards compatibility)
       case 'awaiting_payment':
         return {
           icon: <AlertCircle className="h-5 w-5 text-yellow-500" />,
           text: 'Awaiting Payment',
-          color: 'text-yellow-700 bg-yellow-50 border-yellow-200'
+          color: 'text-yellow-700 bg-yellow-50 border-yellow-200',
+          dotColor: 'bg-yellow-500'
         };
       case 'payment_pending':
         return {
           icon: <CheckCircle2 className="h-5 w-5 text-blue-500" />,
           text: 'Payment Under Review',
-          color: 'text-blue-700 bg-blue-50 border-blue-200'
+          color: 'text-blue-700 bg-blue-50 border-blue-200',
+          dotColor: 'bg-blue-500'
         };
       case 'payment_rejected':
         return {
           icon: <Ban className="h-5 w-5 text-red-500" />,
           text: 'Payment Rejected',
-          color: 'text-red-700 bg-red-50 border-red-200'
+          color: 'text-red-700 bg-red-50 border-red-200',
+          dotColor: 'bg-red-500'
         };
       case 'payment_approved':
         return {
           icon: <CheckCircle2 className="h-5 w-5 text-green-500" />,
           text: 'Payment Approved',
-          color: 'text-green-700 bg-green-50 border-green-200'
+          color: 'text-green-700 bg-green-50 border-green-200',
+          dotColor: 'bg-green-500'
         };
       default:
         // Log unknown status for debugging
@@ -415,7 +450,8 @@ const TuteePayment: React.FC = () => {
         return {
           icon: <AlertCircle className="h-5 w-5 text-slate-500" />,
           text: status || 'Unknown',
-          color: 'text-slate-700 bg-slate-50 border-slate-200'
+          color: 'text-slate-700 bg-slate-50 border-slate-200',
+          dotColor: 'bg-slate-500'
         };
     }
   };
@@ -537,6 +573,7 @@ const TuteePayment: React.FC = () => {
                         'border-slate-400'
                       }`}>
                         {status.icon}
+                        {status.dotColor && <span className={`h-2.5 w-2.5 rounded-full ${status.dotColor}`} />}
                         <span className="whitespace-nowrap">{status.text}</span>
                       </div>
                       {booking.payment_proof && !isRejectedStatus(booking) && (
@@ -910,6 +947,7 @@ const TuteePayment: React.FC = () => {
                             'border-slate-400'
                           }`}>
                             {status.icon}
+                            {status.dotColor && <span className={`h-2.5 w-2.5 rounded-full ${status.dotColor}`} />}
                             <span className="whitespace-nowrap">{status.text}</span>
                           </div>
                           <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs sm:text-sm font-semibold">
