@@ -9,6 +9,7 @@ import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { BookingRequest } from '../database/entities';
 
 @Controller('tutors')
 export class TutorsController {
@@ -287,6 +288,32 @@ export class TutorsController {
   }))
   async uploadPaymentProof(@Param('bookingId') bookingId: string, @UploadedFile() file: any) {
     return this.tutorsService.uploadPaymentProof(+bookingId, file);
+  }
+
+  @Post('booking-requests/:bookingId/complete')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const dest = path.join(process.cwd(), 'tutor_documents');
+        if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+        cb(null, dest);
+      },
+      filename: (req: any, file, cb) => {
+        const bookingId = req.params.bookingId;
+        const ext = path.extname(file.originalname) || '';
+        const filename = `sessionProof_${bookingId}_${Date.now()}${ext}`;
+        cb(null, filename);
+      }
+    })
+  }))
+  async completeBooking(
+    @Param('bookingId') bookingId: string,
+    @UploadedFile() file: any,
+    @Body() body: { status?: string }
+  ) {
+    const status = (body.status || 'awaiting_confirmation') as BookingRequest['status'];
+    return this.tutorsService.markBookingAsCompleted(+bookingId, status, file);
   }
 
   @Get(':tutorId/sessions')

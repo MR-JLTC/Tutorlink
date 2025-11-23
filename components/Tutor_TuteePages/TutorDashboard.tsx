@@ -6,6 +6,7 @@ import ProfileSetup from '../tutor/ProfileSetup';
 import AvailabilityScheduling from '../tutor/AvailabilityScheduling';
 import SessionHandling from '../tutor/SessionHandling';
 import EarningsHistory from '../tutor/EarningsHistory';
+import SessionHistory from '../tutor/SessionHistory';
 import PaymentsHistoryPage from '../tutor/PaymentsHistoryPage';
 import UpcomingSessionsPage from '../shared/UpcomingSessionsPage';
 // UpcomingSessions removed from the tutor sessions sidebar per UX: use the dedicated Upcoming Sessions page via the sidebar link.
@@ -30,6 +31,7 @@ const TutorDashboard: React.FC = () => {
               <Route path="/upcoming-sessions" element={<UpcomingSessionsPage />} />
               <Route path="/earnings" element={<EarningsHistory />} />
               <Route path="/earnings/payments" element={<PaymentsHistoryPage />} />
+              <Route path="/session-history" element={<SessionHistory />} />
               <Route path="*" element={<Navigate to="/tutor-dashboard/application" replace />} />
             </Routes>
           </div>

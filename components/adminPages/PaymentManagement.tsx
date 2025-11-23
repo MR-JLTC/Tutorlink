@@ -115,55 +115,40 @@ const PaymentManagement: React.FC = () => {
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment ID</th>
+                                {/* <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment ID</th> */}
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutor</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                             {payments.map((payment) => (
                                 <tr key={payment.payment_id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">#{payment.payment_id}</td>
+                                    {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">#{payment.payment_id}</td> */}
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.student?.user?.name || 'N/A'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.tutor?.user?.name || 'N/A'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₱{Number(payment.amount).toFixed(2)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(payment.created_at).toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{new Date(payment.created_at).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[payment.status]}`}>
                                             {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                                        <div className="inline-flex items-center gap-2">
-                                            {/* <Button variant="secondary" onClick={() => { setSelectedPayment(payment); setDisputeStatus(payment.dispute_status || 'none'); setAdminNote(payment.admin_note || ''); }}>Dispute</Button> */}
-                                                {/* View student's uploaded proof (opens modal) */}
-                                                {payment.dispute_proof_url && (
-                                                    <Button variant="secondary" onClick={() => { setSelectedProofModalPayment(payment); }}>View Proof</Button>
-                                                )}
+                                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <div className="inline-flex items-center justify-center gap-2">
                                             {payment.status === 'pending' && (
-                                                <>
-                                                    <Button 
-                                                        onClick={() => setApproveModalPayment(payment)} 
-                                                        disabled={verifyingId === payment.payment_id}
-                                                    >
-                                                        Approve
-                                                    </Button>
-                                                    <Button variant="danger" onClick={() => setRejectModalPayment(payment)} disabled={verifyingId === payment.payment_id}>Reject</Button>
-                                                </>
-                                            )}
-                                            {payment.status === 'confirmed' && (payment as any).admin_payment_proof_url && (
-                                                <a 
-                                                    href={getFileUrl((payment as any).admin_payment_proof_url)} 
-                                                    target="_blank" 
-                                                    rel="noreferrer"
-                                                    className="text-xs text-green-600 hover:text-green-700 underline"
+                                                <Button 
+                                                    onClick={() => setSelectedProofModalPayment(payment)} 
+                                                    disabled={verifyingId === payment.payment_id}
                                                 >
-                                                    View proof
-                                                </a>
+                                                    View Proof
+                                                </Button>
+                                            )}
+                                            {(payment.status === 'confirmed' || payment.status === 'rejected') && (
+                                                <Button variant="secondary" onClick={() => { setSelectedProofModalPayment(payment); }}>View Proof</Button>
                                             )}
                                         </div>
                                     </td>
@@ -179,10 +164,10 @@ const PaymentManagement: React.FC = () => {
                         <Card key={payment.payment_id} className="p-4">
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
-                                    <div>
+                                    {/* <div>
                                         <p className="text-xs text-slate-500">Payment ID</p>
                                         <p className="font-semibold text-slate-900">#{payment.payment_id}</p>
-                                    </div>
+                                    </div> */}
                                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${statusColors[payment.status]}`}>
                                         {payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
                                     </span>
@@ -208,14 +193,16 @@ const PaymentManagement: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
-                                    {/* <Button 
-                                        variant="secondary" 
-                                        onClick={() => { setSelectedPayment(payment); setDisputeStatus(payment.dispute_status || 'none'); setAdminNote(payment.admin_note || ''); }} 
-                                        className="text-xs flex-1 sm:flex-none"
-                                    >
-                                        Dispute
-                                    </Button> */}
-                                    {payment.dispute_proof_url && (
+                                    {payment.status === 'pending' && (
+                                        <Button 
+                                            onClick={() => setSelectedProofModalPayment(payment)} 
+                                            disabled={verifyingId === payment.payment_id}
+                                            className="text-xs flex-1 sm:flex-none"
+                                        >
+                                            View Proof
+                                        </Button>
+                                    )}
+                                    {(payment.status === 'confirmed' || payment.status === 'rejected') && (
                                         <Button 
                                             variant="secondary" 
                                             onClick={() => { setSelectedProofModalPayment(payment); }} 
@@ -223,35 +210,6 @@ const PaymentManagement: React.FC = () => {
                                         >
                                             View Proof
                                         </Button>
-                                    )}
-                                    {payment.status === 'pending' && (
-                                        <>
-                                            <Button 
-                                                onClick={() => setApproveModalPayment(payment)} 
-                                                disabled={verifyingId === payment.payment_id}
-                                                className="text-xs flex-1 sm:flex-none"
-                                            >
-                                                Approve
-                                            </Button>
-                                            <Button 
-                                                variant="danger" 
-                                                onClick={() => setRejectModalPayment(payment)} 
-                                                disabled={verifyingId === payment.payment_id}
-                                                className="text-xs flex-1 sm:flex-none"
-                                            >
-                                                Reject
-                                            </Button>
-                                        </>
-                                    )}
-                                    {payment.status === 'confirmed' && (payment as any).admin_payment_proof_url && (
-                                        <a 
-                                            href={getFileUrl((payment as any).admin_payment_proof_url)} 
-                                            target="_blank" 
-                                            rel="noreferrer"
-                                            className="text-xs text-green-600 hover:text-green-700 underline flex-1 sm:flex-none text-center"
-                                        >
-                                            View proof
-                                        </a>
                                     )}
                                 </div>
                             </div>
@@ -403,24 +361,74 @@ const PaymentManagement: React.FC = () => {
             )}
 
             {/* Student proof modal: lets admin view the tutee-uploaded proof and Approve/Reject from the same modal */}
-            {selectedProofModalPayment && (
-                <Modal
-                    isOpen={true}
-                    onClose={() => { setSelectedProofModalPayment(null); }}
-                    title={`Payment Proof #${selectedProofModalPayment.payment_id}`}
-                >
-                    <div className="space-y-4">
-                        <div className="text-sm text-slate-700">
-                            <p><strong>Student:</strong> {selectedProofModalPayment.student?.user?.name || 'N/A'}</p>
-                            <p><strong>Tutor:</strong> {selectedProofModalPayment.tutor?.user?.name || 'N/A'}</p>
-                            <p><strong>Amount:</strong> ₱{Number(selectedProofModalPayment.amount).toFixed(2)}</p>
+                {selectedProofModalPayment && (
+                    <Modal
+                        isOpen={true}
+                        onClose={() => { setSelectedProofModalPayment(null); }}
+                        title={`Payment Proof #${selectedProofModalPayment.payment_id}`}
+                        footer={
+                            selectedProofModalPayment.status === 'pending' ? (
+                                <div className="flex items-center justify-end gap-2 w-full">
+                                    <Button variant="secondary" onClick={() => setSelectedProofModalPayment(null)}>Cancel</Button>
+                                    <Button
+                                        onClick={async () => {
+                                            await verify(selectedProofModalPayment.payment_id, 'confirmed');
+                                            setSelectedProofModalPayment(null);
+                                        }}
+                                        disabled={verifyingId === selectedProofModalPayment.payment_id}
+                                    >
+                                        Confirm
+                                    </Button>
+                                    <Button
+                                        variant="danger"
+                                        onClick={() => {
+                                            setRejectModalPayment(selectedProofModalPayment);
+                                            setSelectedProofModalPayment(null);
+                                        }}
+                                    >
+                                        Reject
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-end gap-2 w-full">
+                                    <Button variant="secondary" onClick={() => setSelectedProofModalPayment(null)}>Close</Button>
+                                </div>
+                            )
+                        }
+                    >
+                        <div className="space-y-4">
+                            <div className="text-sm text-slate-700">
+                                <p><strong>Student:</strong> {selectedProofModalPayment.student?.user?.name || 'N/A'}</p>
+                                <p><strong>Tutor:</strong> {selectedProofModalPayment.tutor?.user?.name || 'N/A'}</p>
+                                <p><strong>Amount:</strong> ₱{Number(selectedProofModalPayment.amount).toFixed(2)}</p>
+                                <p><strong>Status:</strong> <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusColors[selectedProofModalPayment.status]}`}>
+                                    {selectedProofModalPayment.status.charAt(0).toUpperCase() + selectedProofModalPayment.status.slice(1)}
+                                </span></p>
+                            </div>
+                            <div className="flex justify-center">
+                                <img 
+                                    src={getFileUrl(
+                                        selectedProofModalPayment.status === 'confirmed' && (selectedProofModalPayment as any).admin_payment_proof_url 
+                                            ? (selectedProofModalPayment as any).admin_payment_proof_url 
+                                            : (selectedProofModalPayment as any).dispute_proof_url || (selectedProofModalPayment as any).payment_proof_url
+                                    )} 
+                                    alt="Payment proof" 
+                                    className="max-h-[70vh] object-contain border rounded" 
+                                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=No+Image'; }} 
+                                />
+                            </div>
+                            {selectedProofModalPayment.status === 'confirmed' && (selectedProofModalPayment as any).admin_payment_proof_url && (
+                                <p className="text-xs text-slate-500 text-center">Admin Payment Proof</p>
+                            )}
+                            {selectedProofModalPayment.status === 'rejected' && (selectedProofModalPayment as any).rejection_reason && (
+                                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                                    <p className="text-xs font-semibold text-red-800 mb-1">Rejection Reason:</p>
+                                    <p className="text-sm text-red-700">{(selectedProofModalPayment as any).rejection_reason}</p>
+                                </div>
+                            )}
                         </div>
-                        <div className="flex justify-center">
-                            <img src={getFileUrl((selectedProofModalPayment as any).dispute_proof_url || (selectedProofModalPayment as any).dispute_proof_url)} alt="Payment proof" className="max-h-[70vh] object-contain border rounded" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=No+Image'; }} />
-                        </div>
-                    </div>
-                </Modal>
-            )}
+                    </Modal>
+                )}
         </div>
     );
 };

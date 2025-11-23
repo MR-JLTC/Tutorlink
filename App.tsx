@@ -20,7 +20,7 @@ import TutorDashboard from './components/Tutor_TuteePages/TutorDashboard';
 import TuteeDashboard from './components/Tutor_TuteePages/TuteeDashboard';
 import UnifiedLoginPage from './components/auth/UnifiedLoginPage';
 import PasswordResetPage from './components/auth/PasswordResetPage';
-import UpcomingSessionsPage from './components/shared/UpcomingSessionsPage';
+import BookingsPage from './components/shared/BookingsPage';
 
 const App: React.FC = () => {
   return (
@@ -61,8 +61,7 @@ const App: React.FC = () => {
         {/* Tutee routes */}
         <Route path="tutee-dashboard/*" element={<TuteeDashboard />} />
 
-        {/* Shared: Upcoming Sessions */}
-        <Route path="/upcoming-sessions" element={<UpcomingSessionsPage />} />
+          {/* Shared: Upcoming Sessions */}
       </Route>
 
       {/* Default redirect for unmatched paths */}

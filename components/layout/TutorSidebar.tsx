@@ -18,20 +18,20 @@ import { useAuth } from '../../hooks/useAuth';
 
 const tutorNavLinks = [
   { 
-    to: '/tutor-dashboard/application', 
-    icon: FileText, 
-    label: 'Application & Verification',
-    description: 'Submit your credentials, certificates, and supporting documents for admin review and approval to start tutoring.',
-    requiresApproval: false,
-    isFirstStep: true
-  },
-  { 
     to: '/tutor-dashboard/profile', 
     icon: User, 
     label: 'Profile Setup',
     description: 'Complete your tutor profile with bio, subjects, profile photo, and GCash payment details for students to see.',
     requiresApproval: false,
     isFirstStep: false
+  },
+  { 
+    to: '/tutor-dashboard/application', 
+    icon: FileText, 
+    label: 'Application & Verification',
+    description: 'Submit your credentials, certificates, and supporting documents for admin review and approval to start tutoring.',
+    requiresApproval: false,
+    isFirstStep: true
   },
   { 
     to: '/tutor-dashboard/availability', 
@@ -49,12 +49,20 @@ const tutorNavLinks = [
     requiresApproval: true,
     isFirstStep: false
   },
+  // {
+  //   // Make this route consistent with other tutor dashboard links so it highlights/behaves like the rest
+  //   to: '/tutor-dashboard/upcoming-sessions',
+  //   icon: Calendar,
+  //   label: 'Upcoming Sessions',
+  //   description: 'View and manage your upcoming scheduled sessions in one place.',
+  //   requiresApproval: true,
+  //   isFirstStep: false
+  // },
   {
-    // Make this route consistent with other tutor dashboard links so it highlights/behaves like the rest
-    to: '/tutor-dashboard/upcoming-sessions',
-    icon: Calendar,
-    label: 'Session Handling',
-    description: 'View and manage your upcoming scheduled sessions in one place.',
+    to: '/tutor-dashboard/session-history',
+    icon: CheckCircle,
+    label: 'Session History',
+    description: 'View your completed tutoring sessions and history.',
     requiresApproval: true,
     isFirstStep: false
   },
@@ -116,9 +124,10 @@ const TutorSidebar: React.FC = () => {
         return;
       }
       try {
-        const res = await apiClient.get('/users/upcoming-sessions/list');
-        const items = res.data?.data || [];
-        if (mounted) setUpcomingCount(Array.isArray(items) ? items.length : 0);
+        const res = await apiClient.get('/users/me/bookings'); // Changed endpoint
+        const allBookings = res.data || [];
+        const upcoming = allBookings.filter(b => ['upcoming', 'confirmed'].includes(b.status)); // Filter on frontend
+        if (mounted) setUpcomingCount(upcoming.length); // Count filtered items
       } catch (err) {
         console.error('Failed to load upcoming sessions count:', err);
         if (mounted) setUpcomingCount(0);

@@ -12,6 +12,11 @@ import * as fs from 'fs';
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  // Tutor requests payment for a completed/overdue session
+  @Post('request')
+  async requestPayment(@Body() body: { bookingId: number; tutorId: number; amount: number; subject?: string }) {
+    return this.paymentsService.requestPayment(body.bookingId, body.tutorId, body.amount, body.subject);
+  }
   @Get()
   findAll() {
     return this.paymentsService.findAll();

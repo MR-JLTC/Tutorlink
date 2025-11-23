@@ -37,6 +37,7 @@ export class BookingRequest {
       'payment_pending',
       'payment_rejected',
       'payment_approved',
+      'awaiting_confirmation',
       'upcoming',
       'completed',
       'cancelled'
@@ -51,12 +52,19 @@ export class BookingRequest {
     | 'payment_pending'
     | 'payment_rejected'
     | 'payment_approved'
+    | 'awaiting_confirmation'
     | 'upcoming'
     | 'completed'
     | 'cancelled';
 
   @Column({ type: 'text', nullable: true })
   payment_proof: string;
+
+    @Column({ type: 'timestamp', nullable: true })
+    tutor_marked_done_at?: Date;
+
+    @Column({ type: 'timestamp', nullable: true })
+    tutee_marked_done_at?: Date;
 
   @Column({ type: 'text', nullable: true })
   student_notes: string;
@@ -66,4 +74,13 @@ export class BookingRequest {
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
   updated_at: Date;
+
+  @Column({ type: 'decimal', precision: 2, scale: 1, nullable: true })
+  tutee_rating?: number;
+
+  @Column({ type: 'text', nullable: true })
+  tutee_comment?: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  tutee_feedback_at?: Date;
 }

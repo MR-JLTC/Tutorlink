@@ -6,6 +6,7 @@ import TuteeFindAndBookTutors from '../tutee/TuteeFindAndBookTutors';
 import TuteePayment from '../tutee/TuteePayment';
 import TuteeAfterSession from '../tutee/TuteeAfterSession';
 import UpcomingSessionsPage from '../shared/UpcomingSessionsPage';
+// import BookingsPage from '../shared/BookingsPage'; // Removed
 import { useAuth } from '../../hooks/useAuth';
 import { User } from '../../types/index';
 import TuteeMyBookings from '../tutee/TuteeMyBookings';
@@ -32,7 +33,7 @@ const TuteeDashboard: React.FC = () => {
             <Route path="*" element={<Navigate to="/tutee-dashboard/become-tutor" replace />} />
           </Routes>
         </div>
-        {/* Upcoming sessions widget removed from My Bookings per UX change; upcoming sessions are available via the sidebar "Upcoming Sessions" page. */}
+        {/* Upcoming bookings widget removed from My Bookings per UX change; upcoming bookings are available via the sidebar "Upcoming Bookings" page. */}
       </div>
     </TuteeLayout>
   );

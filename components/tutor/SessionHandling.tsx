@@ -4,16 +4,18 @@ import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Modal from '../ui/Modal';
 import { useAuth } from '../../context/AuthContext';
-import { MessageSquare, Clock, CheckCircle, X, Eye, AlertCircle } from 'lucide-react';
+import { MessageSquare, Clock, CheckCircle, X, Eye, AlertCircle, Calendar, User, FileText } from 'lucide-react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 import ErrorBoundary from '../ErrorBoundary';
+import RescheduleModal from '../shared/RescheduleModal'; // New import
 
 interface Student {
   user_id: number;
   name: string;
   email: string;
+  profile_image_url?: string;
 }
 
 interface BookingRequest {
@@ -23,7 +25,7 @@ interface BookingRequest {
   date: string;
   time: string;
   duration: number;
-  status: 'pending' | 'accepted' | 'declined' | 'awaiting_payment' | 'confirmed' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'declined' | 'awaiting_payment' | 'awaiting_confirmation' | 'confirmed' | 'completed' | 'cancelled' | 'upcoming';
   payment_proof?: string;
   student_notes?: string;
   created_at: string;
@@ -37,13 +39,21 @@ const SessionHandlingContent: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [resolvingTutor, setResolvingTutor] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'awaiting_payment' | 'confirmed'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'awaiting_payment' | 'confirmed' | 'upcoming'>('all');
   const [isMounted, setIsMounted] = useState(true);
   const [tuteeProfile, setTuteeProfile] = useState<any | null>(null);
   const [tuteeProfileLoading, setTuteeProfileLoading] = useState(false);
   const [isTuteeModalOpen, setIsTuteeModalOpen] = useState(false);
   const [acceptConfirmOpen, setAcceptConfirmOpen] = useState(false);
   const [acceptTarget, setAcceptTarget] = useState<BookingRequest | null>(null);
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false); // New state
+  const [rescheduleTarget, setRescheduleTarget] = useState<BookingRequest | null>(null); // New state
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000); // Rerender component every minute to check for overdue sessions
+    return () => clearInterval(timer);
+  }, []);
 
   // Determine if there is any unreviewed payment proof awaiting tutor action
   const hasUnreviewedPaymentProof = bookingRequests.some(
@@ -205,6 +215,7 @@ const SessionHandlingContent: React.FC = () => {
           user_id: b.student?.user_id || b.student?.user?.user_id,
           name: b.student?.user?.name || b.student?.name || 'Student',
           email: b.student?.user?.email || b.student?.email || '',
+          profile_image_url: b.student?.user?.profile_image_url || b.student?.profile_image_url || b.student?.user?.profile_image || b.student?.profile_image || '',
         },
         subject: b.subject,
         date: b.date,
@@ -278,6 +289,61 @@ const SessionHandlingContent: React.FC = () => {
     }
   };
 
+  const parseSessionStart = (dateStr: string, timeStr: string): Date | null => {
+    if (!dateStr || !timeStr) {
+      return null;
+    }
+
+    // Attempt to combine and parse directly. This works for 'YYYY-MM-DD' and 'HH:mm:ss' or 'HH:mm'
+    let sessionDate = new Date(`${dateStr.split('T')[0]}T${timeStr}`);
+    if (!isNaN(sessionDate.getTime())) {
+      return sessionDate;
+    }
+
+    // Fallback for other formats, like time with AM/PM
+    sessionDate = new Date(dateStr);
+    if (isNaN(sessionDate.getTime())) {
+      return null; // Invalid date string
+    }
+
+    const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      const ampm = timeMatch[3];
+
+      if (ampm && ampm.toLowerCase() === 'pm' && hours < 12) {
+        hours += 12;
+      }
+      if (ampm && ampm.toLowerCase() === 'am' && hours === 12) {
+        hours = 0;
+      }
+
+      sessionDate.setHours(hours, minutes, 0, 0);
+      return sessionDate;
+    }
+
+    return null; // Could not parse the time
+  };
+
+  const handleMarkDone = async (bookingId: number) => {
+    setLoading(true);
+    try {
+      const res = await apiClient.post(`/tutors/booking-requests/${bookingId}/upcoming`);
+      if (res.data?.success) {
+        toast.success('Session marked as completed');
+        await fetchBookingRequests();
+      } else {
+        throw new Error(res.data?.message || 'Failed to mark completed');
+      }
+    } catch (err: any) {
+      console.error('Failed to mark session completed', err);
+      toast.error(err?.response?.data?.message || err?.message || 'Failed to mark session completed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
@@ -306,6 +372,19 @@ const SessionHandlingContent: React.FC = () => {
     }
   };
 
+  // Helper: Check if a session has ended (past its scheduled end time)
+  const hasSessionEnded = (request: BookingRequest): boolean => {
+    const start = parseSessionStart(request.date, request.time);
+    if (!start) return false;
+
+    const durationHours = request.duration || 1.0;
+    const endTime = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+    const currentTime = new Date();
+    
+    // Session has ended if current time is past the end time
+    return currentTime.getTime() > endTime.getTime();
+  };
+
   // Sort: 1) awaiting_payment with proof, 2) awaiting_payment without proof, 3) others
   // Tie-breaker: most recent first
   const priorityFor = (r: BookingRequest) => {
@@ -323,23 +402,84 @@ const SessionHandlingContent: React.FC = () => {
   });
 
   const filteredRequests = sortedRequests.filter(request => {
+    // Exclude sessions with status "awaiting_confirmation"
+    if (request.status === 'awaiting_confirmation') {
+      return false;
+    }
+
+    // Filter out sessions that have already ended (past their scheduled end time)
+    // Only apply this to sessions that are scheduled (upcoming, confirmed)
+    const scheduledStatuses = ['upcoming', 'confirmed'];
+    if (scheduledStatuses.includes(request.status) && hasSessionEnded(request)) {
+      return false;
+    }
+
     if (filter === 'all') {
-      // In "All Requests", show only items needing tutor action (pending)
-      return request.status === 'pending';
+      // Show all requests that are not completed or cancelled
+      return request.status !== 'completed' && request.status !== 'cancelled';
+    } else if (filter === 'upcoming') {
+      const eligibleStatusesForUpcomingTab = ['upcoming', 'confirmed'];
+      return eligibleStatusesForUpcomingTab.includes(request.status);
     }
     return request.status === filter;
   });
+
+  // Helper: count upcoming sessions (status 'upcoming' or 'confirmed' and start time in the future)
+  const countUpcomingSessions = () => {
+    const now = new Date();
+    return bookingRequests.filter(r => {
+      const eligibleStatuses = ['upcoming', 'confirmed'];
+      if (!eligibleStatuses.includes(r.status)) return false;
+      const start = parseSessionStart(r.date, r.time);
+      return start && start > now;
+    }).length;
+  };
+
+const isOverdue = (request: BookingRequest): boolean => {
+  const start = parseSessionStart(request.date, request.time);
+  if (!start) return false;
+
+  const durationHours = request.duration || 1.0;
+  const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+  const currentTime = new Date();
+
+  const eligibleStatuses = ['upcoming', 'confirmed'];
+  return currentTime.getTime() > end.getTime() && eligibleStatuses.includes(request.status);
+};
+
+
+
+
+
+const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
+  if (r.status !== 'upcoming') return false;
+
+  const start = parseSessionStart(r.date, r.time);
+  if (!start) return false;
+
+  const durationHours = r.duration || 1.0;
+  const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+  const now = new Date();
+
+  // Show button if session already started (in-progress) OR already ended
+  return start <= now;
+};
+
+
+
+
 
   const stats = {
     total: bookingRequests.length,
     pending: bookingRequests.filter(r => r.status === 'pending').length,
     awaiting_payment: bookingRequests.filter(r => r.status === 'awaiting_payment').length,
     confirmed: bookingRequests.filter(r => r.status === 'confirmed').length,
+    upcoming: countUpcomingSessions(),
   };
 
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
-      <ToastContainer />
+      <ToastContainer aria-label="Notification messages" />
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1">
@@ -400,7 +540,8 @@ const SessionHandlingContent: React.FC = () => {
             { key: 'all', label: 'All Requests' },
             { key: 'pending', label: 'Pending' },
             { key: 'awaiting_payment', label: 'Awaiting Payment' },
-            { key: 'confirmed', label: 'Confirmed' }
+            { key: 'confirmed', label: 'Confirmed' },
+            { key: 'upcoming', label: 'Upcoming' }
           ].map(tab => (
             <button
               key={tab.key}
@@ -433,10 +574,10 @@ const SessionHandlingContent: React.FC = () => {
       {/* Booking Requests */}
       <div className="space-y-3 sm:space-y-4">
         {filteredRequests.length === 0 ? (
-          <Card className="p-6 sm:p-8 text-center">
-            <MessageSquare className="h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
-            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No booking requests</h3>
-            <p className="text-sm sm:text-base text-gray-500">
+          <Card className="p-6 sm:p-8 text-center -mx-2 sm:-mx-3 md:mx-0">
+            <MessageSquare className="h-10 w-10 sm:h-12 sm:w-12 text-slate-400 mx-auto mb-3 sm:mb-4" />
+            <h3 className="text-base sm:text-lg font-medium text-slate-900 mb-1">No booking requests</h3>
+            <p className="text-xs sm:text-sm md:text-base text-slate-600">
               {filter === 'all' 
                 ? "You haven't received any booking requests yet."
                 : `No ${filter.replace('_', ' ')} requests found.`
@@ -444,13 +585,37 @@ const SessionHandlingContent: React.FC = () => {
             </p>
           </Card>
         ) : (
-          filteredRequests.map(request => (
-            <Card key={request.id} className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0 mb-2.5 sm:mb-3 md:mb-4">
-                <div className="flex-1 min-w-0 w-full sm:w-auto">
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 mb-2">
-                        <h3 className="text-sm sm:text-base md:text-lg font-semibold text-slate-800 break-words">
-                          {request.student.name}
+          filteredRequests.map(request => {
+            const statusColors: Record<string, string> = {
+              'pending': 'bg-gradient-to-r from-yellow-500 to-amber-500',
+              'accepted': 'bg-gradient-to-r from-blue-500 to-indigo-500',
+              'confirmed': 'bg-gradient-to-r from-green-500 to-emerald-500',
+              'awaiting_payment': 'bg-gradient-to-r from-orange-500 to-amber-500',
+              'upcoming': 'bg-gradient-to-r from-blue-500 to-indigo-500',
+              'completed': 'bg-gradient-to-r from-purple-500 to-indigo-500',
+              'declined': 'bg-gradient-to-r from-red-500 to-rose-500',
+              'cancelled': 'bg-gradient-to-r from-gray-500 to-slate-500',
+            };
+            
+            return (
+              <Card 
+                key={request.id} 
+                className={`group relative bg-gradient-to-br from-white to-blue-50/30 rounded-xl sm:rounded-2xl shadow-lg border-2 ${
+                  isOverdue(request) 
+                    ? 'border-red-300 hover:border-red-400 bg-red-50/50' 
+                    : 'border-slate-200 hover:border-blue-300'
+                } p-4 sm:p-5 md:p-6 -mx-2 sm:-mx-3 md:mx-0 transition-all duration-300 overflow-hidden`}
+              >
+                {/* Decorative gradient bar */}
+                <div className={`absolute top-0 left-0 right-0 h-1 ${statusColors[request.status] || 'bg-gradient-to-r from-blue-500 to-indigo-500'}`} />
+                
+                <div className="flex flex-col gap-4 sm:gap-5">
+                  {/* Header Row */}
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                        <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 break-words">
+                          {request.subject}
                         </h3>
                         <button
                           onClick={async () => {
@@ -498,75 +663,145 @@ const SessionHandlingContent: React.FC = () => {
                               setTuteeProfileLoading(false);
                             }
                           }}
-                          className="inline-flex items-center justify-center p-1 rounded-md bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-600 touch-manipulation"
+                          className="inline-flex items-center justify-center p-1.5 sm:p-2 rounded-lg bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-600 touch-manipulation transition-colors shadow-sm hover:shadow-md"
                           title="View tutee profile"
                           style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
-                          <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
                         </button>
-                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium border flex-shrink-0 ${getStatusColor(request.status)}`}>
-                      <div className="flex items-center space-x-0.5 sm:space-x-1">
-                        {getStatusIcon(request.status)}
-                        <span className="whitespace-nowrap">{request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}</span>
+                        <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md border-2 ${getStatusColor(request.status)}`}>
+                          {getStatusIcon(request.status)}
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: request.status === 'pending' ? '#eab308' : request.status === 'confirmed' ? '#16a34a' : request.status === 'awaiting_payment' ? '#f97316' : '#3b82f6' }} />
+                          <span className="whitespace-nowrap">{request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}</span>
+                        </div>
                       </div>
-                    </span>
+                      
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600 mb-3">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
+                          <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
+                          {request.student.name}
+                        </span>
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
+                          <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </Calendar>
+                          {new Date(request.date).toLocaleDateString()}
+                        </span>
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
+                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </Clock>
+                          {request.time}
+                        </span>
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
+                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </Clock>
+                          {request.duration} {request.duration === 1 ? 'hour' : 'hours'}
+                        </span>
+                      </div>
+                      
+                      {request.student_notes && (
+                        <div className="p-3 sm:p-4 bg-gradient-to-br from-slate-50 to-blue-50/50 rounded-xl border-2 border-slate-200 shadow-sm">
+                          <div className="flex items-start gap-2 sm:gap-3">
+                            <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg flex-shrink-0 mt-0.5">
+                              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-xs sm:text-sm md:text-base font-semibold text-slate-800 mb-1.5 sm:mb-2">Student Notes</h4>
+                              <p className="text-xs sm:text-sm md:text-base text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
+                                {request.student_notes}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 md:gap-4 text-[10px] sm:text-xs md:text-sm text-slate-600 mt-2">
-                    <div>
-                      <p className="break-words"><strong>Subject:</strong> {request.subject}</p>
-                      <p><strong>Date:</strong> {new Date(request.date).toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                      <p><strong>Time:</strong> {request.time}</p>
-                      <p><strong>Duration:</strong> {request.duration} hours</p>
-                    </div>
-                  </div>
-                  
-                  {request.student_notes && (
-                    <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-slate-50 rounded-lg">
-                      <p className="text-[10px] sm:text-xs md:text-sm text-slate-700 break-words">
-                        <strong>Student Notes:</strong> {request.student_notes}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
 
               {/* Payment proof review moved to admin. Tutors cannot view or approve payment proofs. */}
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 pt-2.5 sm:pt-3 md:pt-4 border-t border-slate-200">
-                <div className="text-[10px] sm:text-xs text-slate-500">
-                  Requested on {new Date(request.created_at).toLocaleDateString()}
+                  
+                  {/* Session Details */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-semibold text-slate-700">Requested:</span>
+                      <span className="text-xs sm:text-sm md:text-base font-medium text-slate-900">
+                        {new Date(request.created_at).toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })}
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                  {request.status === 'pending' && (
-                    <>
-                      <Button
-                        onClick={() => { setAcceptTarget(request); setAcceptConfirmOpen(true); }}
-                        disabled={loading}
-                        className="flex items-center justify-center space-x-1 w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span>Accept</span>
-                      </Button>
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 pt-3 sm:pt-4 border-t-2 border-slate-200">
+                  <div className="text-[10px] sm:text-xs text-slate-500">
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    {request.status === 'pending' && (
+                      <>
+                        <Button
+                          onClick={() => { setAcceptTarget(request); setAcceptConfirmOpen(true); }}
+                          disabled={loading}
+                          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 active:from-green-800 active:to-emerald-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 w-full sm:w-auto touch-manipulation"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
+                        >
+                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span>Accept</span>
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => handleBookingAction(request.id, 'decline')}
+                          disabled={loading}
+                          className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 active:from-red-800 active:to-rose-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 w-full sm:w-auto touch-manipulation"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
+                        >
+                          <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span>Decline</span>
+                        </Button>
+                      </>
+                    )}
+                    {(request.status === 'upcoming' || request.status === 'confirmed') && (
                       <Button
                         variant="secondary"
-                        onClick={() => handleBookingAction(request.id, 'decline')}
+                        onClick={() => { setRescheduleTarget(request); setIsRescheduleModalOpen(true); }}
                         disabled={loading}
-                        className="flex items-center justify-center space-x-1 w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
+                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:from-blue-800 active:to-indigo-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 w-full sm:w-auto touch-manipulation"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
-                        <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        <span>Decline</span>
+                        <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span>Reschedule</span>
                       </Button>
-                    </>
-                  )}
+                    )}
+
+                    {/* Mark as done button for overdue upcoming sessions in Session Handling */}
+                    {isSessionEligibleForMarkAsDone(request) && (
+                      <Button
+                        onClick={() => handleMarkDone(request.id)}
+                        disabled={loading}
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:from-purple-800 active:to-indigo-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 w-full sm:w-auto touch-manipulation"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                      >
+                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <span>Mark as done</span>
+                      </Button>
+                    )}
                   
-                  {/* No payment confirmation actions in Session Handling */}
+                    {/* No payment confirmation actions in Session Handling */}
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        )}
+      </div>
       
-              {/* Tutee Profile Modal */}
+      {/* Tutee Profile Modal */}
               {isTuteeModalOpen && (
                 <Modal
                   isOpen={true}
@@ -664,14 +899,25 @@ const SessionHandlingContent: React.FC = () => {
                   <div className="space-y-4">
                     <div className="rounded-lg overflow-hidden shadow-sm">
                       <div className="bg-gradient-to-r from-green-600 to-emerald-500 p-4 text-white flex items-center gap-4">
-                        <div className="h-14 w-14 rounded-full overflow-hidden flex-shrink-0 border-2 border-white">
-                          <img src={getFileUrl((acceptTarget.student as any)?.profile_image_url || '') || `https://ui-avatars.com/api/?name=${encodeURIComponent(acceptTarget.student.name)}`} alt={acceptTarget.student.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(acceptTarget.student.name)}`; }} />
+                        <div className="h-16 w-16 rounded-full overflow-hidden flex-shrink-0 border-2 border-white shadow-lg">
+                          <img 
+                            src={
+                              acceptTarget.student.profile_image_url 
+                                ? getFileUrl(acceptTarget.student.profile_image_url) 
+                                : `https://ui-avatars.com/api/?name=${encodeURIComponent(acceptTarget.student.name)}&background=10b981&color=fff&size=128`
+                            } 
+                            alt={acceptTarget.student.name} 
+                            className="w-full h-full object-cover" 
+                            onError={(e) => { 
+                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(acceptTarget.student.name)}&background=10b981&color=fff&size=128`; 
+                            }} 
+                          />
                         </div>
-                        <div>
-                          <div className="font-semibold text-lg">Accept booking from {acceptTarget.student.name}</div>
-                          <div className="text-sm opacity-90">{acceptTarget.student.email}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-lg truncate">Accept booking from {acceptTarget.student.name}</div>
+                          <div className="text-sm opacity-90 truncate">{acceptTarget.student.email}</div>
                         </div>
-                        <div className="ml-auto text-sm inline-flex items-center bg-white/20 px-2 py-1 rounded text-white">
+                        <div className="ml-auto text-sm inline-flex items-center bg-white/20 px-2 py-1 rounded text-white flex-shrink-0">
                           {acceptTarget.duration} hr{acceptTarget.duration !== 1 ? 's' : ''}
                         </div>
                       </div>
@@ -696,12 +942,6 @@ const SessionHandlingContent: React.FC = () => {
                   </div>
                 </Modal>
               )}
-                </div>
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
       {/* Tutor resolution status */}
       {resolvingTutor && (
         <Card className="p-4">
@@ -729,6 +969,20 @@ const SessionHandlingContent: React.FC = () => {
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Reschedule Modal */}
+      {isRescheduleModalOpen && rescheduleTarget && (
+        <RescheduleModal
+          open={isRescheduleModalOpen}
+          bookingId={rescheduleTarget.id}
+          onClose={() => { setIsRescheduleModalOpen(false); setRescheduleTarget(null); }}
+          onSuccess={() => {
+            setIsRescheduleModalOpen(false);
+            setRescheduleTarget(null);
+            fetchBookingRequests(); // Refresh the list after successful reschedule
+          }}
+        />
       )}
     </div>
   );

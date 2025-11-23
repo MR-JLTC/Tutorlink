@@ -4,7 +4,7 @@ import { Tutor, TutorSubject } from '../../types';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
-import { Check, X, FileText, User, Mail, School, Book, Clock } from 'lucide-react';
+import { Check, X, FileText, User, Mail, School, Book, Clock, CreditCard } from 'lucide-react';
 import { getFileUrl } from '../../services/api';
 
 const TutorManagement: React.FC = () => {
@@ -241,13 +241,14 @@ const TutorManagement: React.FC = () => {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">University</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session Rate</th>
                 <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {tutors.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-4 text-center text-gray-500">No pending applications found.</td>
+                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">No pending applications found.</td>
                 </tr>
               ) : (
                 tutors.map((tutor) => (
@@ -277,6 +278,11 @@ const TutorManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(tutor as any).university?.name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(tutor as any).course?.course_name || 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {(tutor as any).session_rate_per_hour 
+                        ? `₱${Number((tutor as any).session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/hr`
+                        : 'N/A'}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                       <div className="flex justify-center">
                         <Button onClick={() => handleViewDetails(tutor)}>View Details</Button>
@@ -329,6 +335,14 @@ const TutorManagement: React.FC = () => {
                       <p className="text-slate-500 text-xs mb-1">Course</p>
                       <p className="font-medium text-slate-900 truncate">{(tutor as any).course?.course_name || 'N/A'}</p>
                     </div>
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-slate-500 text-xs mb-1">Session Rate per Hour</p>
+                    <p className="font-medium text-slate-900">
+                      {(tutor as any).session_rate_per_hour 
+                        ? `₱${Number((tutor as any).session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/hr`
+                        : 'N/A'}
+                    </p>
                   </div>
                   <Button onClick={() => handleViewDetails(tutor)} className="w-full">View Details</Button>
                 </div>
@@ -445,7 +459,7 @@ const TutorManagement: React.FC = () => {
       </Card>
 
       {selectedTutor && (
-        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Application Details`}
+        <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={`Application Details`} maxWidth="5xl"
           footer={
             <div className="flex flex-row items-center justify-end gap-2 flex-wrap sm:flex-nowrap">
               <Button
@@ -469,106 +483,158 @@ const TutorManagement: React.FC = () => {
             </div>
           }
         >
-          <div className="space-y-6 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 hover:scrollbar-thumb-slate-400 pr-2">
-            {/* Header */}
-            <div>
-              <h3 className="text-xl font-semibold text-slate-800">{selectedTutor.user?.name}</h3>
-              <p className="text-sm text-slate-500">{selectedTutor.user?.email}</p>
-            </div>
-
-            {/* Content grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Enhanced Header Section */}
+            <div className="bg-gradient-to-br from-sky-600 via-indigo-600 to-indigo-700 p-4 sm:p-6 rounded-xl text-white relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full -mr-16 -mt-16"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white rounded-full -ml-12 -mb-12"></div>
+              </div>
+              <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 {selectedTutor.user?.profile_image_url && (
-                  <div>
-                    <h4 className="font-semibold">Profile Image</h4>
-                    <div className="mt-2">
-                      <div className="h-32 w-32 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
-                        <img src={getFileUrl(selectedTutor.user.profile_image_url)} alt="Tutor Profile" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
-                      </div>
+                  <div className="flex-shrink-0">
+                    <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full ring-4 ring-white/30 shadow-2xl overflow-hidden bg-white/10 backdrop-blur-sm">
+                      <img src={getFileUrl(selectedTutor.user.profile_image_url)} alt="Tutor Profile" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
                     </div>
                   </div>
                 )}
-                <div>
-                  <h4 className="font-semibold">University & Course</h4>
-                  <div className="mt-2 space-y-1">
-                    <div className="bg-gray-50 p-2 rounded-md">
-                      <span className="text-xs text-gray-500">University:</span>
-                      <p className="text-gray-700 font-medium">{(selectedTutor as any).university?.name || 'Not specified'}</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xl sm:text-2xl font-bold mb-1">{selectedTutor.user?.name}</h3>
+                  <div className="flex items-center gap-2 text-white/90">
+                    <Mail className="h-4 w-4 flex-shrink-0" />
+                    <p className="text-sm sm:text-base truncate">{selectedTutor.user?.email}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Content grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              {/* Left Column */}
+              <div className="space-y-4 sm:space-y-5">
+                {/* University & Course Card */}
+                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <div className="p-2 bg-gradient-to-br from-sky-100 to-sky-200 rounded-lg flex-shrink-0 shadow-md">
+                      <School className="h-5 w-5 sm:h-6 sm:w-6 text-sky-600" />
                     </div>
-                    <div className="bg-gray-50 p-2 rounded-md">
-                      <span className="text-xs text-gray-500">Course:</span>
-                      <p className="text-gray-700 font-medium">{(selectedTutor as any).course?.course_name || 'Not specified'}</p>
+                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">University & Course</h4>
+                  </div>
+                  <div className="space-y-2.5 sm:space-y-3">
+                    <div className="bg-gradient-to-r from-sky-50 to-indigo-50 p-3 sm:p-4 rounded-lg border border-sky-200">
+                      <span className="text-xs sm:text-sm text-slate-600 font-medium block mb-1">University</span>
+                      <p className="text-slate-800 font-semibold text-sm sm:text-base">{(selectedTutor as any).university?.name || 'Not specified'}</p>
+                    </div>
+                    <div className="bg-gradient-to-r from-indigo-50 to-sky-50 p-3 sm:p-4 rounded-lg border border-indigo-200">
+                      <span className="text-xs sm:text-sm text-slate-600 font-medium block mb-1">Course</span>
+                      <p className="text-slate-800 font-semibold text-sm sm:text-base">{(selectedTutor as any).course?.course_name || 'Not specified'}</p>
                     </div>
                   </div>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Bio</h4>
-                  <p className="text-gray-700 bg-gray-50 p-3 rounded-md mt-1 min-h-[72px]">{selectedTutor.bio || 'No bio provided.'}</p>
+
+                {/* Bio Card */}
+                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <div className="p-2 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-lg flex-shrink-0 shadow-md">
+                      <User className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
+                    </div>
+                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Bio</h4>
+                  </div>
+                  <p className="text-slate-700 bg-gradient-to-br from-slate-50 to-sky-50 p-3 sm:p-4 rounded-lg border border-slate-200 min-h-[80px] leading-relaxed text-sm sm:text-base">{selectedTutor.bio || 'No bio provided.'}</p>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Expert Subjects</h4>
-                  <div className="mt-2 flex flex-wrap gap-2">
+
+                {/* Expert Subjects Card */}
+                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <div className="p-2 bg-gradient-to-br from-sky-100 to-indigo-100 rounded-lg flex-shrink-0 shadow-md">
+                      <Book className="h-5 w-5 sm:h-6 sm:w-6 text-sky-600" />
+                    </div>
+                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Expert Subjects</h4>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     {(selectedTutor as any).subjects?.length ? (selectedTutor as any).subjects.map((ts: any) => (
-                      <span key={(ts as any).tutor_subject_id} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">{(ts as any).subject?.subject_name}</span>
-                    )) : <span className="text-sm text-gray-500">No subjects submitted.</span>}
+                      <span key={(ts as any).tutor_subject_id} className="px-3 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-800 rounded-lg text-xs sm:text-sm font-medium border border-sky-200 shadow-sm hover:shadow-md transition-shadow">
+                        {(ts as any).subject?.subject_name}
+                      </span>
+                    )) : <span className="text-sm text-slate-500 italic">No subjects submitted.</span>}
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-semibold">Session Rate</h4>
-                  <div className="mt-2">
-                    <div className="bg-gray-50 p-3 rounded-md">
-                      <span className="text-xs text-gray-500">Rate per hour:</span>
-                      <p className="text-gray-700 font-semibold text-lg">
-                        {(selectedTutor as any).session_rate_per_hour 
-                          ? `₱${Number((selectedTutor as any).session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
-                          : 'Not specified'}
-                      </p>
+              {/* Right Column */}
+              <div className="space-y-4 sm:space-y-5">
+                {/* Session Rate Card */}
+                <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50 rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border-2 border-emerald-200 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <div className="p-2 bg-gradient-to-br from-emerald-200 to-teal-200 rounded-lg flex-shrink-0 shadow-md">
+                      <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-700" />
                     </div>
+                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Session Rate</h4>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg border border-emerald-200 shadow-sm">
+                    <span className="text-xs sm:text-sm text-slate-600 font-medium block mb-2">Rate per hour</span>
+                    <p className="text-emerald-700 font-bold text-xl sm:text-2xl">
+                      {(selectedTutor as any).session_rate_per_hour 
+                        ? `₱${Number((selectedTutor as any).session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
+                        : 'Not specified'}
+                    </p>
                   </div>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Submitted Documents</h4>
-                  <ul className="mt-2 space-y-2">
+
+                {/* Submitted Documents Card */}
+                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <div className="p-2 bg-gradient-to-br from-sky-100 to-sky-200 rounded-lg flex-shrink-0 shadow-md">
+                      <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-sky-600" />
+                    </div>
+                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Submitted Documents</h4>
+                  </div>
+                  <ul className="space-y-2">
                     {selectedTutor.documents?.length ? selectedTutor.documents.map(doc => (
-                      <li key={doc.document_id} className="flex items-center justify-between bg-gray-50 rounded p-2">
-                        <div className="flex items-center min-w-0">
-                          <FileText className="h-5 w-5 mr-2 text-primary-600 flex-shrink-0"/>
+                      <li key={doc.document_id} className="flex items-center justify-between bg-gradient-to-r from-slate-50 to-sky-50 rounded-lg p-3 border border-slate-200 hover:border-sky-300 hover:shadow-md transition-all">
+                        <div className="flex items-center min-w-0 flex-1">
+                          <FileText className="h-4 w-4 sm:h-5 sm:w-5 mr-2 sm:mr-3 text-sky-600 flex-shrink-0"/>
                           <button
                             type="button"
                             onClick={() => handleOpenDocument(getFileUrl(doc.file_url), (doc as any).file_type)}
-                            className="text-primary-600 hover:underline truncate text-left"
+                            className="text-sky-700 hover:text-sky-900 hover:underline truncate text-left text-xs sm:text-sm font-medium"
                             title="Open file"
                           >
                             {doc.file_name}
                           </button>
                         </div>
-                        <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                           <button
                             type="button"
                             onClick={() => handleOpenDocument(getFileUrl(doc.file_url), (doc as any).file_type)}
-                            className="text-sm text-slate-600 hover:text-slate-900"
+                            className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-sky-100 text-sky-700 hover:bg-sky-200 rounded-md font-medium transition-colors"
                           >
                             Open
                           </button>
-                          <a href={getFileUrl(doc.file_url)} download className="text-sm text-slate-600 hover:text-slate-900">Download</a>
+                          <a href={getFileUrl(doc.file_url)} download className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-md font-medium transition-colors">
+                            Download
+                          </a>
                         </div>
                       </li>
-                    )) : <li className="text-sm text-gray-500">No documents uploaded.</li>}
+                    )) : <li className="text-sm text-slate-500 italic bg-slate-50 p-3 rounded-lg border border-slate-200">No documents uploaded.</li>}
                   </ul>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Availability</h4>
-                  <ul className="mt-2 grid grid-cols-1 gap-2 text-sm">
+
+                {/* Availability Card */}
+                <div className="bg-gradient-to-br from-sky-50 via-indigo-50 to-sky-50 rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border-2 border-sky-200 hover:shadow-xl transition-shadow">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <div className="p-2 bg-gradient-to-br from-sky-200 to-indigo-200 rounded-lg flex-shrink-0 shadow-md">
+                      <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-sky-700" />
+                    </div>
+                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Availability</h4>
+                  </div>
+                  <ul className="grid grid-cols-1 gap-2">
                     {(selectedTutor as any).availabilities?.length ? (selectedTutor as any).availabilities.map((a: any) => (
-                      <li key={(a as any).availability_id} className="flex justify-between bg-gray-50 p-2 rounded">
-                        <span className="font-medium">{(a as any).day_of_week}</span>
-                        <span className="text-gray-700">{(a as any).start_time} - {(a as any).end_time}</span>
+                      <li key={(a as any).availability_id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-sky-200 hover:border-sky-300 hover:shadow-md transition-all">
+                        <span className="font-semibold text-slate-800 text-sm sm:text-base">{(a as any).day_of_week}</span>
+                        <span className="text-sky-700 font-medium text-sm sm:text-base">{(a as any).start_time} - {(a as any).end_time}</span>
                       </li>
-                    )) : <li className="text-gray-500">No availability submitted.</li>}
+                    )) : <li className="text-sm text-slate-500 italic bg-white p-3 rounded-lg border border-slate-200">No availability submitted.</li>}
                   </ul>
                 </div>
               </div>

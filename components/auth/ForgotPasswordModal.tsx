@@ -35,6 +35,46 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       console.log('Frontend: Email type:', typeof email);
       console.log('Frontend: Email length:', email.length);
       
+      // First, check user type before submitting
+      try {
+        const userTypeResponse = await api.get(`/auth/password-reset/check-user-type?email=${encodeURIComponent(email)}`);
+        const userType = userTypeResponse.data?.userType;
+        
+        console.log('Frontend: User type check result:', userType);
+        
+        if (!userType) {
+          setError('This email address is not registered in our system. Cannot proceed with password reset. Please verify your email address or contact support if you believe this is an error.');
+          setIsLoading(false);
+          return;
+        }
+        
+        // Validate user type matches the mode
+        if (isAdminMode && userType !== 'admin') {
+          const userTypeLabel = userType === 'tutor' ? 'tutor' : userType === 'tutee' ? 'tutee' : userType;
+          setError(`This email belongs to a ${userTypeLabel} account. Please use the regular login page to reset your password.`);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (!isAdminMode && userType === 'admin') {
+          setError('This email belongs to an admin account. Admin password reset must be done through the Admin Login Page.');
+          setIsLoading(false);
+          return;
+        }
+      } catch (checkError: any) {
+        // If user not found, show appropriate error
+        if (checkError.response?.status === 404 || checkError.response?.status === 400) {
+          const checkErrorMessage = checkError.response?.data?.message || '';
+          if (checkErrorMessage.toLowerCase().includes('not found') || checkErrorMessage.toLowerCase().includes('not registered')) {
+            setError('This email address is not registered in our system. Cannot proceed with password reset. Please verify your email address or contact support if you believe this is an error.');
+            setIsLoading(false);
+            return;
+          }
+        }
+        // If check fails for other reasons, continue with the request (backend will validate)
+        console.log('Frontend: User type check failed, continuing with request:', checkError);
+      }
+      
       const requestBody = { email };
       console.log('Frontend: Request body:', requestBody);
       
@@ -49,8 +89,24 @@ const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     } catch (err: any) {
       console.log('Frontend: Error occurred:', err);
       console.log('Frontend: Error response:', err.response?.data);
-      const errorMessage = err.response?.data?.message || 'Failed to send verification code. Please try again.';
-      setError(errorMessage);
+      
+      // Check for specific error cases
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to send verification code. Please try again.';
+      const errorStatus = err.response?.status;
+      
+      // Handle email not registered/found case
+      if (
+        errorStatus === 404 || 
+        errorMessage.toLowerCase().includes('not found') ||
+        errorMessage.toLowerCase().includes('user not found') ||
+        errorMessage.toLowerCase().includes('email not registered') ||
+        errorMessage.toLowerCase().includes('could not find') ||
+        errorMessage.toLowerCase().includes('does not exist')
+      ) {
+        setError('This email address is not registered in our system. Cannot proceed with password reset. Please verify your email address or contact support if you believe this is an error.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }

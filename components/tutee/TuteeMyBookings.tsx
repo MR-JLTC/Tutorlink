@@ -4,6 +4,8 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import apiClient from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import Modal from '../ui/Modal';
+import Button from '../ui/Button';
 
 interface Booking {
   id: number;
@@ -12,6 +14,8 @@ interface Booking {
   time: string;
   duration: number;
   status: string;
+  tutee_rating?: number | null;
+  tutee_comment?: string | null;
   student_notes?: string;
   tutor?: {
     user?: {
@@ -25,6 +29,10 @@ const TuteeMyBookings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackTarget, setFeedbackTarget] = useState<Booking | null>(null);
+  const [rating, setRating] = useState<number>(5);
+  const [comment, setComment] = useState<string>('');
 
   useEffect(() => {
     const init = async () => {
@@ -56,25 +64,26 @@ const TuteeMyBookings: React.FC = () => {
         throw new Error('Invalid response format from server');
       }
 
-      // Transform and validate each booking. We intentionally exclude scheduled/upcoming sessions
-      // from this view — those are shown in the dedicated "Upcoming Sessions" page.
-      const validBookings = response.data
-        .filter((booking: any) => (booking.status || '').toLowerCase() !== 'upcoming')
-        .map(booking => ({
-        id: booking.id || 0,
-        subject: booking.subject || 'Untitled Session',
-        date: booking.date || new Date().toISOString(),
-        time: booking.time || '00:00',
-        duration: booking.duration || 1,
-        status: booking.status || 'pending',
-        student_notes: booking.student_notes || '',
-        tutor: {
-          user: {
-            name: booking.tutor?.user?.name || 'Unknown Tutor'
+      // Process bookings data
+      const bookingsWithStatus = response.data.map((booking: any) => {
+        return {
+          id: booking.id || 0,
+          subject: booking.subject || 'Untitled Session',
+          date: booking.date || new Date().toISOString(),
+          time: booking.time || '00:00',
+          duration: booking.duration || 1,
+          status: booking.status || 'pending',
+          tutee_rating: booking.tutee_rating ?? null,
+          tutee_comment: booking.tutee_comment ?? null,
+          student_notes: booking.student_notes || '',
+          tutor: {
+            user: {
+              name: booking.tutor?.user?.name || 'Unknown Tutor'
+            }
           }
-        }
-      }));
-
+        };
+      });
+      const validBookings = bookingsWithStatus.filter((booking: any) => booking.status.toLowerCase() !== 'upcoming' && booking.status.toLowerCase() !== 'completed');
       setBookings(validBookings);
       setError(null); // Clear any previous errors
     } catch (err: any) {
@@ -173,7 +182,7 @@ const TuteeMyBookings: React.FC = () => {
 
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
-      <ToastContainer />
+      <ToastContainer aria-label="Notification messages" />
       {/* Modern Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
@@ -321,6 +330,12 @@ const TuteeMyBookings: React.FC = () => {
                         </div>
                       </div>
                     )}
+                    {/* After-session feedback action: if booking is completed and no tutee_rating, allow tutee to submit feedback */}
+                    {booking.status.toLowerCase() === 'completed' && !booking.tutee_rating && (
+                      <div className="p-4 border-t border-slate-100 mt-4 flex items-center justify-end">
+                        <Button onClick={() => { setFeedbackTarget(booking); setFeedbackOpen(true); }} className="px-4 py-2 bg-purple-600 text-white rounded-md">Mark as done</Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -328,6 +343,71 @@ const TuteeMyBookings: React.FC = () => {
           </div>
         )}
       </div>
+      {/* Feedback Modal */}
+      {feedbackOpen && feedbackTarget && (
+        <Modal
+          isOpen={true}
+          onClose={() => { setFeedbackOpen(false); setFeedbackTarget(null); setRating(5); setComment(''); }}
+          title="Leave feedback"
+          footer={<>
+            <Button 
+              onClick={async () => {
+                try {
+                  setLoading(true);
+                  await apiClient.post(`/users/bookings/${feedbackTarget.id}/feedback`, { rating, comment });
+                  toast.success('Feedback submitted. Admins have been notified.');
+                  setFeedbackOpen(false);
+                  setFeedbackTarget(null);
+                  setRating(5);
+                  setComment('');
+                  await fetchBookingRequests();
+                } catch (e: any) {
+                  console.error('Failed to submit feedback', e);
+                  toast.error(e?.response?.data?.message || e?.message || 'Failed to submit feedback');
+                } finally { setLoading(false); }
+              }} 
+              className="w-full sm:w-auto px-6 py-2.5 sm:py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-sm sm:text-base shadow-md hover:shadow-lg transition-all touch-manipulation"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+              disabled={loading}
+            >
+              {loading ? 'Submitting...' : 'Submit'}
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => { setFeedbackOpen(false); setFeedbackTarget(null); setRating(5); setComment(''); }} 
+              className="w-full sm:w-auto mt-2 sm:mt-0 sm:ml-2 px-6 py-2.5 sm:py-2 border-2 border-slate-300 hover:bg-slate-50 rounded-lg font-semibold text-sm sm:text-base transition-all touch-manipulation"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              Cancel
+            </Button>
+          </>}
+        >
+          <div className="space-y-4 sm:space-y-5">
+            <div>
+              <label className="block text-sm sm:text-base font-semibold text-slate-800 mb-2">Rating</label>
+              <select 
+                value={rating} 
+                onChange={(e) => setRating(Number(e.target.value))} 
+                className="w-full border-2 border-slate-300 rounded-lg px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+              >
+                {[5,4,3,2,1].map(n => <option key={n} value={n}>{n} / 5</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm sm:text-base font-semibold text-slate-800 mb-2">
+                Comment <span className="text-slate-500 font-normal text-xs sm:text-sm">(optional)</span>
+              </label>
+              <textarea 
+                value={comment} 
+                onChange={(e) => setComment(e.target.value)} 
+                className="w-full border-2 border-slate-300 rounded-lg px-4 py-3 text-sm sm:text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none min-h-[120px] sm:min-h-[140px]" 
+                rows={4}
+                placeholder="Share your experience with this session..."
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };

@@ -27,6 +27,11 @@ type TutorListItem = {
     rating?: number;
     total_reviews?: number;
   } | null;
+  profile?: {
+    session_rate_per_hour?: number | null;
+    subjects?: string[];
+    [key: string]: any;
+  };
 };
 
 const TuteeFindAndBookTutors: React.FC = () => {
@@ -48,6 +53,8 @@ const TuteeFindAndBookTutors: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchDraft]);
   const [filterOption, setFilterOption] = useState<'all' | 'has_subjects' | 'top_rated' | 'with_reviews' | 'newest'>('all');
+  const [priceFilter, setPriceFilter] = useState<'all' | 'under_300' | '300_500' | '500_700' | '700_plus'>('all');
+  const [ratingFilter, setRatingFilter] = useState<'all' | '4_plus' | '3_plus' | '2_plus' | '1_plus'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTutorProfile, setSelectedTutorProfile] = useState<any | null>(null);
@@ -124,30 +131,138 @@ const TuteeFindAndBookTutors: React.FC = () => {
   const [cancelConfirmationOpen, setCancelConfirmationOpen] = useState(false);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [allowedDurations, setAllowedDurations] = useState<number[]>([]);
+  const [existingBookings, setExistingBookings] = useState<any[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
 
-  // Add useEffect for managing available time slots
+  // Fetch existing bookings for the tutor on the selected date
   useEffect(() => {
-    if (bookingForm.date && selectedTutorProfile?.availability) {
+    const fetchExistingBookings = async () => {
+      if (!bookingForm.date || !selectedTutorProfile?.user?.tutor_profile?.tutor_id) {
+        setExistingBookings([]);
+        return;
+      }
+
+      try {
+        setLoadingBookings(true);
+        // Fetch tutor's bookings using the booking-requests endpoint
+        const tutorId = selectedTutorProfile.user.tutor_profile.tutor_id;
+        const response = await apiClient.get(`/tutors/${tutorId}/booking-requests`);
+        
+        // Extract bookings from response (handle different response formats)
+        let allBookings: any[] = [];
+        if (Array.isArray(response.data)) {
+          allBookings = response.data;
+        } else if (Array.isArray(response.data?.data)) {
+          allBookings = response.data.data;
+        } else if (response.data?.bookings && Array.isArray(response.data.bookings)) {
+          allBookings = response.data.bookings;
+        }
+        
+        // Filter bookings for the exact date and active statuses
+        const bookingsForDate = allBookings.filter((booking: any) => {
+          const bookingDate = new Date(booking.date).toISOString().split('T')[0];
+          const status = (booking.status || '').toLowerCase();
+          // Include bookings that are still active (not cancelled or completed)
+          const activeStatuses = ['pending', 'upcoming', 'confirmed'];
+          return bookingDate === bookingForm.date && activeStatuses.includes(status);
+        });
+        
+        setExistingBookings(bookingsForDate);
+      } catch (error) {
+        console.error('Failed to fetch existing bookings:', error);
+        // If endpoint doesn't exist or fails, continue with empty bookings
+        setExistingBookings([]);
+      } finally {
+        setLoadingBookings(false);
+      }
+    };
+
+    fetchExistingBookings();
+  }, [bookingForm.date, selectedTutorProfile?.user?.tutor_profile?.tutor_id]);
+
+  // Helper function to check if a time slot conflicts with existing bookings
+  const isTimeSlotAvailable = (startTime: string, duration: number, existingBookings: any[]): boolean => {
+    const parseTimeToMinutes = (time: string): number => {
+      const [h, m] = time.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    const slotStart = parseTimeToMinutes(startTime);
+    const slotEnd = slotStart + (duration * 60);
+
+    // Check if this slot overlaps with any existing booking
+    for (const booking of existingBookings) {
+      const bookingStart = parseTimeToMinutes(booking.time);
+      const bookingEnd = bookingStart + (booking.duration * 60);
+
+      // Check for overlap: slot starts before booking ends AND slot ends after booking starts
+      if (slotStart < bookingEnd && slotEnd > bookingStart) {
+        return false; // Conflict found
+      }
+    }
+
+    return true; // No conflicts
+  };
+
+  // Add useEffect for managing available time slots (now considers existing bookings and duration)
+  useEffect(() => {
+    if (bookingForm.date && selectedTutorProfile?.availability && bookingForm.duration > 0) {
       const date = new Date(bookingForm.date);
       const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
-      // Use .filter() to get all availability blocks for the day
+      // Get all blocks for the selected day
       const dayAvailabilityBlocks = selectedTutorProfile.availability.filter(
         (a: any) => a.day_of_week.toLowerCase() === dayOfWeek.toLowerCase()
       );
-      
-      if (dayAvailabilityBlocks.length > 0) {
-        // Generate slots for each block and combine them
-        const allSlots = dayAvailabilityBlocks.reduce((acc: string[], block: any) => {
-          const slotsForBlock = generateTimeSlots(block.start_time, block.end_time);
-          return [...acc, ...slotsForBlock];
-        }, []);
 
-        // Sort the combined slots chronologically
-        const sortedSlots = allSlots.sort();
+      if (dayAvailabilityBlocks.length > 0) {
+        let blockToShow = null;
+        if (bookingForm.time) {
+          const selectedMin = (() => {
+            const [h, m] = bookingForm.time.split(':').map(Number);
+            return h * 60 + m;
+          })();
+          blockToShow = dayAvailabilityBlocks.find((b: any) => {
+            const startMin = Number(b.start_time.split(':')[0]) * 60 + Number(b.start_time.split(':')[1]);
+            const endMin = Number(b.end_time.split(':')[0]) * 60 + Number(b.end_time.split(':')[1]);
+            return selectedMin >= startMin && selectedMin < endMin;
+          });
+        }
+        // If no time selected, default to first block for the day
+        if (!blockToShow && dayAvailabilityBlocks.length > 0) {
+          blockToShow = dayAvailabilityBlocks[0];
+        }
         
+        let slots: string[] = [];
+        if (blockToShow) {
+          // Generate all possible 30-minute slots
+          const allSlots = generateTimeSlots(blockToShow.start_time, blockToShow.end_time);
+          
+          // Filter slots based on:
+          // 1. The slot must have enough time for the selected duration
+          // 2. The slot must not conflict with existing bookings
+          slots = allSlots.filter(slot => {
+            const slotStart = (() => {
+              const [h, m] = slot.split(':').map(Number);
+              return h * 60 + m;
+            })();
+            const blockEnd = (() => {
+              const [h, m] = blockToShow.end_time.split(':').map(Number);
+              return h * 60 + m;
+            })();
+            
+            // Check if there's enough time from this slot for the selected duration
+            const slotEnd = slotStart + (bookingForm.duration * 60);
+            if (slotEnd > blockEnd) {
+              return false; // Not enough time in the block
+            }
+            
+            // Check if this slot conflicts with existing bookings
+            return isTimeSlotAvailable(slot, bookingForm.duration, existingBookings);
+          });
+        }
+        
+        const sortedSlots = slots.sort();
         setAvailableTimeSlots(sortedSlots);
-        
-        // Clear time if not in available slots
         if (bookingForm.time && !sortedSlots.includes(bookingForm.time)) {
           setBookingForm(prev => ({ ...prev, time: '' }));
         }
@@ -155,10 +270,17 @@ const TuteeFindAndBookTutors: React.FC = () => {
         setAvailableTimeSlots([]);
         setBookingForm(prev => ({ ...prev, time: '' }));
       }
+    } else if (!bookingForm.duration || bookingForm.duration === 0) {
+      // If no duration selected, clear time slots
+      setAvailableTimeSlots([]);
+      if (bookingForm.time) {
+        setBookingForm(prev => ({ ...prev, time: '' }));
+      }
     }
-  }, [bookingForm.date, selectedTutorProfile?.availability]);
+  }, [bookingForm.date, bookingForm.duration, selectedTutorProfile?.availability, bookingForm.time, existingBookings]);
 
   // Recompute allowed durations whenever the selected time or date or availability changes
+  // Now also considers existing bookings
   useEffect(() => {
     const computeAllowedDurations = () => {
       setAllowedDurations([]);
@@ -172,34 +294,71 @@ const TuteeFindAndBookTutors: React.FC = () => {
 
       if (dayAvailabilityBlocks.length === 0) return;
 
+      const parseTimeToMinutes = (time: string): number => {
+        const [h, m] = time.split(':').map(Number);
+        return h * 60 + m;
+      };
+
       let maxMinutes = 0;
 
       if (bookingForm.time) {
         // Find the block that contains the selected time
-        const selectedTime = new Date(`1970-01-01T${bookingForm.time}`);
+        const selectedTimeMinutes = parseTimeToMinutes(bookingForm.time);
         const relevantBlock = dayAvailabilityBlocks.find((block: any) => {
-          const start = new Date(`1970-01-01T${block.start_time}`);
-          const end = new Date(`1970-01-01T${block.end_time}`);
-          return selectedTime >= start && selectedTime < end;
+          const blockStart = parseTimeToMinutes(block.start_time);
+          const blockEnd = parseTimeToMinutes(block.end_time);
+          return selectedTimeMinutes >= blockStart && selectedTimeMinutes < blockEnd;
         });
 
         if (relevantBlock) {
-          const effectiveStart = selectedTime;
-          const windowEnd = new Date(`1970-01-01T${relevantBlock.end_time}`);
-          if (!isNaN(windowEnd.getTime())) {
-            maxMinutes = (windowEnd.getTime() - effectiveStart.getTime()) / (1000 * 60);
+          const blockEnd = parseTimeToMinutes(relevantBlock.end_time);
+          maxMinutes = blockEnd - selectedTimeMinutes;
+          
+          // Check existing bookings to find the earliest conflict
+          for (const booking of existingBookings) {
+            const bookingStart = parseTimeToMinutes(booking.time);
+            const bookingEnd = bookingStart + (booking.duration * 60);
+            
+            // If booking starts after selected time, it limits available duration
+            if (bookingStart > selectedTimeMinutes && bookingStart < blockEnd) {
+              const availableUntilBooking = bookingStart - selectedTimeMinutes;
+              if (availableUntilBooking < maxMinutes) {
+                maxMinutes = availableUntilBooking;
+              }
+            }
           }
         }
       } else {
-        // If no time is selected, find the longest block for the day
+        // If no time is selected, find the longest available period considering bookings
         dayAvailabilityBlocks.forEach((block: any) => {
-          const windowStart = new Date(`1970-01-01T${block.start_time}`);
-          const windowEnd = new Date(`1970-01-01T${block.end_time}`);
-          if (!isNaN(windowStart.getTime()) && !isNaN(windowEnd.getTime()) && windowEnd > windowStart) {
-            const blockMinutes = (windowEnd.getTime() - windowStart.getTime()) / (1000 * 60);
-            if (blockMinutes > maxMinutes) {
-              maxMinutes = blockMinutes;
+          const blockStart = parseTimeToMinutes(block.start_time);
+          const blockEnd = parseTimeToMinutes(block.end_time);
+          const blockMinutes = blockEnd - blockStart;
+          
+          // Find the longest continuous period in this block (considering bookings)
+          let longestPeriod = blockMinutes;
+          
+          // Check if any booking affects this block
+          for (const booking of existingBookings) {
+            const bookingStart = parseTimeToMinutes(booking.time);
+            const bookingEnd = bookingStart + (booking.duration * 60);
+            
+            // If booking overlaps with this block, calculate available periods
+            if (bookingStart < blockEnd && bookingEnd > blockStart) {
+              // Period before booking
+              const periodBefore = bookingStart > blockStart ? bookingStart - blockStart : 0;
+              // Period after booking
+              const periodAfter = bookingEnd < blockEnd ? blockEnd - bookingEnd : 0;
+              
+              const maxPeriod = Math.max(periodBefore, periodAfter);
+              if (maxPeriod < longestPeriod) {
+                longestPeriod = maxPeriod;
+              }
             }
+          }
+          
+          if (longestPeriod > maxMinutes) {
+            maxMinutes = longestPeriod;
           }
         });
       }
@@ -227,7 +386,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
     };
 
     computeAllowedDurations();
-  }, [bookingForm.time, bookingForm.date, selectedTutorProfile?.availability]);
+  }, [bookingForm.time, bookingForm.date, selectedTutorProfile?.availability, existingBookings]);
 
   // When the booking form is shown, proactively mark required fields as errors so
   // the user sees which fields need input even before pressing Submit.
@@ -270,43 +429,49 @@ const TuteeFindAndBookTutors: React.FC = () => {
 
   const generateTimeSlots = (startTime: string, endTime: string): string[] => {
     const slots: string[] = [];
-    const start = new Date(`1970-01-01T${startTime}`);
-    const end = new Date(`1970-01-01T${endTime}`);
-    
-    // Validate input times
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+
+    const parseToMinutes = (t: string) => {
+      if (!t) return NaN;
+      const parts = t.split(':');
+      const h = parseInt(parts[0], 10) || 0;
+      const m = parseInt(parts[1], 10) || 0;
+      return h * 60 + m;
+    };
+
+    const formatFromMinutes = (mins: number) => {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+
+    const startMin = parseToMinutes(startTime);
+    const endMin = parseToMinutes(endTime);
+    if (isNaN(startMin) || isNaN(endMin)) {
       console.error('Invalid time format:', { startTime, endTime });
       return slots;
     }
-
-    // Ensure end time is after start time
-    if (end <= start) {
+    if (endMin <= startMin) {
       console.error('End time must be after start time:', { startTime, endTime });
       return slots;
     }
 
-    // Get current time for same-day validation
     const now = new Date();
     const isToday = bookingForm.date === now.toISOString().split('T')[0];
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    
+
     try {
-      while (start <= end) {
-        const timeStr = start.toTimeString().substring(0, 5);
-        
+      // Generate slots in 30-minute intervals, including up to the end time
+      // Use <= instead of < to include the end time (e.g., 17:00 if availability ends at 17:00)
+      for (let m = startMin; m <= endMin; m += 30) {
         // For today's slots, only include future times (with 30 min buffer)
-        if (!isToday || (
-          start.getHours() * 60 + start.getMinutes() > currentMinutes + 30
-        )) {
-          slots.push(timeStr);
+        if (!isToday || (m > currentMinutes + 30)) {
+          slots.push(formatFromMinutes(m));
         }
-        
-        start.setMinutes(start.getMinutes() + 30); // 30-minute intervals
       }
     } catch (error) {
       console.error('Error generating time slots:', error);
     }
-    
+
     return slots;
   };
 
@@ -343,6 +508,46 @@ const TuteeFindAndBookTutors: React.FC = () => {
       });
     }
 
+    // Apply price filter
+    if (priceFilter !== 'all') {
+      list = list.filter(t => {
+        const rate = t.profile?.session_rate_per_hour;
+        if (!rate) return false; // Exclude tutors without pricing
+        const price = Number(rate);
+        switch (priceFilter) {
+          case 'under_300':
+            return price < 300;
+          case '300_500':
+            return price >= 300 && price < 500;
+          case '500_700':
+            return price >= 500 && price < 700;
+          case '700_plus':
+            return price >= 700;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply rating filter
+    if (ratingFilter !== 'all') {
+      list = list.filter(t => {
+        const rating = t.tutor_profile?.rating || 0;
+        switch (ratingFilter) {
+          case '4_plus':
+            return rating >= 4;
+          case '3_plus':
+            return rating >= 3;
+          case '2_plus':
+            return rating >= 2;
+          case '1_plus':
+            return rating >= 1;
+          default:
+            return true;
+        }
+      });
+    }
+
     // Apply filter option
     if (filterOption === 'has_subjects') {
       list = list.filter(t => {
@@ -358,7 +563,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
     }
 
     return list;
-  }, [tutors, searchQuery, filterOption]);
+  }, [tutors, searchQuery, filterOption, priceFilter, ratingFilter]);
 
   const handleBook = () => {
     const isValid = validateBookingForm();
@@ -586,19 +791,49 @@ const TuteeFindAndBookTutors: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <label className="text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap">Filter:</label>
-          <select
-            value={filterOption}
-            onChange={e => setFilterOption(e.target.value as any)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-200 bg-white w-full md:w-48"
-          >
-            <option value="all">All</option>
-            <option value="has_subjects">Has subjects</option>
-            <option value="top_rated">Top rated</option>
-            <option value="with_reviews">With reviews</option>
-            <option value="newest">Newest</option>
-          </select>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap">Sort:</label>
+            <select
+              value={filterOption}
+              onChange={e => setFilterOption(e.target.value as any)}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-200 bg-white w-full sm:w-48"
+            >
+              <option value="all">All</option>
+              <option value="has_subjects">Has subjects</option>
+              <option value="top_rated">Top rated</option>
+              <option value="with_reviews">With reviews</option>
+              <option value="newest">Newest</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap">Price:</label>
+            <select
+              value={priceFilter}
+              onChange={e => setPriceFilter(e.target.value as any)}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-200 bg-white w-full sm:w-40"
+            >
+              <option value="all">All prices</option>
+              <option value="under_300">Under ₱300/hr</option>
+              <option value="300_500">₱300-₱500/hr</option>
+              <option value="500_700">₱500-₱700/hr</option>
+              <option value="700_plus">₱700+/hr</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap">Rating:</label>
+            <select
+              value={ratingFilter}
+              onChange={e => setRatingFilter(e.target.value as any)}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-200 bg-white w-full sm:w-36"
+            >
+              <option value="all">All ratings</option>
+              <option value="4_plus">4+ ⭐</option>
+              <option value="3_plus">3+ ⭐</option>
+              <option value="2_plus">2+ ⭐</option>
+              <option value="1_plus">1+ ⭐</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -644,54 +879,159 @@ const TuteeFindAndBookTutors: React.FC = () => {
             {filteredTutors.map(t => {
               const profileSubjects: string[] = (t as any).profile?.subjects || (t as any).tutor_profile?.subjects || [];
               return (
-              <div key={t.user_id} className="group relative bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-xl hover:border-sky-200 transition-all duration-200">
+              <div key={t.user_id} className="group relative bg-white border border-slate-200 rounded-2xl p-4 sm:p-4 shadow-sm hover:shadow-xl hover:border-sky-200 transition-all duration-200 flex flex-col h-full">
                 <div className="absolute inset-x-0 top-0 h-1 rounded-t-2xl bg-gradient-to-r from-sky-400 via-indigo-400 to-sky-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="flex items-start gap-3">
+                {/* Mobile: Centered Layout */}
+                <div className="flex flex-col items-center text-center sm:hidden flex-1">
+                  {/* Profile Picture */}
+                  <div className="relative mb-3">
+                    <div className="h-20 w-20 rounded-full ring-4 ring-sky-100 shadow-lg overflow-hidden bg-gradient-to-br from-sky-50 to-indigo-50">
+                      <img
+                        src={getFileUrl(t.profile_image_url || '')}
+                        alt={t.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(t.name)}`; }}
+                      />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 h-5 w-5 bg-gradient-to-br from-sky-500 to-indigo-500 rounded-full border-2 border-white shadow-md"></div>
+                  </div>
+                  
+                  {/* Name */}
+                  <h3 className="font-bold text-base text-slate-800 mb-1">{t.name}</h3>
+                  
+                  {/* University */}
+                  <div className="flex items-center justify-center gap-1.5 mb-3">
+                    <svg className="w-3.5 h-3.5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0v-5.5a2.5 2.5 0 015 0V21m-5 0h5m-5 0v-5.5a2.5 2.5 0 015 0V21" />
+                    </svg>
+                    <span className="text-xs text-slate-600">{t.university_name || 'N/A'}</span>
+                  </div>
+                  
+                  {/* Ratings */}
+                  <div className="flex items-center justify-center gap-1.5 mb-3">
+                    <div className="flex items-center">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <svg
+                          key={star}
+                          className={`w-4 h-4 ${star <= (t.tutor_profile?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                    <span className="text-xs font-semibold text-slate-700">
+                      {t.tutor_profile?.rating?.toFixed(1) || 'No ratings'}
+                      {t.tutor_profile?.total_reviews ? ` (${t.tutor_profile.total_reviews})` : ''}
+                    </span>
+                  </div>
+                  
+                  {/* Subjects */}
+                  {profileSubjects.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 mb-3">
+                      {profileSubjects.slice(0, 3).map((subject: string, idx: number) => (
+                        <span key={idx} className="text-xs text-sky-700 bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-200 px-3 py-1 rounded-full font-medium shadow-sm">
+                          {subject}
+                        </span>
+                      ))}
+                      {profileSubjects.length > 3 && (
+                        <span className="text-xs text-indigo-700 bg-gradient-to-r from-indigo-50 to-sky-50 border border-indigo-200 px-3 py-1 rounded-full font-semibold shadow-sm">
+                          +{profileSubjects.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Session Rate */}
+                  {t.profile?.session_rate_per_hour ? (
+                    <div className="flex items-center justify-center gap-2 mb-3 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border border-emerald-200">
+                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-bold text-emerald-700">
+                        ₱{Number(t.profile.session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/hr
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-400 italic mb-3">Price not set</div>
+                  )}
+                </div>
+                
+                {/* Desktop: Original Layout */}
+                <div className="hidden sm:flex items-start gap-3 flex-1">
                   <img
                     src={getFileUrl(t.profile_image_url || '')}
                     alt={t.name}
-                    className="h-14 w-14 sm:h-16 sm:w-16 rounded-full object-cover flex-shrink-0 ring-4 ring-slate-50 shadow-md"
+                    className="h-16 w-16 rounded-full object-cover flex-shrink-0 ring-4 ring-slate-50 shadow-md"
                     onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(t.name)}`; }}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-xs sm:text-sm md:text-base text-slate-800 truncate">{t.name}</div>
                     <div className="text-[10px] sm:text-xs md:text-sm text-slate-500 truncate">{t.university_name || 'N/A'}</div>
-                    <div className="flex items-center gap-1 mt-2 flex-wrap">
-                      <div className="flex items-center flex-shrink-0">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <svg
-                            key={star}
-                            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${star <= (t.tutor_profile?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                          </svg>
-                        ))}
-                      </div>
-                      <span className="text-[10px] sm:text-xs md:text-sm text-slate-600 truncate">
-                        {t.tutor_profile?.rating?.toFixed(1) || 'No ratings'} 
-                        {t.tutor_profile?.total_reviews ? ` (${t.tutor_profile.total_reviews})` : ''}
-                      </span>
-                      {profileSubjects.length ? (
-                        <span className="text-[10px] sm:text-xs text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-full">
-                          {profileSubjects[0]}
-                          {profileSubjects.length > 1 ? ' +' + (profileSubjects.length - 1) : ''}
+                    <div className="mt-2 space-y-2">
+                      {/* Ratings */}
+                      <div className="flex items-center gap-1">
+                        <div className="flex items-center flex-shrink-0">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <svg
+                              key={star}
+                              className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${star <= (t.tutor_profile?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          ))}
+                        </div>
+                        <span className="text-[10px] sm:text-xs md:text-sm text-slate-600 truncate">
+                          {t.tutor_profile?.rating?.toFixed(1) || 'No ratings'} 
+                          {t.tutor_profile?.total_reviews ? ` (${t.tutor_profile.total_reviews})` : ''}
                         </span>
-                      ) : null}
+                      </div>
+                      {/* Subjects - below ratings */}
+                      {profileSubjects.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1">
+                          {profileSubjects.slice(0, 3).map((subject: string, idx: number) => (
+                            <span key={idx} className="text-[10px] sm:text-xs text-sky-700 bg-sky-50 border border-sky-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                              {subject}
+                            </span>
+                          ))}
+                          {profileSubjects.length > 3 && (
+                            <span className="text-[10px] sm:text-xs text-sky-600 bg-sky-100 border border-sky-200 px-2 py-0.5 rounded-full font-medium">
+                              +{profileSubjects.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Price display - ensure consistent height */}
+                    <div className="mt-2 min-h-[20px] sm:min-h-[24px] flex items-center">
+                      {t.profile?.session_rate_per_hour ? (
+                        <div className="flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-xs sm:text-sm md:text-base font-semibold text-emerald-700">
+                            ₱{Number(t.profile.session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/hr
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] sm:text-xs text-slate-400 italic">Price not set</div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2 text-[11px] sm:text-xs md:text-sm text-slate-600">
+                <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center sm:items-start sm:justify-between gap-3 flex-shrink-0">
+                  <div className="inline-flex items-center gap-2 text-xs sm:text-[11px] md:text-sm text-slate-600">
                     <span className="h-2 w-2 rounded-full bg-emerald-400" />
                     <span className="font-medium capitalize">{t.tutor_profile?.status || 'pending'}</span>
                   </div>
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     <button
                       onClick={() => openProfile(t)}
-                      className="px-3 sm:px-4 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-xl text-sm md:text-base font-semibold hover:shadow-lg transition-all w-full sm:w-auto touch-manipulation"
+                      className="px-4 sm:px-4 py-2.5 bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-xl text-sm md:text-base font-semibold hover:shadow-lg transition-all w-full sm:w-auto touch-manipulation shadow-md hover:shadow-xl"
                       style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       View Profile
@@ -710,6 +1050,8 @@ const TuteeFindAndBookTutors: React.FC = () => {
           isOpen={true}
           onClose={() => { setIsProfileOpen(false); setShowBookingForm(false); setBookingForm({ subject: '', date: '', time: '', duration: 1, student_notes: '' }); }}
           title={""}
+          maxWidth="5xl"
+          className="md:max-w-[90vw] lg:max-w-5xl"
           footer={
             <>
               {!showBookingForm ? (
@@ -781,20 +1123,21 @@ const TuteeFindAndBookTutors: React.FC = () => {
               <div className="text-slate-600 font-medium">Loading profile...</div>
       </div>
           ) : (
-            <div className="max-h-[82vh] sm:max-h-[85vh] overflow-y-auto pr-1 sm:pr-3 lg:pr-4">
-              <div className="space-y-6">
+            <div className="p-4 sm:p-6 lg:p-6">
+              <div className="space-y-4 sm:space-y-5 md:space-y-6 lg:space-y-6">
               {/* Enhanced Header Section */}
-              <div className="relative rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl">
-                <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-4 sm:p-6 md:p-8 text-white relative overflow-hidden">
-                  {/* Decorative background pattern */}
+              <div className="relative rounded-xl sm:rounded-2xl lg:rounded-2xl overflow-hidden shadow-2xl">
+                <div className="bg-gradient-to-br from-sky-600 via-indigo-600 to-indigo-700 p-4 sm:p-6 md:p-7 lg:p-8 text-white relative overflow-hidden">
+                  {/* Enhanced decorative background pattern */}
                   <div className="absolute inset-0 opacity-10">
-                    <div className="absolute top-0 right-0 w-32 h-32 sm:w-48 sm:h-48 md:w-64 md:h-64 bg-white rounded-full -mr-16 sm:-mr-24 md:-mr-32 -mt-16 sm:-mt-24 md:-mt-32"></div>
-                    <div className="absolute bottom-0 left-0 w-24 h-24 sm:w-36 sm:h-36 md:w-48 md:h-48 bg-white rounded-full -ml-12 sm:-ml-18 md:-ml-24 -mb-12 sm:-mb-18 md:-mb-24"></div>
+                    <div className="absolute top-0 right-0 w-32 h-32 sm:w-48 sm:h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 bg-white rounded-full -mr-16 sm:-mr-24 md:-mr-28 lg:-mr-32 -mt-16 sm:-mt-24 md:-mt-28 lg:-mt-32"></div>
+                    <div className="absolute bottom-0 left-0 w-24 h-24 sm:w-36 sm:h-36 md:w-44 md:h-44 lg:w-52 lg:h-52 bg-white rounded-full -ml-12 sm:-ml-18 md:-ml-22 lg:-ml-26 -mb-12 sm:-mb-18 md:-mb-22 lg:-mb-26"></div>
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-40 h-40 sm:w-56 sm:h-56 md:w-72 md:h-72 lg:w-80 lg:h-80 bg-white rounded-full opacity-5"></div>
                   </div>
                   
-                  <div className="relative flex flex-col sm:flex-row items-start sm:items-start gap-3 sm:gap-4 md:gap-6">
+                  <div className="relative flex flex-col items-center gap-3 sm:gap-4 md:gap-5 lg:gap-6">
                     <div className="relative flex-shrink-0">
-                      <div className="h-20 w-20 sm:h-24 sm:w-24 md:h-28 md:w-28 rounded-xl sm:rounded-2xl ring-2 sm:ring-4 ring-white/30 shadow-2xl overflow-hidden bg-white/10 backdrop-blur-sm">
+                      <div className="h-24 w-24 sm:h-28 sm:w-28 md:h-30 md:w-30 lg:h-32 lg:w-32 rounded-full ring-2 sm:ring-3 md:ring-4 ring-white/30 shadow-2xl overflow-hidden bg-white/10 backdrop-blur-sm">
                         <img 
                           src={getFileUrl(selectedTutorProfile?.user?.profile_image_url || '')} 
                           alt={selectedTutorProfile?.user?.name} 
@@ -803,27 +1146,23 @@ const TuteeFindAndBookTutors: React.FC = () => {
                         />
                       </div>
                       {selectedTutorProfile?.profile?.is_verified && (
-                        <div className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-green-500 rounded-full p-1 sm:p-1.5 ring-2 sm:ring-4 ring-white shadow-lg">
+                        <div className="absolute -bottom-1 -right-1 sm:-bottom-1.5 sm:-right-1.5 md:-bottom-2 md:-right-2 bg-green-500 rounded-full p-1 sm:p-1.5 md:p-1.5 ring-2 sm:ring-3 md:ring-4 ring-white shadow-lg">
                           <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                           </svg>
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0 w-full">
-                      <div className="flex items-start justify-between gap-2 sm:gap-3 md:gap-4 mb-2 sm:mb-3">
-                        <div className="min-w-0 flex-1">
-                          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight mb-1 truncate">{selectedTutorProfile?.user?.name}</h2>
-                          <div className="flex items-center gap-1.5 sm:gap-2 text-white/90">
-                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0v-5.5a2.5 2.5 0 015 0V21m-5 0h5m-5 0v-5.5a2.5 2.5 0 015 0V21" />
-                            </svg>
-                            <span className="text-xs sm:text-sm font-medium truncate">{selectedTutorProfile?.user?.university_name || 'N/A'}</span>
-                          </div>
-                        </div>
+                    <div className="flex flex-col items-center w-full">
+                      <h2 className="text-xl sm:text-2xl md:text-2xl lg:text-3xl font-bold leading-tight mb-2 text-center">{selectedTutorProfile?.user?.name}</h2>
+                      <div className="flex items-center justify-center gap-1.5 sm:gap-2 text-white/90 mb-3 sm:mb-4">
+                        <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0v-5.5a2.5 2.5 0 015 0V21m-5 0h5m-5 0v-5.5a2.5 2.5 0 015 0V21" />
+                        </svg>
+                        <span className="text-xs sm:text-sm font-medium">{selectedTutorProfile?.user?.university_name || 'N/A'}</span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                        <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm rounded-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 shadow-lg">
+                      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+                        <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm rounded-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 shadow-lg border border-white/20">
                           <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-yellow-300 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                           </svg>
@@ -834,86 +1173,116 @@ const TuteeFindAndBookTutors: React.FC = () => {
                               : 'No reviews'}
                           </span>
                         </div>
+                        {selectedTutorProfile?.profile?.session_rate_per_hour && (
+                          <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm rounded-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 shadow-lg border border-white/20">
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-emerald-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="font-bold text-sm sm:text-base md:text-lg">
+                              ₱{Number(selectedTutorProfile.profile.session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/hr
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Content Sections */}
-              <div className="space-y-4 sm:space-y-5 md:space-y-6">
-                {/* About Section */}
-                {!showBookingForm && (
-                <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 shadow-md border border-slate-200">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2.5 sm:mb-3 md:mb-4">
-                    <div className="p-1.5 sm:p-2 bg-indigo-100 rounded-lg flex-shrink-0">
-                      <svg className="w-4 h-4 sm:w-5 sm:w-5 md:w-6 md:h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
+              {/* Content Sections - Two Column Layout on Desktop */}
+              {!showBookingForm && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-5 lg:gap-6">
+                {/* Left Column */}
+                <div className="space-y-4 sm:space-y-5 md:space-y-5 lg:space-y-5">
+                  {/* About Section */}
+                  <div className="bg-white rounded-lg sm:rounded-xl lg:rounded-xl p-4 sm:p-5 md:p-5 lg:p-6 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow duration-300">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-3.5 md:mb-4">
+                      <div className="p-2 sm:p-2.5 bg-gradient-to-br from-sky-100 to-sky-200 rounded-xl flex-shrink-0 shadow-md">
+                        <svg className="w-5 h-5 sm:w-6 sm:h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg sm:text-xl md:text-xl lg:text-xl font-bold text-slate-800">About</h3>
                     </div>
-                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-slate-800">About</h3>
+                    <p className="text-sm sm:text-base text-slate-700 leading-relaxed break-words">{selectedTutorProfile?.profile?.bio || 'No bio provided.'}</p>
                   </div>
-                  <p className="text-xs sm:text-sm md:text-base text-slate-700 leading-relaxed break-words">{selectedTutorProfile?.profile?.bio || 'No bio provided.'}</p>
-                </div>
-                )}
 
-                {/* Subjects Section */}
-                {!showBookingForm && (
-                <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 shadow-md border border-slate-200">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2.5 sm:mb-3 md:mb-4">
-                    <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg flex-shrink-0">
-                      <svg className="w-4 h-4 sm:w-5 sm:w-5 md:w-6 md:h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                      </svg>
+                  {/* Subjects Section */}
+                  <div className="bg-white rounded-lg sm:rounded-xl lg:rounded-xl p-4 sm:p-5 md:p-5 lg:p-6 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow duration-300">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-4">
+                      <div className="p-2 sm:p-2.5 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-xl flex-shrink-0 shadow-md">
+                        <svg className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-lg sm:text-xl md:text-xl lg:text-xl font-bold text-slate-800">Subjects</h3>
+                        <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                          {(selectedTutorProfile?.profile?.subjects || []).length} {((selectedTutorProfile?.profile?.subjects || []).length === 1) ? 'subject' : 'subjects'} available
+                        </p>
+                      </div>
                     </div>
-                    <h3 className="text-base sm:text-lg md:text-xl font-bold text-slate-800">Subjects</h3>
-                  </div>
-                  <div className="flex flex-wrap gap-2 sm:gap-3">
-                    {(selectedTutorProfile?.profile?.subjects || []).map((s: string, i: number) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setSearchDraft(String(s));
-                          setSearchQuery(String(s));
-                          setIsProfileOpen(false);
-                        }}
-                        className="group relative px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-800 rounded-lg hover:from-indigo-200 hover:to-purple-200 active:from-indigo-300 active:to-purple-300 transition-all duration-200 font-medium text-xs sm:text-sm shadow-sm hover:shadow-md border border-indigo-200 hover:border-indigo-300 touch-manipulation"
-                        style={{ WebkitTapHighlightColor: 'transparent' }}
-                      >
-                        <span className="relative z-10 break-words">{s}</span>
-                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg opacity-0 group-hover:opacity-10 transition-opacity"></div>
-                      </button>
-                    ))}
+                    {(selectedTutorProfile?.profile?.subjects || []).length === 0 ? (
+                      <div className="text-center py-6 sm:py-8 lg:py-10">
+                        <svg className="w-14 h-14 sm:w-18 sm:h-18 lg:w-20 lg:h-20 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        <p className="text-sm sm:text-base text-slate-500">No subjects listed</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                        {(selectedTutorProfile?.profile?.subjects || []).map((s: string, i: number) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setSearchDraft(String(s));
+                              setSearchQuery(String(s));
+                              setIsProfileOpen(false);
+                            }}
+                            className="group relative px-3 sm:px-4 md:px-4 py-2 sm:py-2.5 md:py-2.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-800 rounded-lg hover:from-sky-200 hover:to-indigo-200 active:from-sky-300 active:to-indigo-300 transition-all duration-200 font-medium text-sm sm:text-sm shadow-md hover:shadow-lg border-2 border-sky-200 hover:border-sky-400 touch-manipulation text-left"
+                            style={{ WebkitTapHighlightColor: 'transparent' }}
+                          >
+                            <span className="relative z-10 block break-words">{s}</span>
+                            <div className="absolute inset-0 bg-gradient-to-r from-sky-600 to-indigo-600 rounded-lg opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-                )}
 
-                {/* Availability Section */}
-                <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-6 shadow-lg border border-indigo-100">
-                  <div className="flex items-center gap-1.5 sm:gap-2 mb-2.5 sm:mb-3 md:mb-4">
-                    <svg className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <h4 className="font-semibold text-indigo-900 text-sm sm:text-base md:text-lg">Availability</h4>
-                  </div>
+                {/* Right Column */}
+                <div className="space-y-4 sm:space-y-5 md:space-y-5 lg:space-y-5">
+                  {/* Availability Section */}
+                  <div className="bg-gradient-to-br from-sky-50 via-indigo-50 to-sky-50 rounded-lg sm:rounded-xl lg:rounded-xl p-4 sm:p-5 md:p-5 lg:p-6 shadow-lg border-2 border-sky-200 hover:shadow-xl transition-shadow duration-300">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-4">
+                      <div className="p-2 sm:p-2.5 bg-gradient-to-br from-sky-200 to-indigo-200 rounded-xl flex-shrink-0 shadow-md">
+                        <svg className="w-5 h-5 sm:w-6 sm:h-6 text-sky-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h4 className="font-bold text-indigo-900 text-lg sm:text-xl md:text-xl lg:text-xl">Availability</h4>
+                    </div>
                   {(selectedTutorProfile?.availability || []).length === 0 ? (
-                    <div className="text-center py-4 sm:py-5 md:py-6">
-                      <svg className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div className="text-xs sm:text-sm text-slate-500">No availability provided.</div>
+                    <div className="text-center py-6 sm:py-8 lg:py-10">
+                      <div className="inline-flex items-center justify-center w-14 h-14 sm:w-18 sm:h-18 lg:w-20 lg:h-20 bg-slate-100 rounded-full mb-3">
+                        <svg className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-sm sm:text-base text-slate-600 font-medium">No availability provided.</div>
                     </div>
                   ) : (
-                    <div className="space-y-2 sm:space-y-3">
+                    <div className="space-y-2.5 sm:space-y-3">
                       {(selectedTutorProfile?.availability || []).map((a: any, index: number) => {
                         const dayColors: Record<string, { bg: string; border: string; text: string; icon: string }> = {
-                          'Monday': { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-800', icon: '📅' },
-                          'Tuesday': { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-800', icon: '📆' },
+                          'Monday': { bg: 'bg-sky-100', border: 'border-sky-300', text: 'text-sky-800', icon: '📅' },
+                          'Tuesday': { bg: 'bg-sky-200', border: 'border-sky-400', text: 'text-sky-900', icon: '📆' },
                           'Wednesday': { bg: 'bg-indigo-100', border: 'border-indigo-300', text: 'text-indigo-800', icon: '📋' },
-                          'Thursday': { bg: 'bg-pink-100', border: 'border-pink-300', text: 'text-pink-800', icon: '📝' },
-                          'Friday': { bg: 'bg-cyan-100', border: 'border-cyan-300', text: 'text-cyan-800', icon: '📌' },
-                          'Saturday': { bg: 'bg-orange-100', border: 'border-orange-300', text: 'text-orange-800', icon: '📊' },
-                          'Sunday': { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800', icon: '📑' },
+                          'Thursday': { bg: 'bg-indigo-200', border: 'border-indigo-400', text: 'text-indigo-900', icon: '📝' },
+                          'Friday': { bg: 'bg-sky-50', border: 'border-sky-200', text: 'text-sky-700', icon: '📌' },
+                          'Saturday': { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-700', icon: '📊' },
+                          'Sunday': { bg: 'bg-sky-300', border: 'border-sky-500', text: 'text-sky-900', icon: '📑' },
                         };
                         const dayName = a.day_of_week || '';
                         const colors = dayColors[dayName] || { bg: 'bg-slate-100', border: 'border-slate-300', text: 'text-slate-800', icon: '📅' };
@@ -923,35 +1292,35 @@ const TuteeFindAndBookTutors: React.FC = () => {
                         return (
                           <div 
                             key={a.availability_id || a.day_of_week || index} 
-                            className={`${colors.bg} ${colors.border} border-2 rounded-lg p-2.5 sm:p-3 transition-all duration-200 hover:shadow-md hover:scale-[1.01] sm:hover:scale-[1.02]`}
+                            className={`${colors.bg} ${colors.border} border-2 rounded-lg p-3 sm:p-3.5 transition-all duration-200 hover:shadow-lg hover:scale-[1.01]`}
                           >
-                            <div className="flex items-center justify-between mb-1.5 sm:mb-2 gap-2">
-                              <div className="flex items-center gap-1.5 sm:gap-2">
+                            <div className="flex items-center justify-between mb-2 sm:mb-2.5 gap-2">
+                              <div className="flex items-center gap-2 sm:gap-2.5">
                                 <span className="text-base sm:text-lg">{colors.icon}</span>
-                                <div className={`font-bold ${colors.text} text-xs sm:text-sm uppercase tracking-wide`}>
+                                <div className={`font-bold ${colors.text} text-sm sm:text-base uppercase tracking-wide`}>
                                   {dayName.substring(0, 3)}
                                 </div>
                               </div>
                               {isUpcoming && (
-                                <span className="text-[10px] sm:text-xs bg-white/70 text-slate-600 px-1.5 sm:px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
+                                <span className="text-xs sm:text-sm bg-white/80 text-slate-700 px-2 sm:px-2.5 py-1 sm:py-1 rounded-full font-semibold whitespace-nowrap shadow-sm">
                                   Next: {new Date(nextDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5 sm:gap-2">
-                              <svg className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${colors.text} flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="flex items-center gap-2 sm:gap-2.5 mb-2 sm:mb-2.5">
+                              <svg className={`w-4 h-4 sm:w-5 sm:h-5 ${colors.text} flex-shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              <div className={`${colors.text} font-semibold text-xs sm:text-sm`}>
+                              <div className={`${colors.text} font-bold text-sm sm:text-base`}>
                                 {a.start_time?.substring(0, 5) || a.start_time} - {a.end_time?.substring(0, 5) || a.end_time}
                               </div>
                             </div>
-                            <div className="mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-white/50">
-                              <div className="flex items-center gap-1">
-                                <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-slate-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <div className="pt-2 sm:pt-2.5 border-t-2 border-white/60">
+                              <div className="flex items-center gap-1.5 sm:gap-2">
+                                <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                                 </svg>
-                                <span className="text-[10px] sm:text-xs text-slate-600">
+                                <span className="text-xs sm:text-sm text-slate-700 font-medium">
                                   {(() => {
                                     const start = new Date(`1970-01-01T${a.start_time}`);
                                     const end = new Date(`1970-01-01T${a.end_time}`);
@@ -964,31 +1333,12 @@ const TuteeFindAndBookTutors: React.FC = () => {
                           </div>
                         );
                       })}
-                      {/* <div className="mt-3 sm:mt-4 pt-2.5 sm:pt-3 border-t border-indigo-200">
-                        <button
-                          onClick={() => {
-                            if (selectedTutorProfile?.availability?.length > 0) {
-                              const firstDay = selectedTutorProfile.availability[0];
-                              const suggestedDate = nextDateForWeekday(firstDay.day_of_week);
-                              if (suggestedDate) {
-                                setBookingForm(prev => ({ ...prev, date: suggestedDate }));
-                                setShowBookingForm(true);
-                              }
-                            }
-                          }}
-                          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs sm:text-sm font-medium py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg hover:from-indigo-700 hover:to-purple-700 active:from-indigo-800 active:to-purple-800 transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-1.5 sm:gap-2 touch-manipulation"
-                          style={{ WebkitTapHighlightColor: 'transparent' }}
-                        >
-                          <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          Book Next Available Slot
-                        </button>
-                      </div> */}
                     </div>
                   )}
+                  </div>
                 </div>
               </div>
+              )}
 
               {/* Booking Form (hidden initially; revealed when the user clicks Book) */}
               {showBookingForm && (
@@ -1060,7 +1410,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
 
                         <section className="p-4 sm:p-5 border border-slate-200 rounded-2xl shadow-sm bg-white space-y-4">
                           <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-200 to-purple-200 text-indigo-700 font-bold text-base shadow-md">2</span>
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-sky-200 to-indigo-200 text-sky-700 font-bold text-base shadow-md">2</span>
                             Schedule & Duration
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1098,21 +1448,87 @@ const TuteeFindAndBookTutors: React.FC = () => {
                             <div className="space-y-2">
                               <label className="block text-sm font-semibold text-slate-700">
                                 Time {availableTimeSlots.length > 0 && <span className="text-xs font-normal text-slate-500">({availableTimeSlots.length} slots)</span>}
+                                {loadingBookings && <span className="text-xs font-normal text-slate-400 ml-2">(Checking availability...)</span>}
                               </label>
+                              {/* Show the block's start/end time for the block containing the selected time, or all blocks if no time selected */}
+                              {bookingForm.date && selectedTutorProfile?.availability && (() => {
+                                const date = new Date(bookingForm.date);
+                                const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
+                                const dayBlocks = selectedTutorProfile.availability.filter(
+                                  (a: any) => a.day_of_week.toLowerCase() === dayOfWeek.toLowerCase()
+                                );
+                                if (dayBlocks.length > 0) {
+                                  if (bookingForm.time) {
+                                    const selectedMin = (() => {
+                                      const [h, m] = bookingForm.time.split(':').map(Number);
+                                      return h * 60 + m;
+                                    })();
+                                    const block = dayBlocks.find((b: any) => {
+                                      const startMin = Number(b.start_time.split(':')[0]) * 60 + Number(b.start_time.split(':')[1]);
+                                      const endMin = Number(b.end_time.split(':')[0]) * 60 + Number(b.end_time.split(':')[1]);
+                                      return selectedMin >= startMin && selectedMin < endMin;
+                                    });
+                                    if (block) {
+                                      return (
+                                        <div className="text-xs text-slate-600 mb-1">
+                                          <span className="font-semibold">Available:</span> {block.start_time} - {block.end_time}
+                                        </div>
+                                      );
+                                    }
+                                  }
+                                  // If no time selected, show all blocks
+                                  return dayBlocks.map((block: any, idx: number) => (
+                                    <div key={idx} className="text-xs text-slate-600 mb-1">
+                                      <span className="font-semibold">Available:</span> {block.start_time} - {block.end_time}
+                                    </div>
+                                  ));
+                                }
+                                return null;
+                              })()}
                               <select
-                                className={`w-full border-2 ${bookingErrors.time ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'} ${!bookingForm.date ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''} px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all font-medium`}
+                                className={`w-full border-2 ${bookingErrors.time ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'} ${!bookingForm.date || !bookingForm.duration || bookingForm.duration === 0 ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''} px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all font-medium`}
                                 value={bookingForm.time}
                                 onChange={(e) => {
                                   const value = e.target.value;
+                                  // When a new time is selected, ensure it is in the correct block
                                   setBookingForm(prev => ({ ...prev, time: value }));
                                   setBookingErrors(prev => { const p = { ...prev }; delete (p as any).time; return p; });
                                 }}
-                                disabled={!bookingForm.date}
+                                disabled={!bookingForm.date || !bookingForm.duration || bookingForm.duration === 0}
                               >
-                                <option value="">Select time</option>
-                                {availableTimeSlots.map(time => (
-                                  <option key={time} value={time}>{time}</option>
-                                ))}
+                                <option value="">{!bookingForm.duration || bookingForm.duration === 0 ? 'Select duration first' : 'Select time'}</option>
+                                {/* Only show slots for the selected block */}
+                                {(() => {
+                                  if (bookingForm.date && selectedTutorProfile?.availability) {
+                                    const date = new Date(bookingForm.date);
+                                    const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'long' });
+                                    const dayBlocks = selectedTutorProfile.availability.filter(
+                                      (a: any) => a.day_of_week.toLowerCase() === dayOfWeek.toLowerCase()
+                                    );
+                                    let blockToShow = null;
+                                    if (bookingForm.time) {
+                                      const selectedMin = (() => {
+                                        const [h, m] = bookingForm.time.split(':').map(Number);
+                                        return h * 60 + m;
+                                      })();
+                                      blockToShow = dayBlocks.find((b: any) => {
+                                        const startMin = Number(b.start_time.split(':')[0]) * 60 + Number(b.start_time.split(':')[1]);
+                                        const endMin = Number(b.end_time.split(':')[0]) * 60 + Number(b.end_time.split(':')[1]);
+                                        return selectedMin >= startMin && selectedMin < endMin;
+                                      });
+                                    }
+                                    if (!blockToShow && dayBlocks.length > 0) {
+                                      blockToShow = dayBlocks[0];
+                                    }
+                                    if (blockToShow) {
+                                      const slots = generateTimeSlots(blockToShow.start_time, blockToShow.end_time);
+                                      return slots.map(time => (
+                                        <option key={time} value={time}>{time}</option>
+                                      ));
+                                    }
+                                  }
+                                  return null;
+                                })()}
                               </select>
                               {bookingErrors.time && (
                                 <p className="text-sm text-red-600 flex items-center gap-1.5">
@@ -1125,21 +1541,41 @@ const TuteeFindAndBookTutors: React.FC = () => {
                               {!bookingForm.date && (
                                 <p className="text-xs text-slate-500">Please select a date first</p>
                               )}
+                              {bookingForm.date && (!bookingForm.duration || bookingForm.duration === 0) && (
+                                <p className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg flex items-center gap-2">
+                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                  Please select a duration first to see available time slots
+                                </p>
+                              )}
+                              {bookingForm.date && bookingForm.duration > 0 && availableTimeSlots.length === 0 && !loadingBookings && (
+                                <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg flex items-center gap-2">
+                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                  </svg>
+                                  No available time slots for this duration on the selected date (may be fully booked)
+                                </p>
+                              )}
                             </div>
 
                             <div className="space-y-2 md:col-span-2">
-                              <label className="block text-sm font-semibold text-slate-700">Duration</label>
+                              <label className="block text-sm font-semibold text-slate-700">
+                                Duration {!bookingForm.date && <span className="text-xs font-normal text-slate-400">(Select date first)</span>}
+                              </label>
                               <select
-                                className={`w-full border-2 ${bookingErrors.duration ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'} ${allowedDurations.length === 0 ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''} px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all font-medium`}
+                                className={`w-full border-2 ${bookingErrors.duration ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-white'} ${!bookingForm.date || allowedDurations.length === 0 ? 'bg-slate-100 cursor-not-allowed opacity-60' : ''} px-4 py-3 rounded-xl focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all font-medium`}
                                 value={bookingForm.duration}
                                 onChange={(e) => {
                                   const value = Number(e.target.value);
-                                  if (!isNaN(value)) setBookingForm(prev => ({ ...prev, duration: value }));
+                                  if (!isNaN(value)) {
+                                    setBookingForm(prev => ({ ...prev, duration: value, time: '' })); // Clear time when duration changes
+                                  }
                                   setBookingErrors(prev => { const p = { ...prev }; delete (p as any).duration; return p; });
                                 }}
-                                disabled={allowedDurations.length === 0}
+                                disabled={!bookingForm.date || allowedDurations.length === 0}
                               >
-                                <option value={0}>Select duration</option>
+                                <option value={0}>{!bookingForm.date ? 'Select date first' : allowedDurations.length === 0 ? 'No available durations' : 'Select duration'}</option>
                                 {allowedDurations.map(d => (
                                   <option key={d} value={d}>{d} {d === 1 ? 'hour' : 'hours'}</option>
                                 ))}
@@ -1153,7 +1589,9 @@ const TuteeFindAndBookTutors: React.FC = () => {
                                 </p>
                               )}
                               <div className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
-                                Choose a duration that fits within the tutor's availability window
+                                {bookingForm.date 
+                                  ? 'Choose a duration that fits within the tutor\'s availability window (considering existing bookings)'
+                                  : 'Select a date to see available durations'}
                               </div>
                             </div>
                           </div>
@@ -1161,7 +1599,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
 
                         <section className="p-4 sm:p-5 border border-slate-200 rounded-2xl shadow-sm bg-white">
                           <h4 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-3">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-purple-200 to-pink-200 text-purple-700 font-bold text-base shadow-md">3</span>
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-200 to-sky-200 text-indigo-700 font-bold text-base shadow-md">3</span>
                             Notes & Requests
                           </h4>
                           <textarea
@@ -1212,9 +1650,23 @@ const TuteeFindAndBookTutors: React.FC = () => {
                               <span className="font-medium text-slate-900 text-right truncate max-w-[60%]">{item.value}</span>
                             </div>
                           ))}
+                          {bookingForm.student_notes && (
+                            <div className="rounded-xl bg-white px-3 py-2 border border-slate-100">
+                              <div className="text-slate-500 mb-1">Notes</div>
+                              <div className="text-slate-900 text-sm break-words whitespace-pre-wrap">{bookingForm.student_notes}</div>
+                            </div>
+                          )}
+                          {selectedTutorProfile?.profile?.session_rate_per_hour && bookingForm.duration > 0 && (
+                            <div className="flex items-center justify-between rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 border-2 border-emerald-200">
+                              <span className="text-emerald-700 font-semibold">Estimated Cost</span>
+                              <span className="font-bold text-emerald-900 text-right">
+                                ₱{(Number(selectedTutorProfile.profile.session_rate_per_hour) * bookingForm.duration).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/60 p-4 text-sm space-y-2">
+                        <div className="rounded-2xl border border-sky-100 bg-gradient-to-br from-white to-sky-50/60 p-4 text-sm space-y-2">
                           <p className="font-semibold text-slate-800">Need to remember:</p>
                           <ul className="text-slate-600 list-disc pl-5 space-y-1">
                             <li>GCash confirmation is required after tutor approval.</li>
@@ -1259,7 +1711,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
         >
           <div className="space-y-4">
             <div className="rounded-lg overflow-hidden shadow-sm">
-              <div className="bg-gradient-to-r from-indigo-600 to-blue-500 p-4 text-white flex items-center gap-4">
+              <div className="bg-gradient-to-r from-sky-600 to-indigo-600 p-4 text-white flex items-center gap-4">
                 <div className="h-14 w-14 rounded-full overflow-hidden flex-shrink-0">
                   <img src={getFileUrl(selectedTutorProfile?.user?.profile_image_url || '')} alt={selectedTutorProfile?.user?.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedTutorProfile?.user?.name || 'Tutor')}`; }} />
                 </div>
@@ -1290,7 +1742,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                     <div className="text-slate-700">{bookingForm.student_notes || 'No notes'}</div>
                   </div>
                 </div>
-                <div className="mt-3 text-xs text-slate-500">A confirmation will be sent to your email when the tutor accepts.</div>
+                {/* <div className="mt-3 text-xs text-slate-500">A confirmation will be sent to your email when the tutor accepts.</div> */}
               </div>
             </div>
           </div>

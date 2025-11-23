@@ -23,9 +23,31 @@ export class PasswordResetService {
     return userType as 'admin' | 'tutor' | 'tutee';
   }
 
+  async getUserTypeByEmail(email: string): Promise<'admin' | 'tutor' | 'tutee' | null> {
+    if (!email || typeof email !== 'string') {
+      throw new BadRequestException('Email is required and must be a valid string');
+    }
+    
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      throw new BadRequestException('Email cannot be empty');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { email: trimmedEmail },
+      select: ['user_id', 'user_type']
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    return this.normalizeUserType((user as any).user_type) || null;
+  }
+
   async requestPasswordReset(
     email: string,
-    options?: { requiredUserType?: 'admin' | 'tutor' | 'tutee' },
+    options?: { requiredUserType?: 'admin' | 'tutor' | 'tutee'; excludeUserType?: 'admin' | 'tutor' | 'tutee' },
   ): Promise<{ message: string }> {
     // Debug: Log the email being searched
     console.log('=== PASSWORD RESET REQUEST DEBUG ===');
@@ -71,6 +93,17 @@ export class PasswordResetService {
     }
 
     const normalizedType = this.normalizeUserType((user as any).user_type);
+    
+    // Check if user type is excluded
+    if (options?.excludeUserType && normalizedType === options.excludeUserType) {
+      console.log('❌ User type excluded from password reset:', {
+        excluded: options.excludeUserType,
+        actual: normalizedType,
+      });
+      throw new BadRequestException(`Password reset for ${options.excludeUserType} accounts must be done through the ${options.excludeUserType} portal.`);
+    }
+    
+    // Check if specific user type is required
     if (options?.requiredUserType && normalizedType !== options.requiredUserType) {
       console.log('❌ User type mismatch for password reset:', {
         required: options.requiredUserType,
@@ -132,7 +165,7 @@ export class PasswordResetService {
     email: string,
     code: string,
     newPassword: string,
-    options?: { requiredUserType?: 'admin' | 'tutor' | 'tutee' },
+    options?: { requiredUserType?: 'admin' | 'tutor' | 'tutee'; excludeUserType?: 'admin' | 'tutor' | 'tutee' },
   ): Promise<{ message: string }> {
     // Debug: Log the verification attempt
     console.log('=== PASSWORD RESET VERIFICATION DEBUG ===');
@@ -168,6 +201,17 @@ export class PasswordResetService {
     }
 
     const normalizedType = this.normalizeUserType((user as any).user_type);
+    
+    // Check if user type is excluded
+    if (options?.excludeUserType && normalizedType === options.excludeUserType) {
+      console.log('❌ User type excluded from password reset:', {
+        excluded: options.excludeUserType,
+        actual: normalizedType,
+      });
+      throw new BadRequestException(`Password reset for ${options.excludeUserType} accounts must be done through the ${options.excludeUserType} portal.`);
+    }
+    
+    // Check if specific user type is required
     if (options?.requiredUserType && normalizedType !== options.requiredUserType) {
       console.log('❌ User type mismatch for password verification:', {
         required: options.requiredUserType,

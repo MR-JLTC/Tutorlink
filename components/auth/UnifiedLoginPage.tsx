@@ -16,6 +16,7 @@ const UnifiedLoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Online images related to tutoring/learning concepts
   const slideshowImages = [
@@ -56,6 +57,28 @@ const UnifiedLoginPage: React.FC = () => {
       description: 'One-on-one online sessions that make learning more effective'
     }    
   ];
+
+  // Restore saved email on mount if "remember me" was previously checked
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    const rememberMeStatus = localStorage.getItem('rememberMe') === 'true';
+    
+    if (savedEmail && rememberMeStatus) {
+      setFormData(prev => ({ ...prev, email: savedEmail }));
+      setRememberMe(true);
+    }
+  }, []);
+
+  // Save/remove email based on rememberMe checkbox
+  useEffect(() => {
+    if (rememberMe && formData.email) {
+      localStorage.setItem('rememberedEmail', formData.email);
+      localStorage.setItem('rememberMe', 'true');
+    } else if (!rememberMe) {
+      localStorage.removeItem('rememberedEmail');
+      localStorage.removeItem('rememberMe');
+    }
+  }, [rememberMe, formData.email]);
 
   // Auto-advance slideshow with cleanup and pause on unmount
   useEffect(() => {
@@ -189,23 +212,36 @@ const UnifiedLoginPage: React.FC = () => {
 
             {/* Mobile Header - Only visible on mobile/tablet */}
             <div className="lg:hidden mb-6">
-              <div className="flex justify-center mb-4">
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-300"></div>
-                  <div className="relative bg-white/90 backdrop-blur-sm p-4 rounded-xl shadow-2xl border border-white/50 group-hover:shadow-3xl transition-all duration-300 group-hover:scale-105">
-                    <Logo className="h-12 w-auto" />
+              {/* Modern Logo Container */}
+              <div className="relative mb-4 flex justify-center">
+                {/* Animated gradient background */}
+                <div className="absolute -inset-3 bg-gradient-to-r from-sky-500/30 via-indigo-500/30 to-sky-500/30 rounded-xl blur-xl animate-pulse"></div>
+                
+                {/* Logo with modern frame */}
+                <div className="relative bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/50 rounded-xl p-3 sm:p-4 shadow-lg border border-sky-100/50 backdrop-blur-sm">
+                  {/* Decorative corner accents */}
+                  <div className="absolute top-0 left-0 w-8 h-8 bg-gradient-to-br from-sky-400/20 to-transparent rounded-tl-xl"></div>
+                  <div className="absolute bottom-0 right-0 w-8 h-8 bg-gradient-to-tl from-indigo-400/20 to-transparent rounded-br-xl"></div>
+                  
+                  {/* Logo */}
+                  <div className="relative z-10">
+                    <Logo className="h-14 sm:h-16 w-auto drop-shadow-lg transition-all duration-500 hover:scale-105 hover:rotate-1" />
                   </div>
                 </div>
               </div>
               
-              <div className="text-center">
-                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-slate-900 via-sky-800 to-indigo-800 bg-clip-text text-transparent mb-2">
+              <div className="text-center space-y-2">
+                <h1 className="text-2xl sm:text-3xl font-extrabold bg-gradient-to-r from-slate-900 via-sky-800 to-indigo-800 bg-clip-text text-transparent">
                   Welcome Back
                 </h1>
-                <p className="text-sm text-slate-600 font-medium mb-3">
-                  Sign in to your TutorLink account
-                </p>
-                <div className="flex items-center justify-center space-x-1">
+                <div className="flex items-center justify-center gap-2">
+                  <div className="h-px w-6 sm:w-8 bg-gradient-to-r from-transparent via-sky-400 to-sky-400"></div>
+                  <p className="text-sm sm:text-base text-slate-600 font-semibold tracking-wide">
+                    Sign in to your TutorLink account
+                  </p>
+                  <div className="h-px w-6 sm:w-8 bg-gradient-to-l from-transparent via-indigo-400 to-indigo-400"></div>
+                </div>
+                <div className="flex items-center justify-center space-x-1.5">
                   <div className="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse"></div>
                   <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
                   <div className="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
@@ -222,26 +258,38 @@ const UnifiedLoginPage: React.FC = () => {
                 </div>
                 
                 {/* Desktop Header with Logo - Only visible on desktop */}
-                <div className="hidden lg:block mb-6">
-                  {/* Logo at the top, centered */}
-                  <div className="flex justify-center mb-4">
-                    <div className="relative group">
-                      <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-300"></div>
-                      <div className="relative bg-white/90 backdrop-blur-sm p-3 rounded-xl shadow-2xl border border-white/50 group-hover:shadow-3xl transition-all duration-300 group-hover:scale-105">
-                        <Logo className="h-12 w-auto" />
+                <div className="hidden lg:block mb-5">
+                  {/* Modern Logo Container */}
+                  <div className="relative mb-4 flex justify-center">
+                    {/* Animated gradient background */}
+                    <div className="absolute -inset-3 bg-gradient-to-r from-sky-500/30 via-indigo-500/30 to-sky-500/30 rounded-xl blur-xl animate-pulse"></div>
+                    
+                    {/* Logo with modern frame */}
+                    <div className="relative bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/50 rounded-xl p-4 shadow-lg border border-sky-100/50 backdrop-blur-sm">
+                      {/* Decorative corner accents */}
+                      <div className="absolute top-0 left-0 w-8 h-8 bg-gradient-to-br from-sky-400/20 to-transparent rounded-tl-xl"></div>
+                      <div className="absolute bottom-0 right-0 w-8 h-8 bg-gradient-to-tl from-indigo-400/20 to-transparent rounded-br-xl"></div>
+                      
+                      {/* Logo */}
+                      <div className="relative z-10">
+                        <Logo className="h-16 w-auto drop-shadow-lg transition-all duration-500 hover:scale-105 hover:rotate-1" />
                       </div>
                     </div>
                   </div>
                   
                   {/* Welcome text centered below logo */}
-                  <div className="text-center">
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 via-sky-800 to-indigo-800 bg-clip-text text-transparent mb-1">
+                  <div className="text-center space-y-1.5">
+                    <h1 className="text-2xl font-extrabold bg-gradient-to-r from-slate-900 via-sky-800 to-indigo-800 bg-clip-text text-transparent">
                       Welcome Back
                     </h1>
-                    <p className="text-slate-600 font-medium text-sm">
-                      Sign in to your TutorLink account
-                    </p>
-                    <div className="flex items-center justify-center space-x-1 mt-2">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="h-px w-8 bg-gradient-to-r from-transparent via-sky-400 to-sky-400"></div>
+                      <p className="text-sm font-semibold text-slate-600 tracking-wide">
+                        Sign in to your TutorLink account
+                      </p>
+                      <div className="h-px w-8 bg-gradient-to-l from-transparent via-indigo-400 to-indigo-400"></div>
+                    </div>
+                    <div className="flex items-center justify-center space-x-1.5">
                       <div className="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse"></div>
                       <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
                       <div className="w-1.5 h-1.5 bg-sky-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
@@ -361,18 +409,20 @@ const UnifiedLoginPage: React.FC = () => {
                       </div>
 
                       {/* Remember Me & Forgot Password */}
-                      <div className="flex items-center justify-between pt-2">
-                        <div className="flex items-center">
+                      <div className="flex items-center justify-end pt-2">
+                        {/* <div className="flex items-center">
                           <input
                             id="remember-me"
                             name="remember-me"
                             type="checkbox"
-                            className="h-4 w-4 text-sky-600 focus:ring-4 focus:ring-sky-500/20 border-2 border-slate-300 rounded-lg transition-all duration-200"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            className="h-4 w-4 text-sky-600 focus:ring-4 focus:ring-sky-500/20 border-2 border-slate-300 rounded-lg transition-all duration-200 cursor-pointer"
                           />
-                          <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-slate-700">
+                          <label htmlFor="remember-me" className="ml-2 block text-sm font-medium text-slate-700 cursor-pointer">
                             Remember me
                           </label>
-                        </div>
+                        </div> */}
                         <div className="text-sm">
                           <button
                             type="button"

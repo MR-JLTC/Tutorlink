@@ -64,14 +64,15 @@ export const NotificationBell: React.FC = () => {
             className="fixed inset-0 bg-black bg-opacity-30 z-40 sm:hidden"
             onClick={() => setShowNotifications(false)}
           />
-          <div className="fixed sm:absolute right-0 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-sm bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[calc(100vh-5rem)] sm:max-h-[400px] flex flex-col">
-            <div className="p-3 sm:p-4 flex-shrink-0 border-b border-gray-200">
+          <div className="fixed sm:absolute right-0 sm:right-0 top-14 sm:top-auto sm:mt-2 w-full sm:w-80 max-w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-lg shadow-xl border border-gray-200 z-50 max-h-[calc(100vh-3.5rem)] sm:max-h-[400px] flex flex-col">
+            <div className="p-4 sm:p-4 flex-shrink-0 border-b border-gray-200 bg-gradient-to-r from-slate-50 to-white">
               <div className="flex items-center justify-between">
-                <h3 className="text-base sm:text-lg font-semibold">Notifications</h3>
+                <h3 className="text-lg sm:text-lg font-bold text-slate-800">Notifications</h3>
                 <button
                   onClick={() => setShowNotifications(false)}
-                  className="sm:hidden p-1 rounded-md hover:bg-gray-100 text-gray-500"
+                  className="p-2 rounded-lg hover:bg-gray-100 active:bg-gray-200 text-gray-500 touch-manipulation transition-colors"
                   aria-label="Close notifications"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -79,67 +80,71 @@ export const NotificationBell: React.FC = () => {
                 </button>
               </div>
             </div>
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 min-h-0">
               {visibleNotifications.some(n => !n.is_read && n.type === 'payment') && (
-                <div className="mb-3 p-2 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg mx-3 sm:mx-4">
-                  <p className="text-xs sm:text-sm text-yellow-800 font-medium">
+                <div className="mb-3 p-3 sm:p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg mx-3 sm:mx-4">
+                  <p className="text-sm sm:text-sm text-yellow-800 font-semibold">
                     You have pending payment notifications
                   </p>
                 </div>
               )}
               {isLoading ? (
-                <div className="animate-pulse space-y-3 sm:space-y-4 px-3 sm:px-4 pb-3 sm:pb-4">
-                  <div className="h-16 sm:h-20 bg-gray-200 rounded"></div>
-                  <div className="h-16 sm:h-20 bg-gray-200 rounded"></div>
+                <div className="animate-pulse space-y-3 sm:space-y-4 px-4 sm:px-4 pb-4 sm:pb-4">
+                  <div className="h-20 sm:h-20 bg-gray-200 rounded-lg"></div>
+                  <div className="h-20 sm:h-20 bg-gray-200 rounded-lg"></div>
                 </div>
               ) : visibleNotifications.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 sm:py-12 px-4">
-                  <BsBell className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mb-2" />
-                  <p className="text-sm sm:text-base text-gray-500">No notifications</p>
+                <div className="flex flex-col items-center justify-center py-12 sm:py-12 px-4">
+                  <BsBell className="w-12 h-12 sm:w-12 sm:h-12 text-gray-300 mb-3" />
+                  <p className="text-sm sm:text-base text-gray-500 font-medium">No notifications</p>
                 </div>
               ) : (
-                <div className="space-y-2 sm:space-y-3 px-3 sm:px-4 pb-3 sm:pb-4">
+                <div className="space-y-3 sm:space-y-3 px-4 sm:px-4 pb-4 sm:pb-4">
                   {visibleNotifications.map((notification: Notification) => (
                     <div 
                       key={notification.notification_id}
-                      className={`p-2.5 sm:p-3 rounded-lg ${
+                      className={`p-3 sm:p-3 rounded-xl border ${
                         notification.is_read 
-                          ? 'bg-gray-50' 
+                          ? 'bg-white border-gray-200' 
                           : notification.type === 'payment'
-                          ? 'bg-yellow-50 border border-yellow-200'
-                          : 'bg-blue-50'
-                      }`}
+                          ? 'bg-yellow-50 border-yellow-300'
+                          : 'bg-blue-50 border-blue-200'
+                      } shadow-sm`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-xs sm:text-sm font-medium text-gray-900 flex-1 break-words">
-                          {notification.type === 'payment' && !notification.is_read && (
-                            <span className="inline-flex items-center justify-center w-1.5 h-1.5 sm:w-2 sm:h-2 mr-1.5 sm:mr-2 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-2">
+                            {notification.type === 'payment' && !notification.is_read && (
+                              <span className="inline-flex items-center justify-center w-2 h-2 sm:w-2 sm:h-2 mt-1.5 bg-red-500 rounded-full animate-pulse flex-shrink-0"></span>
+                            )}
+                            <p className="text-sm sm:text-sm font-semibold text-gray-900 break-words leading-relaxed">
+                              {notification.message}
+                            </p>
+                          </div>
+                          {notification.metadata?.session_date && (
+                            <p className="text-xs sm:text-xs text-gray-600 mt-2 break-words">
+                              <span className="font-medium">Session:</span> {new Date(notification.metadata.session_date).toLocaleDateString()}
+                              {notification.metadata.session_time && ` at ${notification.metadata.session_time}`}
+                            </p>
                           )}
-                          <span>{notification.message}</span>
-                        </p>
+                          <p className="text-xs sm:text-xs text-gray-500 mt-2">
+                            {formatDate(notification.created_at)}
+                          </p>
+                        </div>
                         {notification.type === 'payment' && !notification.is_read && (
-                          <span className="ml-2 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium text-yellow-800 bg-yellow-100 rounded-full whitespace-nowrap flex-shrink-0">
+                          <span className="ml-2 px-2 sm:px-2 py-1 sm:py-1 text-xs sm:text-xs font-semibold text-yellow-800 bg-yellow-200 rounded-full whitespace-nowrap flex-shrink-0">
                             Payment
                           </span>
                         )}
                       </div>
-                      {notification.metadata?.session_date && (
-                        <p className="text-[10px] sm:text-xs text-gray-600 mt-1 break-words">
-                          Session: {new Date(notification.metadata.session_date).toLocaleDateString()}
-                          {notification.metadata.session_time && ` at ${notification.metadata.session_time}`}
-                        </p>
-                      )}
-                      <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                        {formatDate(notification.created_at)}
-                      </p>
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
                         {notification.type === 'payment' && !notification.is_read && (
                           <button
                             onClick={() => {
                               navigate('/tutee-dashboard/payment');
                               setShowNotifications(false);
                             }}
-                            className="text-xs font-medium text-white bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 px-3 py-1.5 rounded-md transition-colors w-full sm:w-auto touch-manipulation"
+                            className="text-sm font-semibold text-white bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-700 hover:to-yellow-800 active:from-yellow-800 active:to-yellow-900 px-4 py-2.5 rounded-lg transition-all w-full sm:w-auto touch-manipulation shadow-md hover:shadow-lg"
                             style={{ WebkitTapHighlightColor: 'transparent' }}
                           >
                             Go to Payment
@@ -148,7 +153,7 @@ export const NotificationBell: React.FC = () => {
                         {!notification.is_read && (
                           <button
                             onClick={() => markAsRead(notification.notification_id)}
-                            className="text-[10px] sm:text-xs text-blue-500 hover:text-blue-700 active:text-blue-800 text-left sm:text-center touch-manipulation"
+                            className="text-xs sm:text-xs text-blue-600 hover:text-blue-700 active:text-blue-800 font-medium text-left sm:text-center touch-manipulation py-2 sm:py-0"
                             style={{ WebkitTapHighlightColor: 'transparent' }}
                           >
                             Mark as read

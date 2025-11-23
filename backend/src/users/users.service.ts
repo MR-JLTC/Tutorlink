@@ -1,13 +1,15 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
-import { User, Admin, Tutor, Course, University, Student, Notification, BookingRequest } from '../database/entities';
+import { User, Admin, Tutor, Course, University, Student, Notification, BookingRequest, Session, Subject } from '../database/entities';
 import { NotificationsService } from '../notifications/notifications.service';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import * as bcrypt from 'bcrypt';
 import { RegisterDto } from '../auth/auth.dto';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
@@ -25,12 +27,72 @@ export class UsersService {
     private notificationRepository: Repository<Notification>,
     @InjectRepository(BookingRequest)
     private bookingRequestRepository: Repository<BookingRequest>,
+    @InjectRepository(Session)
+    private sessionRepository: Repository<Session>,
+    @InjectRepository(Subject)
+    private subjectRepository: Repository<Subject>,
     private notificationsService: NotificationsService,
   ) {}
 
   async findAll(): Promise<User[]> {
     return this.usersRepository.find({ relations: ['admin_profile', 'tutor_profile', 'student_profile', 'student_profile.university', 'student_profile.course', 'tutor_profile.university', 'tutor_profile.course'] });
   }
+  /**
+   * Move overdue 'upcoming' bookings to sessions table and mark as finished
+   */
+  async moveOverdueBookingsToSessions(): Promise<{ moved: number }> {
+    const now = new Date();
+    // Find all upcoming bookings where scheduled end time is in the past
+    // Note: 'subject' is a string column, not a relation, so it's not included in relations
+    const overdueBookings = await this.bookingRequestRepository.find({
+      where: { status: 'upcoming' },
+      relations: ['student', 'tutor'],
+    });
+    let moved = 0;
+    for (const booking of overdueBookings) {
+      // Calculate scheduled end time
+      const [hour, minute] = booking.time.split(':').map(Number);
+      const startDate = new Date(booking.date);
+      startDate.setHours(hour, minute, 0, 0);
+      const endDate = new Date(startDate.getTime() + booking.duration * 60 * 60 * 1000);
+      if (endDate < now) {
+        // Find Student and Tutor entities by user reference
+        const studentEntity = await this.studentRepository.findOne({ where: { user: { user_id: booking.student.user_id } } });
+        const tutorEntity = await this.tutorRepository.findOne({ where: { tutor_id: booking.tutor.tutor_id } });
+        // Find subject entity if booking.subject is a string
+        let subjectEntity = null;
+        if (typeof booking.subject === 'string') {
+          subjectEntity = await this.subjectRepository.findOne({ where: { subject_name: booking.subject } });
+        } else {
+          subjectEntity = booking.subject;
+        }
+        await this.sessionRepository.save({
+          student: studentEntity,
+          tutor: tutorEntity,
+          subject: subjectEntity,
+          start_time: startDate,
+          end_time: endDate,
+          status: 'completed',
+        });
+        // Mark booking as finished
+        booking.status = 'completed';
+        await this.bookingRequestRepository.save(booking);
+        moved++;
+      }
+    }
+    return { moved };
+  }
+
+    /**
+     * Cron job: runs every hour to move overdue bookings automatically
+     */
+    @Cron(CronExpression.EVERY_HOUR)
+    async handleMoveOverdueBookingsCron() {
+      const result = await this.moveOverdueBookingsToSessions();
+      if (result.moved > 0) {
+        this.logger.log(`Moved ${result.moved} overdue bookings to sessions.`);
+      }
+    }
 
   async findOneById(id: number): Promise<User | undefined> {
     return this.usersRepository.findOne({ where: { user_id: id }, relations: ['admin_profile', 'tutor_profile', 'student_profile', 'student_profile.university', 'student_profile.course', 'tutor_profile.university', 'tutor_profile.course'] });
@@ -77,6 +139,86 @@ export class UsersService {
     
     // Reload user with profile
     return this.findOneById(savedUser.user_id);
+  }
+
+  async submitBookingFeedback(bookingId: number, studentUserId: number, rating: number, comment: string) {
+    const booking = await this.bookingRequestRepository.findOne({ where: { id: bookingId }, relations: ['student', 'tutor', 'tutor.user'] });
+    if (!booking) throw new BadRequestException('Booking not found');
+    if ((booking.student as any)?.user_id !== studentUserId) throw new BadRequestException('Not allowed');
+
+    // Ensure booking is completed (tutor marked it done) before allowing feedback
+    if (booking.status !== 'completed') {
+      throw new BadRequestException('Booking must be marked completed before leaving feedback');
+    }
+
+    booking.tutee_rating = Number(rating);
+    booking.tutee_comment = comment || null;
+    booking.tutee_feedback_at = new Date();
+    await this.bookingRequestRepository.save(booking as any);
+
+    // Notify all admins about the new feedback
+    const admins = await this.adminRepository.find({ relations: ['user'] });
+    const messages = admins.map((a: any) => {
+      const adminUser = a.user as any;
+      const msg = `${(booking.student as any).name || 'A student'} left feedback for ${booking.subject}: ${rating}/5${comment ? ' — ' + comment : ''}`;
+      return this.notificationRepository.create({
+        userId: adminUser.user_id.toString(),
+        receiver_id: adminUser.user_id,
+        userType: 'admin',
+        message: msg,
+        timestamp: new Date(),
+        read: false,
+        sessionDate: booking.date as any,
+        subjectName: booking.subject,
+        booking: booking as any
+      });
+    });
+
+    try {
+      await Promise.all(messages.map(m => this.notificationRepository.save(m as any)));
+    } catch (e) {
+      console.warn('submitBookingFeedback: failed to save admin notifications', e);
+    }
+
+    return { success: true };
+  }
+
+  async confirmBookingCompletion(bookingId: number, studentUserId: number) {
+    const booking = await this.bookingRequestRepository.findOne({ where: { id: bookingId }, relations: ['student', 'tutor', 'tutor.user'] });
+    if (!booking) throw new BadRequestException('Booking not found');
+    if ((booking.student as any)?.user_id !== studentUserId) throw new BadRequestException('Not allowed');
+
+    // Only allow confirming if tutor already marked it for confirmation
+    if (booking.status !== 'awaiting_confirmation') {
+      throw new BadRequestException('Booking is not awaiting confirmation');
+    }
+
+    booking.status = 'completed';
+    booking.tutee_feedback_at = booking.tutee_feedback_at || null;
+    const saved = await this.bookingRequestRepository.save(booking as any);
+
+    // Notify tutor that the student has confirmed completion
+    try {
+      const tutorUserId = (booking.tutor as any)?.user?.user_id;
+      if (tutorUserId) {
+        const note = this.notificationRepository.create({
+          userId: tutorUserId.toString(),
+          receiver_id: tutorUserId,
+          userType: 'tutor',
+          message: `The student has confirmed completion for ${booking.subject}.`,
+          timestamp: new Date(),
+          read: false,
+          sessionDate: booking.date as any,
+          subjectName: booking.subject,
+          booking: saved
+        } as any);
+        await this.notificationRepository.save(note as any);
+      }
+    } catch (e) {
+      console.warn('confirmBookingCompletion: failed to notify tutor', e);
+    }
+
+    return { success: true };
   }
 
   async isAdmin(userId: number): Promise<boolean> {
@@ -521,6 +663,7 @@ export class UsersService {
       time: b.time,
       duration: b.duration,
       status: b.status,
+      created_at: b.created_at,
       tutor_name: b.tutor?.user?.name,
       student_name: b.student?.name
     }));
@@ -553,6 +696,25 @@ export class UsersService {
       { receiver_id: userId, userType: userType as any },
       { read: true }
     );
+    return { success: true };
+  }
+
+  async markBookingFinished(bookingId: number): Promise<{ success: boolean }> {
+    const booking = await this.bookingRequestRepository.findOne({ where: { id: bookingId } });
+
+    if (!booking) {
+      throw new BadRequestException('Booking not found');
+    }
+
+    if (booking.status !== 'upcoming') {
+      throw new BadRequestException('Only upcoming bookings can be marked as finished');
+    }
+
+    booking.status = 'completed';
+    booking.tutor_marked_done_at = new Date();
+
+    await this.bookingRequestRepository.save(booking);
+
     return { success: true };
   }
 }

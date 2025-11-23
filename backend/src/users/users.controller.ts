@@ -33,6 +33,13 @@ export class UsersController {
       } : null
     }));
   }
+  /**
+   * Admin endpoint: Move overdue bookings to sessions and mark as finished
+   */
+  @Patch('bookings/move-overdue')
+  async moveOverdueBookingsToSessions() {
+    return this.usersService.moveOverdueBookingsToSessions();
+  }
 
   @Get('test-auth')
   async testAuth() {
@@ -197,6 +204,18 @@ export class UsersController {
   async getUpcomingSessionsList(@Req() req: any) {
     const userId = req.user?.user_id;
     return this.usersService.getUpcomingSessionsList(userId);
+  }
+
+  @Post('bookings/:bookingId/feedback')
+  async submitBookingFeedback(@Param('bookingId') bookingId: string, @Req() req: any, @Body() body: { rating: number; comment?: string }) {
+    const userId = req.user?.user_id;
+    return this.usersService.submitBookingFeedback(+bookingId, userId, body.rating, body.comment || '');
+  }
+
+  @Post('bookings/:bookingId/confirm-completion')
+  async confirmBookingCompletion(@Param('bookingId') bookingId: string, @Req() req: any) {
+    const userId = req.user?.user_id;
+    return this.usersService.confirmBookingCompletion(+bookingId, userId);
   }
 
   @Patch('notifications/:id/read')

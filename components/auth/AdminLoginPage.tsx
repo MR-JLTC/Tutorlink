@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { logoBase64 } from '../../assets/logo';
+import ForgotPasswordModal from './ForgotPasswordModal';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,20 +80,41 @@ const LoginPage: React.FC = () => {
             {/* Form side */}
             <Card className="!p-10 bg-white/85 border-0 rounded-none md:rounded-l-none">
               {/* Logo and Branding above form on right side */}
-              <div className="mb-8 flex flex-col items-center">
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-600 rounded-xl blur-sm opacity-20 group-hover:opacity-30 transition-all duration-300"></div>
-                  <div className="relative bg-white border border-slate-200 rounded-xl shadow-lg px-4 py-3 group-hover:shadow-xl group-hover:border-sky-200/60 transition-all duration-300 group-hover:scale-105">
-                    <img className="h-12 w-auto" src={logoBase64} alt="TutorLink" />
+              <div className="mb-6 flex flex-col items-center">
+                {/* Modern Logo Container */}
+                <div className="relative mb-4">
+                  {/* Animated gradient background */}
+                  <div className="absolute -inset-3 bg-gradient-to-r from-sky-500/30 via-indigo-500/30 to-sky-500/30 rounded-xl blur-xl animate-pulse"></div>
+                  
+                  {/* Logo with modern frame */}
+                  <div className="relative bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/50 rounded-xl p-4 shadow-lg border border-sky-100/50 backdrop-blur-sm">
+                    {/* Decorative corner accents */}
+                    <div className="absolute top-0 left-0 w-8 h-8 bg-gradient-to-br from-sky-400/20 to-transparent rounded-tl-xl"></div>
+                    <div className="absolute bottom-0 right-0 w-8 h-8 bg-gradient-to-tl from-indigo-400/20 to-transparent rounded-br-xl"></div>
+                    
+                    {/* Logo */}
+                    <div className="relative z-10">
+                      <img 
+                        className="h-16 w-auto drop-shadow-lg transition-all duration-500 hover:scale-105 hover:rotate-1" 
+                        src={logoBase64} 
+                        alt="TutorLink" 
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="mt-4 text-center">
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-sky-600 to-indigo-600 bg-clip-text text-transparent">
+                
+                {/* Branding Text */}
+                <div className="text-center space-y-1.5">
+                  <h1 className="text-2xl font-extrabold bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-600 bg-clip-text text-transparent">
                     TutorLink
                   </h1>
-                  <p className="text-sm text-slate-600 font-medium mt-1">
-                    Connecting Minds, Building Futures
-                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="h-px w-8 bg-gradient-to-r from-transparent via-sky-400 to-sky-400"></div>
+                    <p className="text-sm font-semibold text-slate-600 tracking-wide">
+                      Connecting Minds, Building Futures
+                    </p>
+                    <div className="h-px w-8 bg-gradient-to-l from-transparent via-indigo-400 to-indigo-400"></div>
+                  </div>
                 </div>
               </div>
           <form className="space-y-6" onSubmit={handleSubmit}>
@@ -199,6 +222,19 @@ const LoginPage: React.FC = () => {
                   )}
                 </button>
               </div>
+              
+              {/* Forgot Password Link */}
+              <div className="flex items-center justify-end pt-2">
+                <div className="text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPasswordModal(true)}
+                    className="font-medium text-sky-600 hover:text-sky-700 transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div>
@@ -217,6 +253,14 @@ const LoginPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotPasswordModal}
+        onClose={() => setShowForgotPasswordModal(false)}
+        onSuccess={() => {}}
+        mode="admin"
+      />
     </div>
   );
 };

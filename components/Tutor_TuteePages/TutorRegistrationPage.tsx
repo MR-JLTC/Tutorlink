@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Logo from '../../components/Logo';
 import apiClient from '../../services/api';
 import { mapRoleToStorageKey, setRoleAuth } from '../../utils/authRole';
@@ -18,7 +18,7 @@ interface DayAvailability {
   slots: TimeSlot[];
 }
 
-const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 interface TutorRegistrationModalProps {
   isOpen?: boolean;
@@ -322,21 +322,47 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     });
   };
 
-  // Load NSFWJS model
-  useEffect(() => {
-    const loadModel = async () => {
+  // Lazy load NSFWJS model only when needed (not on mount to prevent lag)
+  const [isLoadingModel, setIsLoadingModel] = useState(false);
+  const modelLoadingPromiseRef = useRef<Promise<any> | null>(null);
+  
+  const loadNsfwModel = async (): Promise<boolean> => {
+    if (nsfwModel) {
+      return true; // Model already loaded
+    }
+    
+    // If model is already loading, wait for the existing promise
+    if (modelLoadingPromiseRef.current) {
       try {
-        console.log('Loading NSFWJS model...');
-        const model = await nsfwjs.load();
-        setNsfwModel(model);
-        console.log('NSFWJS model loaded successfully');
-      } catch (error) {
-        console.error('Failed to load NSFWJS model:', error);
-        notify('Failed to load image analysis model. Please refresh the page.', 'error');
+        const model = await modelLoadingPromiseRef.current;
+        return !!model;
+      } catch {
+        return false;
       }
-    };
-    loadModel();
-  }, []);
+    }
+    
+    // Start loading the model
+    try {
+      setIsLoadingModel(true);
+      console.log('Loading NSFWJS model...');
+      
+      const loadPromise = nsfwjs.load();
+      modelLoadingPromiseRef.current = loadPromise;
+      
+      const model = await loadPromise;
+      setNsfwModel(model);
+      modelLoadingPromiseRef.current = null;
+      setIsLoadingModel(false);
+      console.log('NSFWJS model loaded successfully');
+      return true;
+    } catch (error) {
+      console.error('Failed to load NSFWJS model:', error);
+      modelLoadingPromiseRef.current = null;
+      setIsLoadingModel(false);
+      notify('Failed to load image analysis model. Please try again.', 'error');
+      return false;
+    }
+  };
 
   // Fetch subjects based on selected university and course; lock when none selected
   useEffect(() => {
@@ -549,6 +575,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       for (const file of files) {
         // Check if it's an image file
         if ((file as File).type.startsWith('image/')) {
+          // Lazy load model if needed before analyzing
           const isAppropriate = await analyzeImageContent(file as File);
           if (isAppropriate) {
             processedFiles.push(file as File);
@@ -613,6 +640,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       for (const file of validFiles) {
         // Check if it's an image file
         if ((file as File).type.startsWith('image/')) {
+          // Lazy load model if needed before analyzing
           const isAppropriate = await analyzeImageContent(file as File);
           if (isAppropriate) {
             processedFiles.push(file as File);
@@ -994,8 +1022,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   };
 
   const analyzeImageContent = async (file: File): Promise<boolean> => {
-    if (!nsfwModel) {
-      console.log('NSFWJS model not loaded yet');
+    // Lazy load the model if not already loaded
+    const modelLoaded = await loadNsfwModel();
+    if (!modelLoaded || !nsfwModel) {
+      console.log('NSFWJS model could not be loaded');
+      notify('Image analysis is temporarily unavailable. Please try again in a moment.', 'error');
       return false;
     }
 
@@ -1545,7 +1576,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   return (
     <>
       <div
-        className={isModal ? "fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" : "min-h-screen bg-gradient-to-br from-indigo-50/40 to-sky-50/40"}
+        className={isModal ? "fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" : "min-h-screen flex items-center justify-center lg:py-8 bg-gradient-to-br from-indigo-50/40 to-sky-50/40"}
         role={isModal ? "dialog" : undefined}
         aria-modal={isModal ? "true" : undefined as any}
         onClick={(e) => {
@@ -1558,17 +1589,17 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
         <div 
           className={
             isModal
-              ? "w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
-              : "w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+              ? "w-full max-w-4xl lg:max-w-3xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
+              : "w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-h-[95vh] lg:max-h-[80vh] flex flex-col"
           }
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3.5 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center justify-between px-3 sm:px-5 lg:px-4 py-2.5 sm:py-3.5 lg:py-2 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-              <Logo className="h-10 w-10 sm:h-14 sm:w-14 flex-shrink-0" />
+              <Logo className="h-10 w-10 sm:h-14 sm:w-14 lg:h-10 lg:w-10 flex-shrink-0" />
               <div className="min-w-0 flex-1">
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 truncate">Tutor Application</h1>
-                <p className="text-slate-600 text-xs sm:text-sm hidden sm:block">Share your expertise and start earning.</p>
+                <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-2xl font-bold text-slate-800 truncate">Tutor Application</h1>
+                <p className="text-slate-600 text-xs sm:text-sm hidden sm:block lg:hidden">Share your expertise and start earning.</p>
               </div>
             </div>
             {isModal ? (
@@ -1603,12 +1634,12 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               </button>
             )}
           </div>
-          <div className="max-h-[85vh] sm:max-h-[90vh] overflow-y-auto px-2 sm:px-4 md:px-5 py-3 sm:py-4 md:py-5 bg-gradient-to-br from-indigo-50/40 to-sky-50/40 relative">
-            <div className="w-full bg-white/80 backdrop-blur-lg p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl shadow-xl border border-white/50">
+          <div className={`overflow-y-auto px-2 sm:px-4 md:px-5 lg:px-4 py-3 sm:py-4 md:py-5 lg:py-3 bg-gradient-to-br from-indigo-50/40 to-sky-50/40 relative ${isModal ? 'max-h-[85vh] sm:max-h-[90vh]' : 'flex-1'}`}>
+            <div className="w-full bg-white/80 backdrop-blur-lg p-3 sm:p-4 md:p-5 lg:p-4 rounded-xl sm:rounded-2xl shadow-xl border border-white/50">
         <form 
           onSubmit={handleSubmit} 
           id="tutor-registration-form"
-          className="mx-auto max-w-4xl" 
+          className="mx-auto max-w-3xl" 
           noValidate
           onKeyDown={(e) => {
             // Prevent form submission on Enter key unless it's the submit button
@@ -1621,10 +1652,10 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           }}
         >
           {/* Account Info */}
-          <div className="space-y-5 mb-6">
+          <div className="space-y-4 lg:space-y-3 mb-5 lg:mb-4">
             {/* Email Verification Section */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 md:p-6 rounded-lg sm:rounded-xl border border-blue-200 shadow-sm">
-              <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-3 sm:mb-4 flex items-center">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 md:p-4 lg:p-3 rounded-lg sm:rounded-xl border border-blue-200 shadow-sm">
+              <h3 className="text-base sm:text-lg lg:text-base font-semibold text-slate-800 mb-3 sm:mb-3 lg:mb-2 flex items-center">
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
@@ -1633,13 +1664,13 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="w-full">
-                  <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1.5 sm:mb-2">Email Address</label>
+                  <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1.5 sm:mb-2 lg:mb-1">Email Address</label>
                   <input 
                     type="email" 
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)} 
                     disabled={!universityId}
-                    className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                    className={`w-full px-3 sm:px-4 lg:px-3 py-2 sm:py-3 lg:py-2 text-sm sm:text-base lg:text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
                       emailDomainError ? 'border-red-400 bg-red-50' : 
                       !universityId ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed' : 
                       'border-slate-300'
@@ -1664,9 +1695,9 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 </div>
                 
                 <div className="w-full">
-                  <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1.5 sm:mb-2">University</label>
+                  <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1.5 sm:mb-2 lg:mb-1">University</label>
                   <select 
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 sm:focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white" 
+                    className="w-full px-3 sm:px-4 lg:px-3 py-2 sm:py-3 lg:py-2 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg focus:ring-2 sm:focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all bg-white" 
                     value={universityId} 
                     onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')} 
                     required
@@ -1784,9 +1815,9 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
             </div>
 
             {/* Other Account Fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm items-start">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-3 lg:gap-3 p-3 sm:p-4 md:p-4 lg:p-3 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm items-start">
               <div className="w-full sm:col-span-2 lg:col-span-8">
-                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Full Name</label>
+                <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1 lg:mb-0.5">Full Name</label>
                 <input 
                   type="text" 
                   value={fullName} 
@@ -1794,14 +1825,14 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     const next = e.target.value.replace(/[^A-Za-z\-\s]/g, '').slice(0, 60);
                     setFullName(next);
                   }} 
-                  className="w-full py-2 sm:py-2.5 pl-3 sm:pl-4 pr-3 sm:pr-4 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full py-2 sm:py-2 lg:py-1.5 pl-3 sm:pl-3 lg:pl-3 pr-3 sm:pr-3 lg:pr-3 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   placeholder="Enter your full name"
                   required 
                 />
               </div>
               
               <div className="w-full sm:col-span-2 lg:col-span-4">
-                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Password</label>
+                <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1 lg:mb-0.5">Password</label>
                 <div className="relative w-full">
                   <input 
                     type={showPassword ? "text" : "password"} 
@@ -1819,7 +1850,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                       MozAppearance: 'textfield'
                     }}
                     required 
-                    className="w-full py-2 sm:py-2.5 pl-3 sm:pl-4 pr-10 sm:pr-12 text-sm sm:text-base border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
+                    className="w-full py-2 sm:py-2.5 lg:py-1.5 pl-3 sm:pl-4 lg:pl-3 pr-10 sm:pr-12 lg:pr-10 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
                     placeholder="Desired Password"
                   />
                   <button
@@ -1865,7 +1896,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Additional Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 md:p-5 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-3 lg:gap-3 mb-4 sm:mb-4 lg:mb-3 p-3 sm:p-4 md:p-4 lg:p-3 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm items-start">
             <div className="w-full sm:col-span-1 lg:col-span-3">
               <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Year Level</label>
               <select 
@@ -1926,7 +1957,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Bio */}
-          <div className="mb-4 sm:mb-6 max-w-4xl p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
+          <div className="mb-4 sm:mb-4 lg:mb-3 p-3 sm:p-4 md:p-4 lg:p-3 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
             <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Your Bio (why you'd be a great tutor)</label>
             <textarea 
               value={bio} 
@@ -1940,7 +1971,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
             />
           </div>
           {/* Subjects of Expertise */}
-          <div className="p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
+          <div className="p-3 sm:p-4 md:p-4 lg:p-3 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
             <h2 className="block text-base sm:text-lg text-slate-700 font-semibold mb-2">1. Subjects of Expertise</h2>
             <div className="flex flex-wrap gap-2 mb-4 min-h-[2.5rem] items-center">
               {Array.from(selectedSubjects).map((subject: string) => (
@@ -2209,7 +2240,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
 
 
            {/* Availability Scheduling */}
-          <div className="mt-6 sm:mt-8 p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
+          <div className="mt-5 sm:mt-5 lg:mt-4 p-3 sm:p-4 md:p-4 lg:p-3 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
             <h2 className="block text-base sm:text-lg text-slate-700 font-semibold mb-2">2. Weekly Availability</h2>
             <div className="space-y-3 sm:space-y-4">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
@@ -2276,23 +2307,23 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Document Upload */}
-          <div className="mt-6 sm:mt-8 p-3 sm:p-4 md:p-6 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
+          <div className="mt-5 sm:mt-5 lg:mt-4 p-3 sm:p-4 md:p-4 lg:p-3 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm">
             <h2 className="block text-base sm:text-lg text-slate-700 font-semibold mb-2">3. Proof Documents</h2>
             <div className="mb-4 sm:mb-6">
               <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
               <input type="file" 
                accept="image/*" 
                onChange={handleProfileImageChange} 
-               disabled={isAnalyzingImage}
-               className={`w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg ${isAnalyzingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+               disabled={isAnalyzingImage || isLoadingModel}
+               className={`w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg ${(isAnalyzingImage || isLoadingModel) ? 'opacity-50 cursor-not-allowed' : ''}`}
                />
-              {isAnalyzingImage && (
+              {(isAnalyzingImage || isLoadingModel) && (
                 <div className="flex items-center mt-2 text-blue-600">
                   <svg className="animate-spin -ml-1 mr-2 h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="text-xs sm:text-sm">Analyzing image content...</span>
+                  <span className="text-xs sm:text-sm">{isLoadingModel ? 'Loading image analyzer...' : 'Analyzing image content...'}</span>
                 </div>
               )}
               {profileImage && <p className="text-xs text-slate-500 mt-1 truncate">Selected: {profileImage.name}</p>}
@@ -2302,16 +2333,16 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               <input type="file" 
                accept="image/*" 
                onChange={handleGcashQRImageChange} 
-               disabled={isAnalyzingImage}
-               className={`w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg ${isAnalyzingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+               disabled={isAnalyzingImage || isLoadingModel}
+               className={`w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-slate-300 rounded-lg ${(isAnalyzingImage || isLoadingModel) ? 'opacity-50 cursor-not-allowed' : ''}`}
                />
-              {isAnalyzingImage && (
+              {(isAnalyzingImage || isLoadingModel) && (
                 <div className="flex items-center mt-2 text-blue-600">
                   <svg className="animate-spin -ml-1 mr-2 h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span className="text-xs sm:text-sm">Analyzing image content...</span>
+                  <span className="text-xs sm:text-sm">{isLoadingModel ? 'Loading image analyzer...' : 'Analyzing image content...'}</span>
                 </div>
               )}
               {gcashQRImage && <p className="text-xs text-slate-500 mt-1 truncate">Selected: {gcashQRImage.name}</p>}

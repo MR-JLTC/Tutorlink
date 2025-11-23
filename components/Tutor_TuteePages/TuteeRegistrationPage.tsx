@@ -564,23 +564,23 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
 
   return (
     <div 
-      className={isModal ? "fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" : "min-h-screen bg-gradient-to-br from-indigo-50/40 to-sky-50/40"}
+      className={isModal ? "fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3 sm:p-6 animate-[fadeIn_200ms_ease-out]" : "min-h-screen flex items-center justify-center lg:py-8 bg-gradient-to-br from-indigo-50/40 to-sky-50/40"}
       role={isModal ? "dialog" : undefined}
       aria-modal={isModal ? "true" : undefined as any}
     >
       <div 
         className={
           isModal
-            ? "w-full max-w-5xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
-            : "w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+            ? "w-full max-w-4xl lg:max-w-3xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
+            : "w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-h-[95vh] lg:max-h-[80vh] flex flex-col"
         }
       >
-        <div className="flex items-center justify-between px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
+        <div className="flex items-center justify-between px-3 sm:px-4 md:px-5 lg:px-4 py-2.5 sm:py-3 lg:py-2 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
-            <Logo className="h-10 w-10 sm:h-12 sm:w-12 flex-shrink-0" />
+            <Logo className="h-10 w-10 sm:h-12 sm:w-12 lg:h-10 lg:w-10 flex-shrink-0" />
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800 truncate">Student Registration</h1>
-              <p className="text-slate-600 text-xs sm:text-sm hidden sm:block">Create your account to find a tutor.</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-2xl font-bold text-slate-800 truncate">Student Registration</h1>
+              <p className="text-slate-600 text-xs sm:text-sm hidden sm:block lg:hidden">Create your account to find a tutor.</p>
             </div>
           </div>
           {isModal ? (
@@ -606,12 +606,12 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
             </button>
           )}
         </div>
-        <div className="max-h-[85vh] sm:max-h-[90vh] overflow-y-auto px-2 sm:px-3 md:px-4 py-3 sm:py-4 bg-gradient-to-br from-indigo-50/40 to-sky-50/40">
-          <div className="w-full bg-white/80 backdrop-blur-lg p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl shadow-xl border border-white/50">
-            <form onSubmit={handleSubmit} noValidate className="max-w-5xl mx-auto">
+        <div className={`overflow-y-auto px-2 sm:px-3 md:px-4 lg:px-4 py-3 sm:py-4 lg:py-3 bg-gradient-to-br from-indigo-50/40 to-sky-50/40 ${isModal ? 'max-h-[85vh] sm:max-h-[90vh]' : 'flex-1'}`}>
+          <div className="w-full bg-white/80 backdrop-blur-lg p-3 sm:p-4 md:p-5 lg:p-4 rounded-xl sm:rounded-2xl shadow-xl border border-white/50">
+            <form onSubmit={handleSubmit} noValidate className="max-w-3xl mx-auto">
           {/* Email Verification Section */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 md:p-6 rounded-lg sm:rounded-xl border border-blue-200 mb-3 sm:mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-3 sm:mb-4 flex items-center">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 md:p-4 lg:p-3 rounded-lg sm:rounded-xl border border-blue-200 mb-3 sm:mb-4 lg:mb-3">
+            <h3 className="text-base sm:text-lg lg:text-base font-semibold text-slate-800 mb-3 sm:mb-3 lg:mb-2 flex items-center">
               <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
@@ -620,9 +620,9 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
             
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="w-full">
-                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1.5 sm:mb-2">University</label>
+                <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1.5 sm:mb-2 lg:mb-1">University</label>
               <select
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                  className="w-full px-3 sm:px-4 lg:px-3 py-2 sm:py-3 lg:py-2 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
                 value={universityId}
                 onChange={(e) => setUniversityId(e.target.value ? Number(e.target.value) : '')}
                 required
@@ -634,13 +634,13 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
               </select>
             </div>
              <div className="w-full">
-                <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1.5 sm:mb-2">Email Address</label>
+                <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1.5 sm:mb-2 lg:mb-1">Email Address</label>
                 <input 
                   type="email" 
                   value={formData.email} 
                   onChange={handleInputChange} 
                   disabled={!universityId}
-                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
+                  className={`w-full px-3 sm:px-4 lg:px-3 py-2 sm:py-3 lg:py-2 text-sm sm:text-base lg:text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
                     emailDomainError ? 'border-red-400 bg-red-50' : 
                     !universityId ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed' : 
                     'border-slate-300'
@@ -771,9 +771,9 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
           </div>
 
           {/* Other Account Fields */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 mb-4 sm:mb-5 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-3 lg:gap-3 mb-4 sm:mb-4 lg:mb-3 items-start">
             <div className="w-full sm:col-span-2 lg:col-span-8">
-              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1" htmlFor="name">Full Name</label>
+              <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1 lg:mb-0.5" htmlFor="name">Full Name</label>
               <input 
                 type="text" 
                 id="name" 
@@ -784,13 +784,13 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                   handleInputChange({ target: { name: 'name', value: next } } as any);
                 }} 
                 maxLength={60}
-                className="w-full py-2 sm:py-2.5 pl-3 sm:pl-4 pr-3 sm:pr-4 text-sm sm:text-base border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                className="w-full py-2 sm:py-2 lg:py-1.5 pl-3 sm:pl-3 lg:pl-3 pr-3 sm:pr-3 lg:pr-3 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                 placeholder="Enter your full name"
                 required 
               />
             </div>
             <div className="w-full sm:col-span-2 lg:col-span-4">
-              <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1" htmlFor="password">Password</label>
+              <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1 lg:mb-0.5" htmlFor="password">Password</label>
               <div className="relative w-full">
                 <input 
                   type={showPassword ? "text" : "password"} 
@@ -800,7 +800,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                   onChange={handleInputChange} 
                   minLength={7} 
                   maxLength={21} 
-                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 pr-10 sm:pr-12 text-sm sm:text-base border border-slate-300 rounded-lg 
+                  className="w-full px-3 sm:px-4 lg:px-3 py-2 sm:py-2.5 lg:py-1.5 pr-10 sm:pr-12 lg:pr-10 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg 
                   [&::-ms-reveal]:hidden 
                   [&::-webkit-credentials-auto-fill-button]:hidden 
                   [&::-webkit-strong-password-auto-fill-button]:hidden" 
@@ -899,7 +899,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
           </div>
           
           {/* Profile Image Upload */}
-          <div className="mb-4 sm:mb-6">
+          <div className="mb-4 sm:mb-4 lg:mb-3">
             <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Profile Image (optional)</label>
             <input 
               type="file" 

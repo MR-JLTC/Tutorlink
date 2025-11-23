@@ -95,6 +95,7 @@ export interface Payment {
   admin_note?: string;
   admin_payment_proof_url?: string;
   rejection_reason?: string;
+  booking_id?: number;
 
   // Joined data from backend
   student?: { user?: { name: string } };

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpException, HttpStatus, Get, Query } from '@nestjs/common';
 import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
 import { PasswordResetService } from './password-reset.service';
 
@@ -27,6 +27,31 @@ export class VerifyCodeAndResetPasswordDto {
 export class PasswordResetController {
   constructor(private readonly passwordResetService: PasswordResetService) {}
 
+  @Get('check-user-type')
+  async checkUserType(@Query('email') email: string) {
+    try {
+      if (!email) {
+        throw new HttpException(
+          {
+            message: 'Email is required',
+            statusCode: HttpStatus.BAD_REQUEST,
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const userType = await this.passwordResetService.getUserTypeByEmail(email);
+      return { userType };
+    } catch (error) {
+      throw new HttpException(
+        {
+          message: error.message || 'Failed to check user type',
+          statusCode: error.status || HttpStatus.BAD_REQUEST,
+        },
+        error.status || HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
   @Post('request')
   async requestPasswordReset(@Body() requestPasswordResetDto: RequestPasswordResetDto) {
     try {
@@ -48,8 +73,10 @@ export class PasswordResetController {
         );
       }
       
+      // Only allow tutor/tutee for regular password reset (not admin)
       const result = await this.passwordResetService.requestPasswordReset(
-        requestPasswordResetDto.email
+        requestPasswordResetDto.email,
+        { requiredUserType: undefined, excludeUserType: 'admin' }
       );
       return result;
     } catch (error) {
@@ -131,10 +158,12 @@ export class PasswordResetController {
         );
       }
       
+      // Only allow tutor/tutee for regular password reset (not admin)
       const result = await this.passwordResetService.verifyCodeAndResetPassword(
         verifyCodeAndResetPasswordDto.email,
         verifyCodeAndResetPasswordDto.code,
-        verifyCodeAndResetPasswordDto.newPassword
+        verifyCodeAndResetPasswordDto.newPassword,
+        { requiredUserType: undefined, excludeUserType: 'admin' }
       );
       return result;
     } catch (error) {

@@ -150,6 +150,11 @@ const TuteePayment: React.FC = () => {
       'payment_approved': 'confirmed',
       'pending': 'pending'
     };
+    // If booking has plain 'rejected' status but no attached payment, treat it as unknown
+    if (bookingStatus === 'rejected' && !booking.payment) {
+      return '';
+    }
+
     return statusMap[bookingStatus] || bookingStatus;
   };
 
@@ -216,6 +221,16 @@ const TuteePayment: React.FC = () => {
       });
       setPayments(userPayments);
       
+      // Helper: Check if a subject has any confirmed payments
+      const hasConfirmedPaymentForSubject = (subject: string, tutorId: number): boolean => {
+        return userPayments.some((p: Payment) => {
+          const isConfirmed = ['confirmed', 'admin_confirmed'].includes((p.status || '').toLowerCase());
+          const matchesSubject = p.subject === subject || !p.subject;
+          const matchesTutor = p.tutor_id === tutorId;
+          return isConfirmed && matchesSubject && matchesTutor;
+        });
+      };
+
       // Filter bookings that have payment-related statuses OR have associated payments
       const relevantBookings = allBookings
         .map((booking: BookingRequest) => {
@@ -223,6 +238,12 @@ const TuteePayment: React.FC = () => {
           if (booking.payment) {
             return booking;
           }
+
+          // Check if this subject has a confirmed payment (for same tutor)
+          const subjectHasConfirmedPayment = hasConfirmedPaymentForSubject(
+            booking.subject,
+            booking.tutor?.tutor_id || 0
+          );
 
           // Otherwise, attempt to find the latest matching payment by tutor & subject.
           const matchingPayments = userPayments
@@ -245,12 +266,21 @@ const TuteePayment: React.FC = () => {
               const bookingIsConfirmed = confirmedBookingStatuses.includes((booking.status || '').toLowerCase());
 
               // Rule 1: Don't match a confirmed payment to an unpaid booking.
-              if (paymentIsConfirmed && bookingIsUnpaid) {
+              // Exception: If this subject already has a confirmed payment, don't match any confirmed payment to this booking
+              if (paymentIsConfirmed && (bookingIsUnpaid || subjectHasConfirmedPayment)) {
                 return false;
               }
 
               // Rule 2: Don't match a pending payment to a confirmed booking.
               if (paymentIsPending && bookingIsConfirmed) {
+                return false;
+              }
+
+              const paymentIsRejected = ['rejected', 'payment_rejected'].includes((p.status || '').toLowerCase());
+              const bookingIsAwaitingFirstPayment = (booking.status || '').toLowerCase() === 'awaiting_payment';
+
+              // Rule 3: Don't match an old rejected payment to a brand new booking that is awaiting its first payment.
+              if (paymentIsRejected && bookingIsAwaitingFirstPayment) {
                 return false;
               }
 
@@ -262,6 +292,29 @@ const TuteePayment: React.FC = () => {
             ...booking,
             payment: matchingPayments[0]
           };
+        })
+        .map((booking: BookingRequest) => {
+          // Check if this subject has a confirmed payment for the same tutor
+          const subjectHasConfirmedPayment = hasConfirmedPaymentForSubject(
+            booking.subject,
+            booking.tutor?.tutor_id || 0
+          );
+          
+          const bookingStatus = (booking.status || '').toLowerCase();
+          
+          // If subject has confirmed payment and this booking is awaiting payment,
+          // clear any incorrectly matched confirmed payment so it shows as pending payment
+          if (subjectHasConfirmedPayment && (bookingStatus === 'awaiting_payment' || bookingStatus === 'pending')) {
+            if (booking.payment && ['confirmed', 'admin_confirmed'].includes((booking.payment.status || '').toLowerCase())) {
+              // Create a new booking object without the confirmed payment association
+              return {
+                ...booking,
+                payment: undefined
+              };
+            }
+          }
+          
+          return booking;
         })
         .filter((booking: BookingRequest) => {
           // Include bookings that have:
@@ -280,7 +333,6 @@ const TuteePayment: React.FC = () => {
             bookingStatus === 'pending' ||
             bookingStatus === 'admin_confirmed' ||
             bookingStatus === 'confirmed' ||
-            bookingStatus === 'rejected' ||
             bookingStatus === 'refunded' ||
             bookingStatus === 'payment_approved';
           
@@ -343,7 +395,7 @@ const TuteePayment: React.FC = () => {
       return;
     }
     if (calculatedAmount > 0 && amountPaid < calculatedAmount) {
-      toast.error(`Amount paid (₱${amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) must be at least ₱${calculatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (amount to pay)`);
+      toast.error(`Amount paid (₱${amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) must be at least ₱${calculatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (amount to pay). You can pay more if needed.`);
       return;
     }
 
@@ -687,16 +739,15 @@ const TuteePayment: React.FC = () => {
                           <label className="block text-xs sm:text-sm md:text-base font-semibold text-slate-800 mb-1.5 sm:mb-2">Amount Paid</label>
                           <input 
                             type="number" 
-                            min={calculatedAmount} 
+                            min="0" 
                             step="0.01" 
                             value={amountByBooking[booking.id] || (calculatedAmount > 0 && !isRejectedStatus(booking) ? calculatedAmount.toFixed(2) : '')} 
                             onChange={(e) => setAmountByBooking(prev => ({ ...prev, [booking.id]: e.target.value }))} 
                             className="w-full border-2 border-slate-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
                             placeholder="0.00"
-                            disabled={calculatedAmount > 0 && !isRejectedStatus(booking)}
                           />
                           {calculatedAmount > 0 && !isRejectedStatus(booking) && (
-                            <p className="text-[10px] sm:text-xs text-slate-500 mt-1.5">Amount auto-filled based on session rate</p>
+                            <p className="text-[10px] sm:text-xs text-slate-500 mt-1.5">Amount auto-filled based on session rate. You can enter a higher amount if needed.</p>
                           )}
                           {isRejectedStatus(booking) && (
                             <p className="text-[10px] sm:text-xs text-amber-600 mt-1.5 font-medium">Please enter the amount you paid</p>
@@ -737,7 +788,16 @@ const TuteePayment: React.FC = () => {
                               return (
                                 <div className="p-2 sm:p-2.5 bg-amber-50 border border-amber-300 rounded-lg">
                                   <p className="text-[10px] sm:text-xs text-amber-800 font-medium">
-                                    ⚠️ Amount paid (₱{amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) must be at least ₱{calculatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (amount to pay)
+                                    ⚠️ Amount paid (₱{amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) must be at least ₱{calculatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (amount to pay). You can pay more if needed.
+                                  </p>
+                                </div>
+                              );
+                            }
+                            if (amountPaid > calculatedAmount) {
+                              return (
+                                <div className="p-2 sm:p-2.5 bg-blue-50 border border-blue-300 rounded-lg">
+                                  <p className="text-[10px] sm:text-xs text-blue-800 font-medium">
+                                    ✓ Amount paid (₱{amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) is greater than the required amount. This is acceptable.
                                   </p>
                                 </div>
                               );

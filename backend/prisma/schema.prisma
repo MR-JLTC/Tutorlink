@@ -21,6 +21,8 @@ model Session {
   subjectId String
   tutor     User     @relation("TutorSessions", fields: [tutorId], references: [id])
   tutee     User     @relation("TuteeSessions", fields: [tuteeId], references: [id])
+  tutorMarkedDoneAt DateTime?  // When tutor marks session as done
+  tuteeMarkedDoneAt DateTime?  // When tutee marks session as done
 }
 
 model Subject {

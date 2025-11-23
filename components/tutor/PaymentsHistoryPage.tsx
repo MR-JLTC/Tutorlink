@@ -69,6 +69,8 @@ const PaymentsHistoryPage: React.FC = () => {
       if (!name.includes(debouncedQuery.toLowerCase())) return false;
     }
 
+    // Hide payments that are already confirmed
+    if (p.status === 'confirmed') return false;
     return true;
   });
 

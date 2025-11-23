@@ -207,8 +207,7 @@ const TuteeSidebar: React.FC = () => {
         const userPayments = allPayments.filter((p: any) => {
           if (!user?.user_id) return false;
           return (
-            p.student?.user?.user_id === user.user_id ||
-            p.student_id === user.student_id
+            p.student?.user?.user_id === user.user_id
           );
         });
   

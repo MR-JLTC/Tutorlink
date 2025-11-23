@@ -9,7 +9,7 @@ interface DayAvailability {
   selectedSlots: Set<string>; // Set of time slots like "09:00", "09:30", etc.
 }
 
-const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 // Generate 30-minute time slots from 00:00 to 23:30
 const generateTimeSlots = (): string[] => {
@@ -1397,7 +1397,7 @@ const AvailabilityScheduling: React.FC = () => {
             <p className="text-2xl font-bold text-blue-600">
               {Object.values(availability).filter((day: DayAvailability) => day.selectedSlots.size > 0).length}
             </p>
-            <p className="text-sm text-blue-600">out of 6 days</p>
+            <p className="text-sm text-blue-600">out of 7 days</p>
           </div>
           
           <div className="bg-green-50 p-4 rounded-lg">

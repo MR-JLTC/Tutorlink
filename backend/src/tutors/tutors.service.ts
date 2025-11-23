@@ -825,6 +825,13 @@ export class TutorsService {
       relations: ['tutor', 'tutor.user'],
       order: { created_at: 'DESC' }
     });
+    // Debug: log statuses returned so we can trace why UI shows Leave Feedback first
+    try {
+      console.log(`getStudentBookingRequests: returning ${requests.length} bookings for student_user_id=${studentUserId}`);
+      requests.forEach(r => console.log(`  booking id=${(r as any).id} status=${(r as any).status} tutee_rating=${(r as any).tutee_rating}`));
+    } catch (e) {
+      // ignore logging errors
+    }
     return requests;
   }
 
@@ -1499,6 +1506,49 @@ export class TutorsService {
         })
       ];
       await Promise.all(notifications.map(n => this.notificationRepository.save(n)));
+    }
+
+    return { success: true };
+  }
+
+  async markBookingAsCompleted(bookingId: number, status: BookingRequest['status'], file: any) {
+    const request = await this.bookingRequestRepository.findOne({
+      where: { id: bookingId },
+      relations: ['tutor', 'tutor.user', 'student']
+    });
+    if (!request) throw new NotFoundException('Booking request not found');
+
+    // Only allow marking as completed if the booking is not already completed or cancelled
+    if (request.status === 'completed' || request.status === 'cancelled') {
+      return { success: false, message: 'Booking already completed or cancelled' };
+    }
+
+    if (file) {
+      // Assuming the column is named 'session_proof_url' on the BookingRequest entity
+      const proofUrl = `/tutor_documents/${file.filename}`;
+      (request as any).session_proof_url = proofUrl;
+    }
+
+    // Use the status from the request, which should be 'awaiting_confirmation'
+    request.status = status;
+    const saved = await this.bookingRequestRepository.save(request);
+
+    // Create notification for student confirming session completion
+    try {
+      const notification = this.notificationRepository.create({
+        userId: request.student.user_id.toString(),
+        receiver_id: request.student.user_id,
+        userType: 'tutee',
+        message: `Your session for ${request.subject} on ${new Date(request.date).toLocaleDateString()} has been marked as completed by the tutor and is awaiting your confirmation.`,
+        timestamp: new Date(),
+        read: false,
+        sessionDate: request.date,
+        subjectName: request.subject,
+        booking: saved
+      });
+      await this.notificationRepository.save(notification);
+    } catch (e) {
+      console.warn('Failed to create completion notification:', e);
     }
 
     return { success: true };

@@ -63,6 +63,45 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('API Request Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add logging for the request payload and response
+apiClient.interceptors.request.use(
+  (config) => {
+    console.log('API Request:', {
+      method: config.method,
+      url: config.url,
+      data: config.data,
+      headers: config.headers
+    });
+    return config;
+  },
+  (error) => {
+    console.error('API Request Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+apiClient.interceptors.response.use(
+  (response) => {
+    console.log('API Response:', {
+      method: response.config.method,
+      url: response.config.url,
+      status: response.status,
+      data: response.data
+    });
+    return response;
+  },
+  (error) => {
+    console.error('API Response Error:', {
+      method: error.config?.method,
+      url: error.config?.url,
+      status: error.response?.status,
+      data: error.response?.data
+    });
     return Promise.reject(error);
   }
 );

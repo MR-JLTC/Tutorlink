@@ -447,7 +447,7 @@ const EarningsHistory: React.FC = () => {
         </Card>
       </div>
 
-      {/* Session History */}
+      {/* Session History
       <Card className="p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-xl font-semibold">Session History</h2>
@@ -536,7 +536,7 @@ const EarningsHistory: React.FC = () => {
             ))
           )}
         </div>
-      </Card>
+      </Card> */}
       {proofModalOpen && proofModalUrl && (
         <Modal isOpen={proofModalOpen} onClose={() => setProofModalOpen(false)} title={proofModalTitle}>
           <div className="flex justify-center">
