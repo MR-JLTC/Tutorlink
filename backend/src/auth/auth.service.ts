@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { LoginDto, RegisterDto } from './auth.dto';
 import { EmailVerificationService } from './email-verification.service';
+import { TutorsService } from '../tutors/tutors.service';
 
 @Injectable()
 export class AuthService {
@@ -11,6 +12,7 @@ export class AuthService {
     private usersService: UsersService,
     private jwtService: JwtService,
     private emailVerificationService: EmailVerificationService,
+    private tutorsService: TutorsService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<any> {
@@ -150,6 +152,17 @@ export class AuthService {
       userType = 'student'; // Normalize both to 'student' for frontend
     }
     console.log('Mapped user type:', userType);
+    
+    // If user is a tutor, set online status to 'online'
+    if (userType === 'tutor') {
+      try {
+        await this.tutorsService.updateOnlineStatus(user.user_id, 'online');
+        console.log('✅ Tutor online status set to online');
+      } catch (err) {
+        console.warn('Failed to update tutor online status:', err);
+        // Don't block login if online status update fails
+      }
+    }
     
     const payload = { email: user.email, sub: user.user_id, name: user.name, role: userType };
     console.log('✅ Login successful, generating token');

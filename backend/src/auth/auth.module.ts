@@ -10,6 +10,7 @@ import { TestPasswordResetController } from './test-password-reset.controller';
 import { EmailVerificationService } from './email-verification.service';
 import { EmailVerificationController } from './email-verification.controller';
 import { UsersModule } from '../users/users.module';
+import { TutorsModule } from '../tutors/tutors.module';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
@@ -22,6 +23,7 @@ import { EmailModule } from '../email/email.module';
   imports: [
     TypeOrmModule.forFeature([User, PasswordResetToken, EmailVerificationRegistry]),
     UsersModule,
+    TutorsModule,
     EmailModule,
     PassportModule,
     JwtModule.register({

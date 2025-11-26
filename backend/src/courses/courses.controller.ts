@@ -18,13 +18,13 @@ export class CoursesController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  createCourse(@Body() body: { course_name: string; university_id: number }) {
-    return this.coursesService.createCourse(body.course_name, body.university_id);
+  createCourse(@Body() body: { course_name: string; university_id: number; acronym?: string }) {
+    return this.coursesService.createCourse(body.course_name, body.university_id, body.acronym);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id')
-  updateCourse(@Param('id') id: string, @Body() body: { course_name?: string; university_id?: number }) {
+  updateCourse(@Param('id') id: string, @Body() body: { course_name?: string; university_id?: number; acronym?: string }) {
     return this.coursesService.updateCourse(+id, body);
   }
 

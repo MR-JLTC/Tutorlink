@@ -241,14 +241,13 @@ const TutorManagement: React.FC = () => {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">University</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session Rate</th>
                 <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {tutors.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-4 text-center text-gray-500">No pending applications found.</td>
+                  <td colSpan={4} className="px-6 py-4 text-center text-gray-500">No pending applications found.</td>
                 </tr>
               ) : (
                 tutors.map((tutor) => (
@@ -278,11 +277,6 @@ const TutorManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(tutor as any).university?.name || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(tutor as any).course?.course_name || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {(tutor as any).session_rate_per_hour 
-                        ? `₱${Number((tutor as any).session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/hr`
-                        : 'N/A'}
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                       <div className="flex justify-center">
                         <Button onClick={() => handleViewDetails(tutor)}>View Details</Button>
@@ -335,14 +329,6 @@ const TutorManagement: React.FC = () => {
                       <p className="text-slate-500 text-xs mb-1">Course</p>
                       <p className="font-medium text-slate-900 truncate">{(tutor as any).course?.course_name || 'N/A'}</p>
                     </div>
-                  </div>
-                  <div className="text-sm">
-                    <p className="text-slate-500 text-xs mb-1">Session Rate per Hour</p>
-                    <p className="font-medium text-slate-900">
-                      {(tutor as any).session_rate_per_hour 
-                        ? `₱${Number((tutor as any).session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}/hr`
-                        : 'N/A'}
-                    </p>
                   </div>
                   <Button onClick={() => handleViewDetails(tutor)} className="w-full">View Details</Button>
                 </div>
@@ -483,158 +469,243 @@ const TutorManagement: React.FC = () => {
             </div>
           }
         >
-          <div className="space-y-6">
+          <div className="space-y-6 sm:space-y-8">
             {/* Enhanced Header Section */}
-            <div className="bg-gradient-to-br from-sky-600 via-indigo-600 to-indigo-700 p-4 sm:p-6 rounded-xl text-white relative overflow-hidden">
-              <div className="absolute inset-0 opacity-10">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full -mr-16 -mt-16"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white rounded-full -ml-12 -mb-12"></div>
+            <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 p-6 sm:p-8 rounded-2xl text-white relative overflow-hidden shadow-2xl">
+              <div className="absolute inset-0 opacity-20">
+                <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+                <div className="absolute top-1/2 left-1/2 w-24 h-24 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 blur-xl"></div>
               </div>
-              <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                {selectedTutor.user?.profile_image_url && (
+              <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-5 sm:gap-6">
+                {selectedTutor.user?.profile_image_url ? (
                   <div className="flex-shrink-0">
-                    <div className="h-20 w-20 sm:h-24 sm:w-24 rounded-full ring-4 ring-white/30 shadow-2xl overflow-hidden bg-white/10 backdrop-blur-sm">
+                    <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-full ring-4 ring-white/40 shadow-2xl overflow-hidden bg-white/20 backdrop-blur-sm transform hover:scale-105 transition-transform duration-300">
                       <img src={getFileUrl(selectedTutor.user.profile_image_url)} alt="Tutor Profile" className="w-full h-full object-cover" style={{aspectRatio: '1/1'}} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-shrink-0">
+                    <div className="h-24 w-24 sm:h-28 sm:w-28 rounded-full ring-4 ring-white/40 shadow-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <User className="h-12 w-12 sm:h-14 sm:w-14 text-white/80" />
                     </div>
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-xl sm:text-2xl font-bold mb-1">{selectedTutor.user?.name}</h3>
-                  <div className="flex items-center gap-2 text-white/90">
-                    <Mail className="h-4 w-4 flex-shrink-0" />
-                    <p className="text-sm sm:text-base truncate">{selectedTutor.user?.email}</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold mb-2 drop-shadow-lg">{selectedTutor.user?.name}</h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-white/95">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      <p className="text-sm sm:text-base truncate">{selectedTutor.user?.email}</p>
+                    </div>
+                    {(selectedTutor as any).university?.name && (
+                      <div className="flex items-center gap-2">
+                        <School className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                        <p className="text-sm sm:text-base truncate">{(selectedTutor as any).university?.name}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Content grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 lg:gap-6">
               {/* Left Column */}
               <div className="space-y-4 sm:space-y-5">
                 {/* University & Course Card */}
-                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                    <div className="p-2 bg-gradient-to-br from-sky-100 to-sky-200 rounded-lg flex-shrink-0 shadow-md">
-                      <School className="h-5 w-5 sm:h-6 sm:w-6 text-sky-600" />
+                <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                  <div className="flex items-center gap-3 mb-3 sm:mb-4">
+                    <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                      <School className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">University & Course</h4>
+                    <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">University & Course</h4>
                   </div>
                   <div className="space-y-2.5 sm:space-y-3">
-                    <div className="bg-gradient-to-r from-sky-50 to-indigo-50 p-3 sm:p-4 rounded-lg border border-sky-200">
-                      <span className="text-xs sm:text-sm text-slate-600 font-medium block mb-1">University</span>
-                      <p className="text-slate-800 font-semibold text-sm sm:text-base">{(selectedTutor as any).university?.name || 'Not specified'}</p>
+                    <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-3.5 sm:p-4 rounded-xl border-2 border-primary-200/50 shadow-sm hover:shadow-md transition-shadow">
+                      <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide block mb-1.5">University</span>
+                      <p className="text-slate-800 font-bold text-sm sm:text-base">{(selectedTutor as any).university?.name || <span className="text-slate-400 italic">Not specified</span>}</p>
                     </div>
-                    <div className="bg-gradient-to-r from-indigo-50 to-sky-50 p-3 sm:p-4 rounded-lg border border-indigo-200">
-                      <span className="text-xs sm:text-sm text-slate-600 font-medium block mb-1">Course</span>
-                      <p className="text-slate-800 font-semibold text-sm sm:text-base">{(selectedTutor as any).course?.course_name || 'Not specified'}</p>
+                    <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-3.5 sm:p-4 rounded-xl border-2 border-primary-200/50 shadow-sm hover:shadow-md transition-shadow">
+                      <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide block mb-1.5">Course</span>
+                      <p className="text-slate-800 font-bold text-sm sm:text-base">{(selectedTutor as any).course?.course_name || <span className="text-slate-400 italic">Not specified</span>}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Bio Card */}
-                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                    <div className="p-2 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-lg flex-shrink-0 shadow-md">
-                      <User className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
+                <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                  <div className="flex items-center gap-3 mb-3 sm:mb-4">
+                    <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                      <User className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Bio</h4>
+                    <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Bio</h4>
                   </div>
-                  <p className="text-slate-700 bg-gradient-to-br from-slate-50 to-sky-50 p-3 sm:p-4 rounded-lg border border-slate-200 min-h-[80px] leading-relaxed text-sm sm:text-base">{selectedTutor.bio || 'No bio provided.'}</p>
+                  <div className="bg-gradient-to-br from-slate-50 via-primary-50/30 to-slate-50 p-3.5 sm:p-4 rounded-xl border-2 border-slate-200/50 shadow-sm min-h-[80px]">
+                    <p className="text-slate-700 leading-relaxed text-sm">{selectedTutor.bio || <span className="text-slate-400 italic">No bio provided.</span>}</p>
+                  </div>
                 </div>
 
                 {/* Expert Subjects Card */}
-                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                    <div className="p-2 bg-gradient-to-br from-sky-100 to-indigo-100 rounded-lg flex-shrink-0 shadow-md">
-                      <Book className="h-5 w-5 sm:h-6 sm:w-6 text-sky-600" />
+                <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                  <div className="flex items-center gap-3 mb-3 sm:mb-4">
+                    <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                      <Book className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Expert Subjects</h4>
+                    <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Expert Subjects</h4>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {(selectedTutor as any).subjects?.length ? (selectedTutor as any).subjects.map((ts: any) => (
-                      <span key={(ts as any).tutor_subject_id} className="px-3 py-1.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-800 rounded-lg text-xs sm:text-sm font-medium border border-sky-200 shadow-sm hover:shadow-md transition-shadow">
+                      <span key={(ts as any).tutor_subject_id} className="px-3 py-1.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg text-xs sm:text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 border border-primary-400/30">
                         {(ts as any).subject?.subject_name}
                       </span>
-                    )) : <span className="text-sm text-slate-500 italic">No subjects submitted.</span>}
+                    )) : <span className="text-xs sm:text-sm text-slate-400 italic bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">No subjects submitted.</span>}
                   </div>
+                </div>
+
+                {/* Availability Card */}
+                <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border-2 border-primary-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                  <div className="flex items-center gap-3 mb-3 sm:mb-4">
+                    <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                      <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                    </div>
+                    <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Availability</h4>
+                  </div>
+                  <ul className="grid grid-cols-1 gap-2.5">
+                    {(selectedTutor as any).availabilities?.length ? (() => {
+                      // Group availabilities by day_of_week
+                      const grouped = (selectedTutor as any).availabilities.reduce((acc: any, a: any) => {
+                        const day = (a as any).day_of_week;
+                        if (!acc[day]) {
+                          acc[day] = [];
+                        }
+                        acc[day].push(a);
+                        return acc;
+                      }, {} as Record<string, any[]>);
+                      
+                      return Object.entries(grouped).map(([day, slots]) => (
+                        <li key={day} className="bg-white p-3.5 sm:p-4 rounded-xl border-2 border-primary-200/50 hover:border-primary-400 hover:shadow-lg transition-all duration-200 shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <span className="font-bold text-slate-800 text-sm sm:text-base flex-shrink-0 min-w-[100px]">{day}</span>
+                            <div className="flex flex-wrap gap-2 flex-1 justify-end">
+                              {slots.map((slot: any) => (
+                                <span key={slot.availability_id} className="text-primary-700 font-semibold text-xs sm:text-sm bg-gradient-to-r from-primary-50 to-primary-100/50 px-2.5 py-1.5 rounded-lg border border-primary-200 whitespace-nowrap">
+                                  {slot.start_time} - {slot.end_time}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </li>
+                      ));
+                    })() : <li className="text-sm text-slate-400 italic bg-white p-3.5 sm:p-4 rounded-xl border-2 border-slate-200 text-center">No availability submitted.</li>}
+                  </ul>
                 </div>
               </div>
 
               {/* Right Column */}
               <div className="space-y-4 sm:space-y-5">
                 {/* Session Rate Card */}
-                <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50 rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border-2 border-emerald-200 hover:shadow-xl transition-shadow">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                    <div className="p-2 bg-gradient-to-br from-emerald-200 to-teal-200 rounded-lg flex-shrink-0 shadow-md">
-                      <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-700" />
+                <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border-2 border-primary-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                      <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Session Rate</h4>
+                    <h4 className="text-base sm:text-lg font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Session Rate</h4>
                   </div>
-                  <div className="bg-white p-4 rounded-lg border border-emerald-200 shadow-sm">
-                    <span className="text-xs sm:text-sm text-slate-600 font-medium block mb-2">Rate per hour</span>
-                    <p className="text-emerald-700 font-bold text-xl sm:text-2xl">
+                  <div className="bg-white p-3.5 sm:p-4 rounded-xl border-2 border-primary-200/50 shadow-lg">
+                    <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide block mb-2">Rate per hour</span>
+                    <p className="text-primary-700 font-bold text-lg sm:text-xl">
                       {(selectedTutor as any).session_rate_per_hour 
                         ? `₱${Number((selectedTutor as any).session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
-                        : 'Not specified'}
+                        : <span className="text-slate-400 italic text-sm">Not specified</span>}
                     </p>
                   </div>
                 </div>
 
-                {/* Submitted Documents Card */}
-                <div className="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                    <div className="p-2 bg-gradient-to-br from-sky-100 to-sky-200 rounded-lg flex-shrink-0 shadow-md">
-                      <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-sky-600" />
+                {/* GCash Information Card */}
+                <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border-2 border-primary-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                      <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Submitted Documents</h4>
+                    <h4 className="text-base sm:text-lg font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">GCash Payment</h4>
                   </div>
-                  <ul className="space-y-2">
+                  <div className="space-y-2.5 sm:space-y-3">
+                    {(selectedTutor as any).gcash_number && (
+                      <div className="bg-white p-3 rounded-xl border-2 border-primary-200/50 shadow-lg">
+                        <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide block mb-1.5">GCash Number</span>
+                        <p className="text-primary-700 font-bold text-sm sm:text-base">
+                          {(selectedTutor as any).gcash_number}
+                        </p>
+                      </div>
+                    )}
+                    {(selectedTutor as any).gcash_qr_url && (
+                      <div className="bg-white p-3 rounded-xl border-2 border-primary-200/50 shadow-lg">
+                        <span className="text-xs text-slate-500 font-semibold uppercase tracking-wide block mb-2">GCash QR Code</span>
+                        <div className="flex justify-center bg-gradient-to-br from-primary-50 to-primary-100/50 p-2 rounded-xl border border-primary-200/50">
+                          <img 
+                            src={getFileUrl((selectedTutor as any).gcash_qr_url)} 
+                            alt="GCash QR Code" 
+                            className="max-w-full h-auto rounded-xl border-2 border-primary-300 shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer"
+                            style={{ maxHeight: '180px' }}
+                            onClick={() => handleOpenDocument(getFileUrl((selectedTutor as any).gcash_qr_url), 'image/*')}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              const parent = (e.target as HTMLImageElement).parentElement;
+                              if (parent) {
+                                parent.innerHTML = '<p class="text-xs text-slate-400 italic">QR code image not available</p>';
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {!(selectedTutor as any).gcash_number && !(selectedTutor as any).gcash_qr_url && (
+                      <div className="bg-white p-3 rounded-xl border-2 border-primary-200/50 shadow-lg">
+                        <p className="text-xs text-slate-400 italic text-center">No GCash information provided.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Submitted Documents Card */}
+                <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                  <div className="flex items-center gap-3 mb-3 sm:mb-4">
+                    <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                      <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                    </div>
+                    <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Submitted Documents</h4>
+                  </div>
+                  <ul className="space-y-2.5">
                     {selectedTutor.documents?.length ? selectedTutor.documents.map(doc => (
-                      <li key={doc.document_id} className="flex items-center justify-between bg-gradient-to-r from-slate-50 to-sky-50 rounded-lg p-3 border border-slate-200 hover:border-sky-300 hover:shadow-md transition-all">
+                      <li key={doc.document_id} className="flex items-center justify-between bg-gradient-to-r from-slate-50 via-primary-50/50 to-slate-50 rounded-xl p-3 border-2 border-slate-200/50 hover:border-primary-300 hover:shadow-lg transition-all duration-200">
                         <div className="flex items-center min-w-0 flex-1">
-                          <FileText className="h-4 w-4 sm:h-5 sm:w-5 mr-2 sm:mr-3 text-sky-600 flex-shrink-0"/>
+                          <div className="p-1.5 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg mr-2.5 flex-shrink-0">
+                            <FileText className="h-4 w-4 text-primary-600"/>
+                          </div>
                           <button
                             type="button"
                             onClick={() => handleOpenDocument(getFileUrl(doc.file_url), (doc as any).file_type)}
-                            className="text-sky-700 hover:text-sky-900 hover:underline truncate text-left text-xs sm:text-sm font-medium"
+                            className="text-primary-700 hover:text-primary-900 hover:underline truncate text-left text-xs sm:text-sm font-semibold"
                             title="Open file"
                           >
                             {doc.file_name}
                           </button>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2.5">
                           <button
                             type="button"
                             onClick={() => handleOpenDocument(getFileUrl(doc.file_url), (doc as any).file_type)}
-                            className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-sky-100 text-sky-700 hover:bg-sky-200 rounded-md font-medium transition-colors"
+                            className="text-xs px-2.5 py-1.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200"
                           >
                             Open
                           </button>
-                          <a href={getFileUrl(doc.file_url)} download className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-md font-medium transition-colors">
+                          <a href={getFileUrl(doc.file_url)} download className="text-xs px-2.5 py-1.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200">
                             Download
                           </a>
                         </div>
                       </li>
-                    )) : <li className="text-sm text-slate-500 italic bg-slate-50 p-3 rounded-lg border border-slate-200">No documents uploaded.</li>}
-                  </ul>
-                </div>
-
-                {/* Availability Card */}
-                <div className="bg-gradient-to-br from-sky-50 via-indigo-50 to-sky-50 rounded-lg sm:rounded-xl p-4 sm:p-5 shadow-lg border-2 border-sky-200 hover:shadow-xl transition-shadow">
-                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-                    <div className="p-2 bg-gradient-to-br from-sky-200 to-indigo-200 rounded-lg flex-shrink-0 shadow-md">
-                      <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-sky-700" />
-                    </div>
-                    <h4 className="text-lg sm:text-xl font-bold text-slate-800">Availability</h4>
-                  </div>
-                  <ul className="grid grid-cols-1 gap-2">
-                    {(selectedTutor as any).availabilities?.length ? (selectedTutor as any).availabilities.map((a: any) => (
-                      <li key={(a as any).availability_id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-sky-200 hover:border-sky-300 hover:shadow-md transition-all">
-                        <span className="font-semibold text-slate-800 text-sm sm:text-base">{(a as any).day_of_week}</span>
-                        <span className="text-sky-700 font-medium text-sm sm:text-base">{(a as any).start_time} - {(a as any).end_time}</span>
-                      </li>
-                    )) : <li className="text-sm text-slate-500 italic bg-white p-3 rounded-lg border border-slate-200">No availability submitted.</li>}
+                    )) : <li className="text-xs sm:text-sm text-slate-400 italic bg-slate-50 p-3 rounded-xl border-2 border-slate-200 text-center">No documents uploaded.</li>}
                   </ul>
                 </div>
               </div>
@@ -677,72 +748,108 @@ const TutorManagement: React.FC = () => {
             }
           >
       
-          <div className="space-y-6 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 hover:scrollbar-thumb-slate-400 pr-2">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-semibold text-slate-800">{(selectedTutorSubject.tutor as any)?.user?.name}</h3>
-                <p className="text-sm text-slate-500">{(selectedTutorSubject.tutor as any)?.user?.email}</p>
+          <div className="space-y-5 sm:space-y-6">
+            {/* Enhanced Header */}
+            <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 p-5 sm:p-6 rounded-2xl text-white relative overflow-hidden shadow-2xl">
+              <div className="absolute inset-0 opacity-20">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white rounded-full -ml-12 -mb-12 blur-xl"></div>
+              </div>
+              <div className="relative">
+                <h3 className="text-xl sm:text-2xl font-bold mb-2 drop-shadow-lg">{(selectedTutorSubject.tutor as any)?.user?.name}</h3>
+                <div className="flex items-center gap-2 text-white/95">
+                  <Mail className="h-4 w-4 flex-shrink-0" />
+                  <p className="text-sm sm:text-base truncate">{(selectedTutorSubject.tutor as any)?.user?.email}</p>
+                </div>
               </div>
             </div>
 
             {/* Subject Expertise Details */}
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-semibold">Subject Expertise</h4>
-                <div className="mt-2">
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+            <div className="space-y-4 sm:space-y-5">
+              {/* Subject Expertise Card */}
+              <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                    <Book className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                  </div>
+                  <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Subject Expertise</h4>
+                </div>
+                <div className="mt-3">
+                  <span className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl text-sm sm:text-base font-semibold shadow-md border border-primary-400/30">
                     {(selectedTutorSubject.subject as any)?.subject_name}
                   </span>
                 </div>
               </div>
 
-              <div>
-                <h4 className="font-semibold">Application Date</h4>
-                <p className="text-gray-700 bg-gray-50 p-3 rounded-md mt-1">
-                  {new Date(selectedTutorSubject.created_at).toLocaleString()}
-                </p>
+              {/* Application Date Card */}
+              <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border-2 border-primary-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                    <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                  </div>
+                  <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Application Date</h4>
+                </div>
+                <div className="bg-white p-3.5 sm:p-4 rounded-xl border-2 border-primary-200/50 shadow-sm">
+                  <p className="text-slate-800 font-semibold text-sm sm:text-base">
+                    {new Date(selectedTutorSubject.created_at).toLocaleString()}
+                  </p>
+                </div>
               </div>
 
-              {/* Supporting Documents */}
-              <div>
-                <h4 className="font-semibold">Supporting Documents</h4>
-                <ul className="mt-2 space-y-2">
+              {/* Supporting Documents Card */}
+              <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                    <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                  </div>
+                  <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Supporting Documents</h4>
+                </div>
+                <ul className="mt-3 space-y-2.5">
                   {(selectedTutorSubject as any).documents?.length ? (selectedTutorSubject as any).documents.map((doc: any) => (
-                    <li key={doc.id} className="flex items-center justify-between bg-gray-50 rounded p-2">
-                      <div className="flex items-center min-w-0">
-                        <FileText className="h-5 w-5 mr-2 text-primary-600 flex-shrink-0"/>
+                    <li key={doc.id} className="flex items-center justify-between bg-gradient-to-r from-slate-50 via-primary-50/50 to-slate-50 rounded-xl p-3 border-2 border-slate-200/50 hover:border-primary-300 hover:shadow-lg transition-all duration-200">
+                      <div className="flex items-center min-w-0 flex-1">
+                        <div className="p-1.5 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg mr-2.5 flex-shrink-0">
+                          <FileText className="h-4 w-4 text-primary-600"/>
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
-                          className="text-primary-600 hover:underline truncate text-left"
+                          className="text-primary-700 hover:text-primary-900 hover:underline truncate text-left text-xs sm:text-sm font-semibold"
                           title="Open file"
                         >
                           {doc.file_name}
                         </button>
                       </div>
-                      <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                      <div className="flex items-center gap-1.5 flex-shrink-0 ml-2.5">
                         <button
                           type="button"
                           onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
-                          className="text-sm text-slate-600 hover:text-slate-900"
+                          className="text-xs px-2.5 py-1.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200"
                         >
                           Open
                         </button>
-                        <a href={getFileUrl(doc.file_url)} download className="text-sm text-slate-600 hover:text-slate-900">Download</a>
+                        <a href={getFileUrl(doc.file_url)} download className="text-xs px-2.5 py-1.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-200">
+                          Download
+                        </a>
                       </div>
                     </li>
-                  )) : <li className="text-sm text-gray-500">No supporting documents uploaded.</li>}
+                  )) : <li className="text-xs sm:text-sm text-slate-400 italic bg-slate-50 p-3 rounded-xl border-2 border-slate-200 text-center">No supporting documents uploaded.</li>}
                 </ul>
               </div>
 
-              <div>
-                <h4 className="font-semibold">Admin Notes</h4>
+              {/* Admin Notes Card */}
+              <div className="bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-xl border border-slate-200/50 hover:shadow-2xl hover:border-primary-300 transition-all duration-300">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex-shrink-0 shadow-lg">
+                    <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                  </div>
+                  <h4 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Admin Notes</h4>
+                </div>
                 <textarea
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
                   placeholder="Add notes for this subject expertise..."
-                  className="w-full p-3 border border-gray-300 rounded-md mt-1 min-h-[100px] resize-none"
+                  className="w-full p-3.5 border-2 border-slate-200 rounded-xl mt-3 min-h-[100px] resize-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all bg-white text-sm"
                 />
               </div>
             </div>

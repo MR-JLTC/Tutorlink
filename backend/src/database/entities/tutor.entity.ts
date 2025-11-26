@@ -56,6 +56,13 @@ export class Tutor {
   })
   status: 'pending' | 'approved' | 'rejected';
 
+  @Column({
+    type: 'enum',
+    enum: ['online', 'offline'],
+    nullable: true,
+  })
+  activity_status?: 'online' | 'offline';
+
   @Column({ name: 'admin_notes', type: 'text', nullable: true })
   admin_notes: string;
 

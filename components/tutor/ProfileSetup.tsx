@@ -4,7 +4,7 @@ import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { useAuth } from '../../hooks/useAuth';
 import { useVerification } from '../../context/VerificationContext';
-import { User, Camera, CreditCard, Star, Edit, Save, X, CheckCircle, Clock } from 'lucide-react';
+import { User, Camera, CreditCard, Star, Edit, Save, X, CheckCircle, Clock, Mail } from 'lucide-react';
 import { updateRoleUser } from '../../utils/authRole';
 
 interface TutorProfile {
@@ -12,6 +12,7 @@ interface TutorProfile {
   profile_photo: string;
   gcash_number: string;
   gcash_qr: string;
+  session_rate_per_hour: number | null;
   subjects: string[];
   rating: number;
   total_reviews: number;
@@ -26,6 +27,7 @@ const ProfileSetup: React.FC = () => {
     profile_photo: '',
     gcash_number: '',
     gcash_qr: '',
+    session_rate_per_hour: null,
     subjects: [],
     rating: 0,
     total_reviews: 0
@@ -101,7 +103,7 @@ const ProfileSetup: React.FC = () => {
     }
   };
 
-  const handleInputChange = (field: keyof TutorProfile, value: string) => {
+  const handleInputChange = (field: keyof TutorProfile, value: string | number | null) => {
     setProfile(prev => ({ ...prev, [field]: value }));
   };
 
@@ -198,11 +200,13 @@ const ProfileSetup: React.FC = () => {
     try {
       console.log('Saving profile with tutorId:', id, 'user:', user);
       // Update basic profile info with authoritative endpoint first
+      const sessionRateToSave = profile.session_rate_per_hour != null ? Number(profile.session_rate_per_hour) : null;
       let updatedBasics = false;
       try {
         await apiClient.put(`/tutors/${id}`, {
           bio: bioToSave,
-          gcash_number: gcashToSave
+          gcash_number: gcashToSave,
+          session_rate_per_hour: sessionRateToSave
         });
         updatedBasics = true;
       } catch (ePrimary: any) {
@@ -211,7 +215,8 @@ const ProfileSetup: React.FC = () => {
         try {
           await apiClient.put(`/tutors/${id}/profile`, {
             bio: bioToSave,
-            gcash_number: gcashToSave
+            gcash_number: gcashToSave,
+            session_rate_per_hour: sessionRateToSave
           });
           updatedBasics = true;
         } catch (eFallback: any) {
@@ -317,30 +322,35 @@ const ProfileSetup: React.FC = () => {
       <Star
         key={i}
         className={`h-4 w-4 ${
-          i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'
+          i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-slate-300'
         }`}
       />
     ));
   };
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-5">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
+    <div className="space-y-4 sm:space-y-5 md:space-y-6 pb-6 sm:pb-8 md:pb-10">
+      {/* Enhanced Header */}
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 text-white shadow-2xl relative overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+        </div>
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1">Profile Setup</h1>
-            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Manage your public profile and payment information</p>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 drop-shadow-lg">Profile Setup</h1>
+            <p className="text-xs sm:text-sm md:text-base text-white/90 leading-tight">Manage your public profile and payment information</p>
           </div>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 md:gap-3 bg-white/95 backdrop-blur-sm rounded-lg sm:rounded-xl p-2 shadow-md w-full sm:w-auto">
-            <div className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs md:text-sm font-semibold text-slate-800 border flex items-center justify-center space-x-1.5 sm:space-x-2 ${applicationStatus === 'approved' ? 'border-green-300' : 'border-red-300'}`}>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 bg-white/95 backdrop-blur-sm rounded-xl p-3 shadow-xl w-full sm:w-auto">
+            <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-semibold text-slate-800 border-2 flex items-center justify-center space-x-2 ${applicationStatus === 'approved' ? 'border-green-400 bg-green-50' : 'border-red-400 bg-red-50'}`}>
               {applicationStatus === 'approved' ? (
                 <>
-                  <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
+                  <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
                   <span className="whitespace-nowrap">Approved</span>
                 </>
               ) : (
                 <>
-                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-600 flex-shrink-0" />
+                  <X className="h-4 w-4 text-red-600 flex-shrink-0" />
                   <span className="whitespace-nowrap">Not Approved</span>
                 </>
               )}
@@ -348,16 +358,16 @@ const ProfileSetup: React.FC = () => {
             <div className="flex space-x-2">
               {isEditing ? (
                 <>
-                  <Button variant="secondary" onClick={() => setIsEditing(false)} className="!px-2.5 sm:!px-3 !py-1.5 sm:!py-2 text-[10px] sm:text-xs md:text-sm flex-1 sm:flex-none">
+                  <Button variant="secondary" onClick={() => setIsEditing(false)} className="!px-3 sm:!px-4 !py-2 text-xs sm:text-sm flex-1 sm:flex-none">
                     Cancel
                   </Button>
-                  <Button onClick={saveProfile} disabled={loading} className="!px-2.5 sm:!px-3 !py-1.5 sm:!py-2 bg-blue-600 text-white hover:bg-blue-700 shadow-sm text-[10px] sm:text-xs md:text-sm flex-1 sm:flex-none">
+                  <Button onClick={saveProfile} disabled={loading} className="!px-3 sm:!px-4 !py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 shadow-lg hover:shadow-xl text-xs sm:text-sm flex-1 sm:flex-none">
                     {loading ? 'Saving...' : 'Save Changes'}
                   </Button>
                 </>
               ) : (
-                <Button onClick={() => setIsEditing(true)} className="!px-2.5 sm:!px-3 !py-1.5 sm:!py-2 bg-blue-600 text-white hover:bg-blue-700 shadow-sm flex items-center justify-center space-x-1.5 sm:space-x-2 text-[10px] sm:text-xs md:text-sm w-full sm:w-auto">
-                  <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+                <Button onClick={() => setIsEditing(true)} className="!px-3 sm:!px-4 !py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 text-xs sm:text-sm w-full sm:w-auto">
+                  <Edit className="h-4 w-4 flex-shrink-0" />
                   <span>Edit Profile</span>
                 </Button>
               )}
@@ -367,13 +377,13 @@ const ProfileSetup: React.FC = () => {
       </div>
 
       {/* Profile Overview */}
-      <Card className="p-4 sm:p-5">
-        <div className="mb-4 sm:mb-5">
+      <Card className="p-5 sm:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
+        <div className="mb-5 sm:mb-6">
           {/* Profile Image */}
-          <div className="flex justify-center mb-3 sm:mb-4">
+          <div className="flex justify-center mb-4 sm:mb-5">
             {profileImage ? (
               <div className="relative">
-                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden ring-4 ring-primary-200 shadow-2xl bg-slate-100 transform hover:scale-105 transition-transform duration-300">
                   <img
                     src={URL.createObjectURL(profileImage)}
                     alt="Profile Preview"
@@ -382,13 +392,13 @@ const ProfileSetup: React.FC = () => {
                   />
                 </div>
                 {applicationStatus === 'approved' && (
-                  <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
-                    ✓
+                  <div className="absolute -top-1 -right-1 bg-gradient-to-br from-green-500 to-emerald-600 text-white text-xs px-2 py-1 rounded-full border-2 border-white shadow-lg">
+                    <CheckCircle className="h-3 w-3" />
                   </div>
                 )}
                 {isEditing && (
-                  <div className="absolute bottom-0 right-0 flex space-x-1">
-                    <label className="bg-blue-600 text-white rounded-full p-2 cursor-pointer hover:bg-blue-700 transition-colors">
+                  <div className="absolute bottom-0 right-0 flex space-x-1.5">
+                    <label className="bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-full p-2.5 cursor-pointer hover:from-primary-700 hover:to-primary-800 transition-all shadow-lg hover:shadow-xl">
                       <Camera className="h-4 w-4" />
                       <input
                         type="file"
@@ -400,7 +410,7 @@ const ProfileSetup: React.FC = () => {
                     {profileImage && (
                       <button
                         onClick={() => setProfileImage(null)}
-                        className="bg-red-600 text-white rounded-full p-2 hover:bg-red-700 transition-colors"
+                        className="bg-gradient-to-br from-red-600 to-red-700 text-white rounded-full p-2.5 hover:from-red-700 hover:to-red-800 transition-all shadow-lg hover:shadow-xl"
                         title="Remove selected image"
                       >
                         <X className="h-4 w-4" />
@@ -411,7 +421,7 @@ const ProfileSetup: React.FC = () => {
               </div>
             ) : profile.profile_photo || user?.profile_image_url ? (
               <div className="relative">
-                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-slate-100">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden ring-4 ring-primary-200 shadow-2xl bg-slate-100 transform hover:scale-105 transition-transform duration-300">
                   <img
                     src={getFileUrl(profile.profile_photo || (user as any)?.profile_image_url || '')}
                     alt="Profile"
@@ -429,17 +439,17 @@ const ProfileSetup: React.FC = () => {
                   />
                 </div>
                 {applicationStatus === 'approved' ? (
-                  <div className="absolute -top-1 -right-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
-                    ✓
+                  <div className="absolute -top-1 -right-1 bg-gradient-to-br from-green-500 to-emerald-600 text-white text-xs px-2 py-1 rounded-full border-2 border-white shadow-lg">
+                    <CheckCircle className="h-3 w-3" />
                   </div>
                 ) : (
-                  <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full border-2 border-white">
-                    <X className="h-4 w-4" />
+                  <div className="absolute -top-1 -right-1 bg-gradient-to-br from-red-500 to-red-600 text-white text-xs px-2 py-1 rounded-full border-2 border-white shadow-lg">
+                    <X className="h-3 w-3" />
                   </div>
                 )}
                 {isEditing && (
-                  <div className="absolute bottom-0 right-0 flex space-x-1">
-                    <label className="bg-blue-600 text-white rounded-full p-2 cursor-pointer hover:bg-blue-700 transition-colors">
+                  <div className="absolute bottom-0 right-0 flex space-x-1.5">
+                    <label className="bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-full p-2.5 cursor-pointer hover:from-primary-700 hover:to-primary-800 transition-all shadow-lg hover:shadow-xl">
                       <Camera className="h-4 w-4" />
                       <input
                         type="file"
@@ -451,7 +461,7 @@ const ProfileSetup: React.FC = () => {
                     {profileImage && (
                       <button
                         onClick={() => setProfileImage(null)}
-                        className="bg-red-600 text-white rounded-full p-2 hover:bg-red-700 transition-colors"
+                        className="bg-gradient-to-br from-red-600 to-red-700 text-white rounded-full p-2.5 hover:from-red-700 hover:to-red-800 transition-all shadow-lg hover:shadow-xl"
                         title="Remove selected image"
                       >
                         <X className="h-4 w-4" />
@@ -461,11 +471,11 @@ const ProfileSetup: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="relative w-24 h-24 rounded-full bg-slate-200 flex items-center justify-center border-4 border-white shadow-lg">
-                <User className="h-12 w-12 text-slate-400" />
+              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center ring-4 ring-primary-200 shadow-2xl">
+                <User className="h-14 w-14 sm:h-16 sm:w-16 text-slate-500" />
                 {isEditing && (
-                  <div className="absolute bottom-0 right-0 flex space-x-1">
-                    <label className="bg-blue-600 text-white rounded-full p-2 cursor-pointer hover:bg-blue-700 transition-colors">
+                  <div className="absolute bottom-0 right-0 flex space-x-1.5">
+                    <label className="bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-full p-2.5 cursor-pointer hover:from-primary-700 hover:to-primary-800 transition-all shadow-lg hover:shadow-xl">
                       <Camera className="h-4 w-4" />
                       <input
                         type="file"
@@ -482,56 +492,62 @@ const ProfileSetup: React.FC = () => {
           
           {/* Tutor Name and Email - Below Profile Image */}
           <div className="text-center">
-            <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-1">
+            <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-1.5">
               {user?.name || 'Tutor'}
             </h3>
-            <p className="text-xs sm:text-sm text-slate-600 break-words">
+            <p className="text-sm sm:text-base text-slate-600 break-words flex items-center justify-center gap-1.5">
+              <Mail className="h-4 w-4 text-primary-600" />
               {user?.email || ''}
             </p>
           </div>
         </div>
         
         <div className="flex-1 min-w-0">
-          <div className="flex items-center space-x-4 mb-2">
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Your Profile</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <User className="h-5 w-5 text-white" />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Your Profile</h2>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-            <div className="bg-green-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-green-800">Approved Subjects</p>
-              <p className="text-lg font-bold text-green-600">{profile.subjects.length}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Approved Subjects</p>
+              <p className="text-2xl sm:text-3xl font-bold text-primary-700">{profile.subjects.length}</p>
             </div>
-            <div className="bg-green-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-green-800">Rating</p>
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-1">
-                {renderStars(profile.rating)}
+            <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Rating</p>
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1">
+                  {renderStars(profile.rating)}
+                </div>
+                <span className="text-base sm:text-lg font-bold text-primary-700">
+                  {profile.total_reviews > 0 ? profile.rating.toFixed(1) : 'No ratings yet'}
+                </span>
               </div>
-              <span className="text-sm text-slate-600">
-                {profile.total_reviews > 0 ? profile.rating.toFixed(1) : 'No ratings yet'}
-              </span>
             </div>
-            </div>
-            <div className="bg-purple-50 p-3 rounded-lg">
-              <p className="text-sm font-medium text-purple-800">Reviews</p>
-              <p className="text-lg font-bold text-purple-600">{profile.total_reviews}</p>
+            <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Reviews</p>
+              <p className="text-2xl sm:text-3xl font-bold text-primary-700">{profile.total_reviews}</p>
             </div>
           </div>
         </div>
       </Card>
 
       {/* Bio Section */}
-      <Card className="p-4 sm:p-5">
-        <h2 className="text-lg sm:text-xl font-semibold mb-3 flex items-center">
-          <User className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-blue-600 flex-shrink-0" />
-          <span>Bio & Description</span>
-        </h2>
+      <Card className="p-5 sm:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+            <User className="h-5 w-5 text-white" />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Bio & Description</h2>
+        </div>
         
         {isEditing ? (
           <>
             <textarea
-              className="w-full border-2 border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
-              rows={4}
+              className="w-full border-2 border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white shadow-sm transition-all"
+              rows={5}
               placeholder="Tell students about your teaching experience, specialties, and approach..."
               value={profile.bio}
               onChange={(e) => {
@@ -540,73 +556,119 @@ const ProfileSetup: React.FC = () => {
               }}
             />
             {profile.bio && /[^A-Za-z\s]/.test(profile.bio) && (
-              <p className="text-xs text-red-600 mt-1">Bio can contain letters and spaces only.</p>
+              <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+                <X className="h-3 w-3" />
+                Bio can contain letters and spaces only.
+              </p>
             )}
           </>
         ) : (
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+          <div className="bg-gradient-to-br from-slate-50 via-primary-50/30 to-slate-50 p-5 rounded-xl border-2 border-slate-200/50 shadow-sm min-h-[120px]">
             {profile.bio ? (
-              <p className="text-slate-700 whitespace-pre-wrap">{profile.bio}</p>
+              <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{profile.bio}</p>
             ) : (
-              <p className="text-slate-500 italic">No bio added yet. Click "Edit Profile" to add one.</p>
+              <p className="text-slate-500 italic text-center py-4">No bio added yet. Click "Edit Profile" to add one.</p>
             )}
           </div>
         )}
       </Card>
 
       {/* Subjects Section */}
-      <Card className="p-4 sm:p-5">
-        <h2 className="text-lg sm:text-xl font-semibold mb-3 flex items-center">
-          <Star className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-blue-600 flex-shrink-0" />
-          <span>Approved Subjects of Expertise</span>
-        </h2>
-        <div className="flex flex-wrap gap-2">
+      <Card className="p-5 sm:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+            <Star className="h-5 w-5 text-white" />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Approved Subjects of Expertise</h2>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
           {profile.subjects.map((subject, index) => (
             <span
               key={index}
-              className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center space-x-1"
+              className="px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 border border-primary-400/30 flex items-center space-x-1.5"
             >
-              <CheckCircle className="h-3 w-3" />
+              <CheckCircle className="h-4 w-4" />
               <span>{subject}</span>
             </span>
           ))}
           {profile.subjects.length === 0 && (
-            <div className="w-full text-center py-4">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <Clock className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
-                <p className="text-yellow-800 font-medium">No approved subjects yet</p>
-                <p className="text-sm text-yellow-700 mt-1">
+            <div className="w-full text-center py-6">
+              <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-200 rounded-xl p-6 shadow-lg">
+                <Clock className="h-10 w-10 text-yellow-600 mx-auto mb-3" />
+                <p className="text-yellow-800 font-semibold text-base mb-1">No approved subjects yet</p>
+                <p className="text-sm text-yellow-700">
                   Your subject expertise applications are being reviewed by our admin team.
                 </p>
               </div>
             </div>
           )}
         </div>
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>Note:</strong> Only subjects approved by our admin team will appear here. 
-            To add new subjects or check the status of your applications, go to the Application & Verification section.
+        <div className="mt-5 p-4 bg-gradient-to-br from-primary-50 to-primary-100/50 border-2 border-primary-200/50 rounded-xl shadow-sm">
+          <p className="text-sm text-primary-800 flex items-start gap-2">
+            <span className="font-bold">Note:</span>
+            <span>Only subjects approved by our admin team will appear here. To add new subjects or check the status of your applications, go to the Application & Verification section.</span>
           </p>
         </div>
       </Card>
 
       {/* Payment Information */}
-      <Card className="p-4 sm:p-5">
-        <h2 className="text-lg sm:text-xl font-semibold mb-3 flex items-center">
-          <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-green-600 flex-shrink-0" />
-          <span>Payment Information</span>
-        </h2>
+      <Card className="p-5 sm:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+            <CreditCard className="h-5 w-5 text-white" />
+          </div>
+          <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Payment Information</h2>
+        </div>
         
-        <div className="space-y-3 sm:space-y-4">
+        <div className="space-y-4 sm:space-y-5">
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wide">
+              Session Rate per Hour
+            </label>
+            {isEditing ? (
+              <>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary-600 font-bold text-lg">₱</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-full border-2 border-slate-300 rounded-xl pl-10 pr-4 py-3 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white shadow-sm transition-all"
+                    placeholder="0.00"
+                    value={profile.session_rate_per_hour ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? null : parseFloat(e.target.value);
+                      handleInputChange('session_rate_per_hour', value);
+                    }}
+                  />
+                </div>
+                {profile.session_rate_per_hour != null && (profile.session_rate_per_hour < 0 || isNaN(profile.session_rate_per_hour)) && (
+                  <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+                    <X className="h-3 w-3" />
+                    Session rate must be a positive number.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 rounded-xl border-2 border-primary-200/50 shadow-sm">
+                <p className="text-primary-700 font-bold text-lg sm:text-xl">
+                  {profile.session_rate_per_hour != null 
+                    ? `₱${Number(profile.session_rate_per_hour).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : <span className="text-slate-500 italic font-normal">No session rate set yet</span>}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wide">
               GCash Number
             </label>
             {isEditing ? (
               <>
                 <input
                   type="text"
-                  className="w-full border-2 border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
+                  className="w-full border-2 border-slate-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white shadow-sm transition-all"
                   placeholder="09XX XXX XXXX"
                   value={profile.gcash_number}
                   onChange={(e) => {
@@ -617,61 +679,68 @@ const ProfileSetup: React.FC = () => {
                   }}
                 />
                 {profile.gcash_number && (!/^09\d{9}$/.test(profile.gcash_number) || profile.gcash_number.length !== 11) && (
-                  <p className="text-xs text-red-600 mt-1">GCash number must be 11 digits, start with 09.</p>
+                  <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+                    <X className="h-3 w-3" />
+                    GCash number must be 11 digits, start with 09.
+                  </p>
                 )}
               </>
             ) : (
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <p className="text-slate-700">
-                  {profile.gcash_number || 'No GCash number added yet'}
+              <div className="bg-gradient-to-br from-slate-50 via-primary-50/30 to-slate-50 p-4 rounded-xl border-2 border-slate-200/50 shadow-sm">
+                <p className="text-slate-700 font-semibold">
+                  {profile.gcash_number || <span className="text-slate-500 italic font-normal">No GCash number added yet</span>}
                 </p>
               </div>
             )}
           </div>
           
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5">
+            <label className="block text-sm font-semibold text-slate-700 mb-2 uppercase tracking-wide">
               GCash QR Code
             </label>
             {isEditing ? (
               <div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleGcashQRChange}
-                    className="flex-1 border-2 border-slate-300 rounded-lg px-3 py-2 bg-white shadow-sm text-xs sm:text-sm"
+                    className="flex-1 border-2 border-slate-300 rounded-xl px-4 py-3 bg-white shadow-sm text-sm transition-all"
                   />
                   {gcashQR && (
                     <button
                       onClick={() => setGcashQR(null)}
-                      className="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center"
+                      className="bg-gradient-to-br from-red-600 to-red-700 text-white px-4 py-3 rounded-xl hover:from-red-700 hover:to-red-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                       title="Remove selected QR code"
                     >
                       <X className="h-4 w-4" />
+                      <span className="text-sm">Remove</span>
                     </button>
                   )}
                 </div>
                 {gcashQR && (
-                  <p className="text-xs sm:text-sm text-slate-600 mt-1">Selected: {gcashQR.name}</p>
+                  <p className="text-sm text-slate-600 mt-2 flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    Selected: {gcashQR.name}
+                  </p>
                 )}
               </div>
             ) : (
-              <div className="bg-slate-50 p-3 sm:p-4 rounded-lg border border-slate-200 flex justify-center sm:justify-start">
+              <div className="bg-gradient-to-br from-slate-50 via-primary-50/30 to-slate-50 p-5 rounded-xl border-2 border-slate-200/50 shadow-sm flex justify-center">
                 {gcashQR ? (
                   <img
                     src={URL.createObjectURL(gcashQR)}
                     alt="GCash QR Preview"
-                    className="w-24 h-24 sm:w-32 sm:h-32 object-contain border border-slate-200 rounded bg-white"
+                    className="w-32 h-32 sm:w-40 sm:h-40 object-contain border-2 border-primary-200 rounded-xl bg-white shadow-lg"
                   />
                 ) : profile.gcash_qr ? (
                   <img
                     src={getFileUrl(profile.gcash_qr)}
                     alt="GCash QR Code"
-                    className="w-24 h-24 sm:w-32 sm:h-32 object-contain border border-slate-200 rounded bg-white"
+                    className="w-32 h-32 sm:w-40 sm:h-40 object-contain border-2 border-primary-200 rounded-xl bg-white shadow-lg hover:shadow-xl transition-all"
                   />
                 ) : (
-                  <p className="text-xs sm:text-sm text-slate-500 italic">No GCash QR code uploaded yet</p>
+                  <p className="text-sm text-slate-500 italic py-4">No GCash QR code uploaded yet</p>
                 )}
               </div>
             )}
@@ -681,18 +750,23 @@ const ProfileSetup: React.FC = () => {
 
       {/* Recent Reviews */}
       {profile.total_reviews > 0 && (
-        <Card className="p-4 sm:p-6">
-          <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Student Feedback</h2>
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-2 mb-2">
-              <div className="flex items-center space-x-1">
+        <Card className="p-5 sm:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <Star className="h-5 w-5 text-white" />
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Student Feedback</h2>
+          </div>
+          <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 border-2 border-primary-200/50 rounded-xl p-5 shadow-lg">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
+              <div className="flex items-center space-x-1.5">
                 {renderStars(profile.rating)}
               </div>
-              <span className="text-sm sm:text-base font-medium text-yellow-800">
+              <span className="text-base sm:text-lg font-bold text-primary-700">
                 {profile.rating.toFixed(1)} out of 5.0
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-yellow-700">
+            <p className="text-sm text-primary-800">
               Based on {profile.total_reviews} student review{profile.total_reviews !== 1 ? 's' : ''}
             </p>
           </div>

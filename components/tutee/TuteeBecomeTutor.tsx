@@ -1,8 +1,18 @@
 import React from 'react';
 import { GraduationCap } from 'lucide-react';
 import TutorRegistrationPage from '../Tutor_TuteePages/TutorRegistrationPage';
+import { useAuth } from '../../context/AuthContext';
 
 const TuteeBecomeTutor: React.FC = () => {
+  const { user } = useAuth();
+  
+  // Extract tutee data from user profile
+  const tuteeEmail = user?.email || '';
+  const tuteeFullName = user?.name || '';
+  const tuteeCourseId = (user as any)?.course_id || '';
+  const tuteeYearLevel = (user as any)?.year_level ? String((user as any).year_level) : '';
+  const tuteeUniversityId = (user as any)?.university_id || '';
+
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
@@ -17,7 +27,17 @@ const TuteeBecomeTutor: React.FC = () => {
 
       {/* Reuse the full Tutor Registration experience inside the tutee dashboard */}
       <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-slate-200 -mx-2 sm:-mx-3 md:mx-0 overflow-hidden">
-        <TutorRegistrationPage />
+        {/* <TutorRegistrationPage 
+          hideEmailVerification={true}
+          hideFullName={true}
+          hideCourse={true}
+          hideYearLevel={true}
+          prefilledEmail={tuteeEmail}
+          prefilledFullName={tuteeFullName}
+          prefilledCourseId={tuteeCourseId}
+          prefilledYearLevel={tuteeYearLevel}
+          prefilledUniversityId={tuteeUniversityId}
+        /> */}
       </div>
     </div>
   );

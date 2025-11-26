@@ -822,7 +822,7 @@ export class TutorsService {
     // Always return the student's booking requests; frontend filters by status
     const requests = await this.bookingRequestRepository.find({
       where: { student: { user_id: studentUserId } as any },
-      relations: ['tutor', 'tutor.user'],
+      relations: ['tutor', 'tutor.user', 'payments'],
       order: { created_at: 'DESC' }
     });
     // Debug: log statuses returned so we can trace why UI shows Leave Feedback first
@@ -932,6 +932,27 @@ export class TutorsService {
     
     console.log('Found tutor profile for user:', user.tutor_profile.tutor_id);
     return user.tutor_profile.tutor_id;
+  }
+
+  async updateOnlineStatus(userId: number, status: 'online' | 'offline'): Promise<void> {
+    try {
+      const tutor = await this.tutorsRepository.findOne({
+        where: { user: { user_id: userId } },
+        relations: ['user']
+      });
+      
+      if (!tutor) {
+        console.warn(`Tutor not found for user_id: ${userId}`);
+        return; // Don't throw error, just log warning
+      }
+      
+      tutor.activity_status = status;
+      await this.tutorsRepository.save(tutor);
+      console.log(`Tutor ${tutor.tutor_id} (user_id: ${userId}) online status updated to: ${status}`);
+    } catch (error) {
+      console.error(`Failed to update online status for user_id ${userId}:`, error);
+      throw error;
+    }
   }
 
   async getTutorProfile(userId: number) {

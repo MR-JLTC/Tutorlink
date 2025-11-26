@@ -347,14 +347,14 @@ const SessionHandlingContent: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'accepted': return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'accepted': return 'text-primary-600 bg-primary-50 border-primary-200';
       case 'declined': return 'text-red-600 bg-red-50 border-red-200';
       case 'awaiting_payment': return 'text-orange-600 bg-orange-50 border-orange-200';
-  case 'payment_approved': return 'text-blue-700 bg-blue-50 border-blue-200';
+  case 'payment_approved': return 'text-primary-700 bg-primary-50 border-primary-200';
   case 'confirmed': return 'text-green-600 bg-green-50 border-green-200';
       case 'completed': return 'text-purple-600 bg-purple-50 border-purple-200';
-      case 'cancelled': return 'text-gray-600 bg-gray-50 border-gray-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      case 'cancelled': return 'text-slate-600 bg-slate-50 border-slate-200';
+      default: return 'text-slate-600 bg-slate-50 border-slate-200';
     }
   };
 
@@ -478,54 +478,58 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
   };
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-6">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6 pb-8 sm:pb-10 md:pb-12 px-2 sm:px-3 md:px-0">
       <ToastContainer aria-label="Notification messages" />
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+        </div>
+        <div className="relative flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-2.5 md:gap-3">
-              <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 drop-shadow-lg flex items-center gap-2 sm:gap-3">
+              <MessageSquare className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 flex-shrink-0" />
               <span className="truncate">Session Handling</span>
             </h1>
-            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Manage booking requests and payment confirmations</p>
+            <p className="text-xs sm:text-sm md:text-base text-white/90 leading-tight">Manage booking requests and payment confirmations</p>
           </div>
         </div>
       </div>
 
   {/* Stats Cards */}
-  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3 md:gap-4">
-        <Card className="p-3 sm:p-4 md:p-5 shadow -mx-2 sm:-mx-3 md:mx-0">
+  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center">
-            <div className="p-1.5 sm:p-2 md:p-2.5 bg-blue-100 rounded-lg mr-2 sm:mr-3 flex-shrink-0">
-              <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-blue-600" />
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+              <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Total Requests</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">{stats.total}</p>
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Total Requests</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700">{stats.total}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-3 sm:p-4 md:p-5 shadow -mx-2 sm:-mx-3 md:mx-0">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center">
-            <div className="p-1.5 sm:p-2 md:p-2.5 bg-yellow-100 rounded-lg mr-2 sm:mr-3 flex-shrink-0">
-              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-yellow-600" />
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+              <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Pending</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">{stats.pending}</p>
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Pending</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700">{stats.pending}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-3 sm:p-4 md:p-5 shadow -mx-2 sm:-mx-3 md:mx-0">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center">
-            <div className="p-1.5 sm:p-2 md:p-2.5 bg-orange-100 rounded-lg mr-2 sm:mr-3 flex-shrink-0">
-              <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-orange-600" />
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+              <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Awaiting Payment</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">{stats.awaiting_payment}</p>
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Awaiting Payment</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700">{stats.awaiting_payment}</p>
             </div>
           </div>
         </Card>
@@ -534,8 +538,8 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
       </div>
 
       {/* Filter Tabs */}
-      <Card className="p-2.5 sm:p-3 md:p-4 -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex flex-wrap gap-1 sm:gap-1.5">
+      <Card className="p-3 sm:p-4 md:p-5 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50">
+        <div className="flex flex-wrap gap-2">
           {[
             { key: 'all', label: 'All Requests' },
             { key: 'pending', label: 'Pending' },
@@ -546,10 +550,10 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key as any)}
-              className={`px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 rounded-lg text-[10px] sm:text-xs md:text-sm font-medium transition-colors touch-manipulation ${
+              className={`px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-md hover:shadow-lg touch-manipulation ${
                 filter === tab.key
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                  : 'text-slate-600 hover:text-slate-800 bg-white border-2 border-slate-200 hover:border-primary-300'
               }`}
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
@@ -572,9 +576,9 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
       </Card>
 
       {/* Booking Requests */}
-      <div className="space-y-3 sm:space-y-4">
+      <div className="space-y-3 sm:space-y-4 pb-4">
         {filteredRequests.length === 0 ? (
-          <Card className="p-6 sm:p-8 text-center -mx-2 sm:-mx-3 md:mx-0">
+          <Card className="p-6 sm:p-8 text-center">
             <MessageSquare className="h-10 w-10 sm:h-12 sm:w-12 text-slate-400 mx-auto mb-3 sm:mb-4" />
             <h3 className="text-base sm:text-lg font-medium text-slate-900 mb-1">No booking requests</h3>
             <p className="text-xs sm:text-sm md:text-base text-slate-600">
@@ -588,26 +592,26 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
           filteredRequests.map(request => {
             const statusColors: Record<string, string> = {
               'pending': 'bg-gradient-to-r from-yellow-500 to-amber-500',
-              'accepted': 'bg-gradient-to-r from-blue-500 to-indigo-500',
+              'accepted': 'bg-gradient-to-r from-primary-500 to-primary-700',
               'confirmed': 'bg-gradient-to-r from-green-500 to-emerald-500',
               'awaiting_payment': 'bg-gradient-to-r from-orange-500 to-amber-500',
-              'upcoming': 'bg-gradient-to-r from-blue-500 to-indigo-500',
-              'completed': 'bg-gradient-to-r from-purple-500 to-indigo-500',
+              'upcoming': 'bg-gradient-to-r from-primary-500 to-primary-700',
+              'completed': 'bg-gradient-to-r from-purple-500 to-primary-700',
               'declined': 'bg-gradient-to-r from-red-500 to-rose-500',
-              'cancelled': 'bg-gradient-to-r from-gray-500 to-slate-500',
+              'cancelled': 'bg-gradient-to-r from-slate-500 to-slate-600',
             };
             
             return (
               <Card 
                 key={request.id} 
-                className={`group relative bg-gradient-to-br from-white to-blue-50/30 rounded-xl sm:rounded-2xl shadow-lg border-2 ${
+                className={`group relative bg-gradient-to-br from-white to-primary-50/30 rounded-xl sm:rounded-2xl shadow-lg border-2 ${
                   isOverdue(request) 
                     ? 'border-red-300 hover:border-red-400 bg-red-50/50' 
-                    : 'border-slate-200 hover:border-blue-300'
-                } p-4 sm:p-5 md:p-6 -mx-2 sm:-mx-3 md:mx-0 transition-all duration-300 overflow-hidden`}
+                    : 'border-slate-200 hover:border-primary-300'
+                } p-4 sm:p-5 md:p-6 transition-all duration-300 overflow-hidden`}
               >
                 {/* Decorative gradient bar */}
-                <div className={`absolute top-0 left-0 right-0 h-1 ${statusColors[request.status] || 'bg-gradient-to-r from-blue-500 to-indigo-500'}`} />
+                <div className={`absolute top-0 left-0 right-0 h-1 ${statusColors[request.status] || 'bg-gradient-to-r from-primary-500 to-primary-700'}`} />
                 
                 <div className="flex flex-col gap-4 sm:gap-5">
                   {/* Header Row */}
@@ -663,13 +667,16 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                               setTuteeProfileLoading(false);
                             }
                           }}
-                          className="inline-flex items-center justify-center p-1.5 sm:p-2 rounded-lg bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-600 touch-manipulation transition-colors shadow-sm hover:shadow-md"
+                          className="inline-flex items-center justify-center p-1.5 sm:p-2 rounded-lg bg-primary-50 hover:bg-primary-100 active:bg-primary-200 text-primary-600 touch-manipulation transition-colors shadow-sm hover:shadow-md"
                           title="View tutee profile"
                           style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
                           <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
                         </button>
-                        <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md border-2 ${getStatusColor(request.status)}`}>
+                      </div>
+                      {/* Status badge moved below subject name */}
+                      <div className="mb-3">
+                        <div className={`inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold gap-1.5 sm:gap-2 shadow-md border-2 ${getStatusColor(request.status)}`}>
                           {getStatusIcon(request.status)}
                           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: request.status === 'pending' ? '#eab308' : request.status === 'confirmed' ? '#16a34a' : request.status === 'awaiting_payment' ? '#f97316' : '#3b82f6' }} />
                           <span className="whitespace-nowrap">{request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}</span>
@@ -677,35 +684,35 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                       </div>
                       
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600 mb-3">
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
-                          {request.student.name}
+                        <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-slate-200 shadow-sm">
+                          <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary-600 flex-shrink-0" />
+                          <span className="truncate max-w-[120px] sm:max-w-none">{request.student.name}</span>
                         </span>
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-slate-200 shadow-sm">
+                          <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </Calendar>
-                          {new Date(request.date).toLocaleDateString()}
+                          <span className="whitespace-nowrap">{new Date(request.date).toLocaleDateString()}</span>
                         </span>
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-slate-200 shadow-sm">
+                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </Clock>
-                          {request.time}
+                          <span className="whitespace-nowrap">{request.time}</span>
                         </span>
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white rounded-lg border border-slate-200 shadow-sm">
+                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </Clock>
-                          {request.duration} {request.duration === 1 ? 'hour' : 'hours'}
+                          <span className="whitespace-nowrap">{request.duration} {request.duration === 1 ? 'hour' : 'hours'}</span>
                         </span>
                       </div>
                       
                       {request.student_notes && (
-                        <div className="p-3 sm:p-4 bg-gradient-to-br from-slate-50 to-blue-50/50 rounded-xl border-2 border-slate-200 shadow-sm">
+                        <div className="p-3 sm:p-4 bg-gradient-to-br from-slate-50 to-primary-50/50 rounded-xl border-2 border-slate-200 shadow-sm">
                           <div className="flex items-start gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg flex-shrink-0 mt-0.5">
-                              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                            <div className="p-1.5 sm:p-2 bg-primary-100 rounded-lg flex-shrink-0 mt-0.5">
+                              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <h4 className="text-xs sm:text-sm md:text-base font-semibold text-slate-800 mb-1.5 sm:mb-2">Student Notes</h4>
@@ -723,7 +730,7 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
 
                   
                   {/* Session Details */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-gradient-to-r from-primary-50 via-primary-100/50 to-primary-50 rounded-xl border-2 border-primary-200/50 shadow-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-xs sm:text-sm font-semibold text-slate-700">Requested:</span>
                       <span className="text-xs sm:text-sm md:text-base font-medium text-slate-900">
@@ -738,30 +745,30 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                 </div>
                 
                 {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 pt-3 sm:pt-4 border-t-2 border-slate-200">
-                  <div className="text-[10px] sm:text-xs text-slate-500">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 pt-4 sm:pt-5 border-t-2 border-slate-200 mt-4">
+                  <div className="hidden sm:block text-[10px] sm:text-xs text-slate-500">
                   </div>
                   
-                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-2 w-full sm:w-auto">
                     {request.status === 'pending' && (
                       <>
                         <Button
                           onClick={() => { setAcceptTarget(request); setAcceptConfirmOpen(true); }}
                           disabled={loading}
-                          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 active:from-green-800 active:to-emerald-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 w-full sm:w-auto touch-manipulation"
+                          className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 active:from-green-800 active:to-emerald-800 text-white rounded-xl px-5 py-3 shadow-md hover:shadow-lg transition-all text-sm sm:text-base font-semibold flex items-center justify-center gap-2 w-full sm:w-auto touch-manipulation min-h-[44px]"
                           style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
-                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <CheckCircle className="h-5 w-5 flex-shrink-0" />
                           <span>Accept</span>
                         </Button>
                         <Button
                           variant="secondary"
                           onClick={() => handleBookingAction(request.id, 'decline')}
                           disabled={loading}
-                          className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 active:from-red-800 active:to-rose-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 w-full sm:w-auto touch-manipulation"
+                          className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 active:from-red-800 active:to-rose-800 text-white rounded-xl px-5 py-3 shadow-md hover:shadow-lg transition-all text-sm sm:text-base font-semibold flex items-center justify-center gap-2 w-full sm:w-auto touch-manipulation min-h-[44px]"
                           style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
-                          <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <X className="h-5 w-5 flex-shrink-0" />
                           <span>Decline</span>
                         </Button>
                       </>
@@ -771,10 +778,10 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                         variant="secondary"
                         onClick={() => { setRescheduleTarget(request); setIsRescheduleModalOpen(true); }}
                         disabled={loading}
-                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:from-blue-800 active:to-indigo-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 w-full sm:w-auto touch-manipulation"
+                        className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 text-white rounded-xl px-5 py-3 shadow-md hover:shadow-lg transition-all text-sm sm:text-base font-semibold flex items-center justify-center gap-2 w-full sm:w-auto touch-manipulation min-h-[44px]"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
-                        <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <Clock className="h-5 w-5 flex-shrink-0" />
                         <span>Reschedule</span>
                       </Button>
                     )}
@@ -784,10 +791,10 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                       <Button
                         onClick={() => handleMarkDone(request.id)}
                         disabled={loading}
-                        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:from-purple-800 active:to-indigo-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 w-full sm:w-auto touch-manipulation"
+                        className="bg-gradient-to-r from-purple-600 to-primary-700 hover:from-purple-700 hover:to-primary-800 active:from-purple-800 active:to-primary-900 text-white rounded-xl px-5 py-3 shadow-md hover:shadow-lg transition-all text-sm sm:text-base font-semibold flex items-center justify-center gap-2 w-full sm:w-auto touch-manipulation min-h-[44px]"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
-                        <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                        <CheckCircle className="h-5 w-5 flex-shrink-0" />
                         <span>Mark as done</span>
                       </Button>
                     )}
@@ -839,7 +846,7 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                             <div><strong>Year level:</strong> {tuteeProfile.year_level}</div>
                           ) : null}
                           {tuteeProfile?.phone || tuteeProfile?.contact_number ? (
-                            <div><strong>Phone:</strong> {tuteeProfile.phone || tuteeProfile.contact_number} <button onClick={async () => { try { await navigator.clipboard.writeText(tuteeProfile.phone || tuteeProfile.contact_number); toast.success('Phone copied'); } catch { toast.error('Unable to copy'); } }} className="ml-2 text-xs text-blue-600">Copy</button></div>
+                            <div><strong>Phone:</strong> {tuteeProfile.phone || tuteeProfile.contact_number} <button onClick={async () => { try { await navigator.clipboard.writeText(tuteeProfile.phone || tuteeProfile.contact_number); toast.success('Phone copied'); } catch { toast.error('Unable to copy'); } }} className="ml-2 text-xs text-primary-600">Copy</button></div>
                           ) : null}
                           {tuteeProfile?.city || tuteeProfile?.country ? (
                             <div><strong>Location:</strong> {[tuteeProfile.city, tuteeProfile.country].filter(Boolean).join(', ')}</div>
@@ -855,7 +862,7 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                           )}
                           <div className="flex items-center gap-2 mt-2">
                             {tuteeProfile?.email && (
-                              <a href={`mailto:${tuteeProfile.email}`} className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm">Send email</a>
+                              <a href={`mailto:${tuteeProfile.email}`} className="px-3 py-1 bg-primary-600 text-white rounded-md text-sm">Send email</a>
                             )}
                             {tuteeProfile?.phone && (
                               <button onClick={async () => { try { await navigator.clipboard.writeText(tuteeProfile.phone); toast.success('Phone copied'); } catch { toast.error('Unable to copy'); } }} className="px-3 py-1 border rounded-md text-sm">Copy phone</button>
@@ -883,13 +890,13 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                           setAcceptTarget(null);
                         }}
                         disabled={loading}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-md"
+                        className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 shadow-md"
                       >
                         {loading ? 'Accepting...' : 'Confirm Accept'}
                       </button>
                       <button
                         onClick={() => { setAcceptConfirmOpen(false); setAcceptTarget(null); }}
-                        className="px-4 py-2 border rounded-md hover:bg-gray-100 ml-2"
+                        className="px-4 py-2 border rounded-md hover:bg-slate-100 ml-2"
                       >
                         Cancel
                       </button>
@@ -944,28 +951,28 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
               )}
       {/* Tutor resolution status */}
       {resolvingTutor && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium text-slate-800">Loading tutor information…</h3>
-              <p className="text-sm text-slate-500">Resolving your tutor profile. This may take a moment.</p>
+        <Card className="p-4 sm:p-5 mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base sm:text-lg font-medium text-slate-800">Loading tutor information…</h3>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">Resolving your tutor profile. This may take a moment.</p>
             </div>
-            <div className="text-sm text-slate-500">Please wait…</div>
+            <div className="text-xs sm:text-sm text-slate-500">Please wait…</div>
           </div>
         </Card>
       )}
 
       {resolveError && (
-        <Card className="p-4 border-red-200 bg-red-50">
-          <div className="flex items-start justify-between">
-            <div>
-              <h3 className="text-lg font-medium text-red-800">Failed to load tutor information</h3>
-              <p className="text-sm text-red-700 mt-2">{resolveError}</p>
-              <p className="text-sm text-slate-500 mt-2">Possible causes: backend not running, expired session, or missing tutor profile.</p>
+        <Card className="p-4 sm:p-5 border-2 border-red-200 bg-red-50 mb-4">
+          <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base sm:text-lg font-medium text-red-800">Failed to load tutor information</h3>
+              <p className="text-xs sm:text-sm text-red-700 mt-2 break-words">{resolveError}</p>
+              <p className="text-xs sm:text-sm text-slate-500 mt-2">Possible causes: backend not running, expired session, or missing tutor profile.</p>
             </div>
-            <div className="flex flex-col items-end space-y-2">
-              <Button onClick={() => resolveTutorIdAndFetch()} className="px-3 py-1">Retry</Button>
-              <Button variant="secondary" onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); }}>Sign in again</Button>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <Button onClick={() => resolveTutorIdAndFetch()} className="px-4 py-2.5 text-sm min-h-[44px] w-full sm:w-auto">Retry</Button>
+              <Button variant="secondary" onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); }} className="px-4 py-2.5 text-sm min-h-[44px] w-full sm:w-auto">Sign in again</Button>
             </div>
           </div>
         </Card>

@@ -119,13 +119,19 @@ apiClient.interceptors.response.use(
   (error) => {
     // Network error (no response from server)
     if (!error.response) {
-      console.error('Network Error:', error.message);
+      console.error('Network Error:', error.message, 'Code:', error.code);
+      // Preserve the original error code (like ERR_CONNECTION_TIMED_OUT)
+      const errorCode = error.code || error.message?.match(/ERR_\w+/)?.[0];
       return Promise.reject({
+        ...error, // Preserve original error properties including code
+        code: error.code || errorCode, // Ensure code is preserved
         response: {
           data: {
             message: 'Unable to connect to the server. Please check your internet connection.'
-          }
-        }
+          },
+          status: undefined // Mark as network error by not having a status
+        },
+        isNetworkError: true // Flag to identify network errors
       });
     }
 
@@ -149,11 +155,13 @@ apiClient.interceptors.response.use(
                           urlToCheck.includes('/auth/register') || 
                           urlToCheck.includes('/auth/login-tutor-tutee') ||
                           urlToCheck.includes('/auth/forgot-password') ||
-                          urlToCheck.includes('/auth/reset-password');
+                          urlToCheck.includes('/auth/reset-password') ||
+                          urlToCheck.includes('/auth/email-verification');
     const isTutorIdEndpoint = reqUrl?.includes('/tutors/by-user/') && reqUrl?.includes('/tutor-id');
+    const isCoursesEndpoint = reqUrl?.includes('/courses');
 
     const suppressByMessage = typeof rawMessage === 'string' && rawMessage.toLowerCase().includes('tutor not found');
-    if (notify && !isAuthEndpoint && !isTutorIdEndpoint && !suppressByMessage) {
+    if (notify && !isAuthEndpoint && !isTutorIdEndpoint && !isCoursesEndpoint && !suppressByMessage) {
       let display = Array.isArray(rawMessage) ? rawMessage.join(', ') : (rawMessage as string | undefined);
       if (typeof display === 'string' && display.toLowerCase().includes('email already registered')) {
         display = 'Email already registered';

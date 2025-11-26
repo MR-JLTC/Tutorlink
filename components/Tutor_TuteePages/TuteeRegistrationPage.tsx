@@ -1151,6 +1151,8 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
                   <li>Payments are handled securely via the Platform.</li>
                   <li>Do not pay tutors outside the Platform.</li>
                 </ul>
+                <h3 className="font-semibold">4.1. Service Fee Deduction</h3>
+                <p>All tutor earnings processed through the platform will be subject to a 13% service fee, automatically deducted to cover system and operational costs. The remaining 87% will be issued as the tutor's final payout. This fee is fixed and non-refundable.</p>
                 <h3 className="font-semibold">5. Conduct</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Be respectful and professional during sessions.</li>

@@ -36,7 +36,8 @@ interface BookingRequest {
     };
   };
   amount?: number;
-  payment?: Payment; // Payment entity associated with this booking
+  payment?: Payment; // Payment entity associated with this booking (from payments relation)
+  payments?: Payment[]; // Array of payments associated with this booking (from backend relation)
 }
 
 interface PaymentHistory extends Payment {
@@ -67,7 +68,6 @@ const TuteePayment: React.FC = () => {
   const [selectedPaymentFiles, setSelectedPaymentFiles] = useState<Record<number, File | undefined>>({});
   const [uploadingPayment, setUploadingPayment] = useState(false);
   const [admins, setAdmins] = useState<Array<{ user_id: number; name: string; qr_code_url: string }>>([]);
-  const [selectedAdminByBooking, setSelectedAdminByBooking] = useState<Record<number, number | undefined>>({});
   const [amountByBooking, setAmountByBooking] = useState<Record<number, string>>({});
   const [initialized, setInitialized] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -137,15 +137,18 @@ const TuteePayment: React.FC = () => {
 
   // Get the effective payment status for a booking (prefer payment.status over booking.status)
   const getEffectivePaymentStatus = (booking: BookingRequest): string => {
+    // Check booking status first - if it's payment_pending, always return that to show "Awaiting Payment Confirmation"
+    const bookingStatus = (booking.status || '').toLowerCase();
+    if (bookingStatus === 'payment_pending') {
+      return 'payment_pending';
+    }
     // If there's a payment entity, use its status
     if (booking.payment?.status) {
       return booking.payment.status;
     }
     // Otherwise, use booking status and map it to payment status equivalents
-    const bookingStatus = (booking.status || '').toLowerCase();
     const statusMap: Record<string, string> = {
       'awaiting_payment': 'pending',
-      'payment_pending': 'pending',
       'payment_rejected': 'rejected',
       'payment_approved': 'confirmed',
       'pending': 'pending'
@@ -201,17 +204,15 @@ const TuteePayment: React.FC = () => {
     try {
       if (isInitial) setLoading(true);
       
-      // Fetch both bookings and payments in parallel
-      const [bookingsResponse, paymentsResponse] = await Promise.all([
-        apiClient.get('/users/me/bookings'),
-        apiClient.get('/payments').catch(() => ({ data: [] })) // Don't fail if payments endpoint fails
-      ]);
-      
+      // Fetch bookings which now include payments via the booking_request_id relationship
+      const bookingsResponse = await apiClient.get('/users/me/bookings');
       const allBookings = bookingsResponse.data || [];
+      
+      // Also fetch all payments for payment history
+      const paymentsResponse = await apiClient.get('/payments').catch(() => ({ data: [] }));
       const allPayments = paymentsResponse.data || [];
       
-      // Filter payments for current user (student)
-      // Match payments to user by student_id or student.user.user_id
+      // Filter payments for current user (student) for payment history
       const userPayments = allPayments.filter((p: Payment) => {
         if (user?.user_id) {
           return (p as any).student?.user?.user_id === user.user_id ||
@@ -221,100 +222,23 @@ const TuteePayment: React.FC = () => {
       });
       setPayments(userPayments);
       
-      // Helper: Check if a subject has any confirmed payments
-      const hasConfirmedPaymentForSubject = (subject: string, tutorId: number): boolean => {
-        return userPayments.some((p: Payment) => {
-          const isConfirmed = ['confirmed', 'admin_confirmed'].includes((p.status || '').toLowerCase());
-          const matchesSubject = p.subject === subject || !p.subject;
-          const matchesTutor = p.tutor_id === tutorId;
-          return isConfirmed && matchesSubject && matchesTutor;
-        });
-      };
-
-      // Filter bookings that have payment-related statuses OR have associated payments
+      // Process bookings: use payments from the backend relationship (payments array)
+      // The backend now includes payments via the booking_request_id foreign key
       const relevantBookings = allBookings
         .map((booking: BookingRequest) => {
-          // If backend already provided the payment relation, use it as the source of truth.
-          if (booking.payment) {
-            return booking;
-          }
-
-          // Check if this subject has a confirmed payment (for same tutor)
-          const subjectHasConfirmedPayment = hasConfirmedPaymentForSubject(
-            booking.subject,
-            booking.tutor?.tutor_id || 0
-          );
-
-          // Otherwise, attempt to find the latest matching payment by tutor & subject.
-          const matchingPayments = userPayments
-            .filter((p: Payment) => {
-              const isBasicMatch = p.tutor_id === booking.tutor?.tutor_id &&
-                                   (p.subject === booking.subject || !p.subject);
-
-              if (!isBasicMatch) {
-                return false;
-              }
-
-              // Prevent incorrect payment-booking associations.
-              const paymentIsConfirmed = ['confirmed', 'admin_confirmed'].includes((p.status || '').toLowerCase());
-              const paymentIsPending = ['pending'].includes((p.status || '').toLowerCase());
-
-              const unpaidBookingStatuses = ['awaiting_payment', 'pending', 'payment_rejected', 'rejected'];
-              const bookingIsUnpaid = unpaidBookingStatuses.includes((booking.status || '').toLowerCase());
-              
-              const confirmedBookingStatuses = ['confirmed', 'admin_confirmed', 'payment_approved'];
-              const bookingIsConfirmed = confirmedBookingStatuses.includes((booking.status || '').toLowerCase());
-
-              // Rule 1: Don't match a confirmed payment to an unpaid booking.
-              // Exception: If this subject already has a confirmed payment, don't match any confirmed payment to this booking
-              if (paymentIsConfirmed && (bookingIsUnpaid || subjectHasConfirmedPayment)) {
-                return false;
-              }
-
-              // Rule 2: Don't match a pending payment to a confirmed booking.
-              if (paymentIsPending && bookingIsConfirmed) {
-                return false;
-              }
-
-              const paymentIsRejected = ['rejected', 'payment_rejected'].includes((p.status || '').toLowerCase());
-              const bookingIsAwaitingFirstPayment = (booking.status || '').toLowerCase() === 'awaiting_payment';
-
-              // Rule 3: Don't match an old rejected payment to a brand new booking that is awaiting its first payment.
-              if (paymentIsRejected && bookingIsAwaitingFirstPayment) {
-                return false;
-              }
-
-              return true;
-            })
-            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
+          // Get the most recent payment for this booking from the payments array
+          // Payments are already linked via booking_request_id in the database
+          const bookingPayments = booking.payments || [];
+          const latestPayment = bookingPayments.length > 0 
+            ? bookingPayments.sort((a: Payment, b: Payment) => 
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              )[0]
+            : null;
+          
           return {
             ...booking,
-            payment: matchingPayments[0]
+            payment: latestPayment || booking.payment // Use latest from payments array, fallback to legacy payment field
           };
-        })
-        .map((booking: BookingRequest) => {
-          // Check if this subject has a confirmed payment for the same tutor
-          const subjectHasConfirmedPayment = hasConfirmedPaymentForSubject(
-            booking.subject,
-            booking.tutor?.tutor_id || 0
-          );
-          
-          const bookingStatus = (booking.status || '').toLowerCase();
-          
-          // If subject has confirmed payment and this booking is awaiting payment,
-          // clear any incorrectly matched confirmed payment so it shows as pending payment
-          if (subjectHasConfirmedPayment && (bookingStatus === 'awaiting_payment' || bookingStatus === 'pending')) {
-            if (booking.payment && ['confirmed', 'admin_confirmed'].includes((booking.payment.status || '').toLowerCase())) {
-              // Create a new booking object without the confirmed payment association
-              return {
-                ...booking,
-                payment: undefined
-              };
-            }
-          }
-          
-          return booking;
         })
         .filter((booking: BookingRequest) => {
           // Include bookings that have:
@@ -344,7 +268,9 @@ const TuteePayment: React.FC = () => {
         console.log('Payment bookings with statuses:', relevantBookings.map(b => ({ 
           id: b.id, 
           bookingStatus: b.status,
-          paymentStatus: b.payment?.status 
+          paymentStatus: b.payment?.status,
+          paymentId: b.payment?.payment_id,
+          bookingRequestId: b.payment?.booking_request_id
         })));
       }
       
@@ -376,7 +302,8 @@ const TuteePayment: React.FC = () => {
 
   const handleUploadPayment = async (bookingId: number) => {
     const file = selectedPaymentFiles[bookingId];
-    const adminId = selectedAdminByBooking[bookingId];
+    // Use the first admin automatically since there's only one
+    const adminId = admins.length > 0 ? admins[0].user_id : null;
     const amt = amountByBooking[bookingId] || '';
     const booking = bookings.find(b => b.id === bookingId);
     const calculatedAmount = booking ? calculateAmount(booking) : 0;
@@ -387,7 +314,7 @@ const TuteePayment: React.FC = () => {
       return;
     }
     if (!adminId) {
-      toast.error('Please select an admin QR to pay to');
+      toast.error('Admin QR code not available. Please try again later.');
       return;
     }
     if (!amt || isNaN(amountPaid) || amountPaid <= 0) {
@@ -415,7 +342,6 @@ const TuteePayment: React.FC = () => {
 
       toast.success('Payment submitted for verification');
       setSelectedPaymentFiles(prev => { const p = { ...prev }; delete p[bookingId]; return p; });
-      setSelectedAdminByBooking(prev => { const p = { ...prev }; delete p[bookingId]; return p; });
       setAmountByBooking(prev => { const p = { ...prev }; delete p[bookingId]; return p; });
       // Immediate fetch to reflect 'payment_pending' without flicker
       await fetchBookings(false);
@@ -478,7 +404,7 @@ const TuteePayment: React.FC = () => {
       case 'payment_pending':
         return {
           icon: <CheckCircle2 className="h-5 w-5 text-blue-500" />,
-          text: 'Payment Under Review',
+          text: 'Awaiting Payment Confirmation',
           color: 'text-blue-700 bg-blue-50 border-blue-200',
           dotColor: 'bg-blue-500'
         };
@@ -534,24 +460,40 @@ const TuteePayment: React.FC = () => {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-6">
+    <div className="space-y-4 sm:space-y-5 md:space-y-8 pb-6 sm:pb-8 md:pb-10">
       <ToastContainer aria-label="Notifications" />
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white">Payment</h1>
+      {/* Enhanced Header for Desktop */}
+      <div className="relative bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl md:rounded-3xl p-4 sm:p-5 md:p-8 lg:p-10 text-white shadow-xl md:shadow-2xl overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
+        {/* Decorative background elements */}
+        <div className="absolute inset-0 opacity-10 hidden md:block">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32 blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24 blur-3xl"></div>
         </div>
-        <button
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 md:gap-6">
+          <div className="flex items-center gap-3 sm:gap-4 md:gap-5">
+            <div className="p-2 sm:p-2.5 md:p-3.5 bg-white/20 backdrop-blur-sm rounded-xl md:rounded-2xl shadow-lg border border-white/20">
+              <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 lg:h-10 lg:w-10 flex-shrink-0" />
+            </div>
+            <div>
+              <h1 className="text-lg sm:text-xl md:text-3xl lg:text-4xl font-extrabold text-white mb-0.5 md:mb-1 tracking-tight">Payment Management</h1>
+              <p className="text-xs sm:text-sm md:text-base text-white/90 font-medium hidden md:block">Manage your session payments and track payment history</p>
+            </div>
+          </div>
+          <button
             onClick={async () => {
               await fetchBookings(true);
               await fetchPaymentHistory();
             }}
-            className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-600 hover:text-blue-700 active:text-blue-800 bg-white hover:bg-blue-50 active:bg-blue-100 rounded-lg transition-colors w-full sm:w-auto touch-manipulation"
+            className="px-3 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-3 text-xs sm:text-sm md:text-base font-semibold md:font-bold text-primary-700 hover:text-primary-800 active:text-primary-900 bg-white hover:bg-primary-50 active:bg-primary-100 rounded-lg md:rounded-xl transition-all shadow-md md:shadow-lg hover:shadow-xl transform hover:scale-105 w-full sm:w-auto touch-manipulation"
             style={{ WebkitTapHighlightColor: 'transparent' }}
-        >
-          Refresh
-        </button>
+          >
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </span>
+          </button>
         </div>
       </div>
 
@@ -568,7 +510,7 @@ const TuteePayment: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="space-y-3 sm:space-y-4">
+        <div className="space-y-4 sm:space-y-5 md:space-y-6 lg:space-y-8">
           {bookings.map((booking) => {
             // Use payment status if available, otherwise use booking status
             const effectiveStatus = getEffectivePaymentStatus(booking);
@@ -577,173 +519,189 @@ const TuteePayment: React.FC = () => {
             const sessionRate = booking.tutor?.session_rate_per_hour || 0;
             
               return (
-                <div key={booking.id} className="group relative bg-gradient-to-br from-white to-blue-50/30 rounded-xl sm:rounded-2xl shadow-lg border-2 border-slate-200 hover:border-blue-300 p-4 sm:p-5 md:p-6 -mx-2 sm:-mx-3 md:mx-0 transition-all duration-300 overflow-hidden">
+                <div key={booking.id} className="group relative bg-gradient-to-br from-white via-primary-50/20 to-primary-100/10 rounded-xl sm:rounded-2xl md:rounded-3xl shadow-lg md:shadow-xl border-2 border-slate-200/80 hover:border-primary-400 hover:shadow-2xl p-4 sm:p-5 md:p-7 lg:p-8 -mx-2 sm:-mx-3 md:mx-0 transition-all duration-300 overflow-hidden">
                   {/* Decorative gradient bar based on status */}
-                  <div className={`absolute top-0 left-0 right-0 h-1 ${
+                  <div className={`absolute top-0 left-0 right-0 h-1 md:h-1.5 ${
                     effectiveStatus.toLowerCase() === 'confirmed' || effectiveStatus.toLowerCase() === 'admin_confirmed' 
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
+                      ? 'bg-gradient-to-r from-green-500 via-emerald-500 to-green-600' :
                     isRejectedStatus(booking)
-                      ? 'bg-gradient-to-r from-red-500 to-rose-500' :
+                      ? 'bg-gradient-to-r from-red-500 via-rose-500 to-red-600' :
                     effectiveStatus.toLowerCase() === 'pending'
-                      ? 'bg-gradient-to-r from-yellow-500 to-amber-500' :
-                    'bg-gradient-to-r from-blue-500 to-indigo-500'
+                      ? 'bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600' :
+                    'bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700'
                   }`} />
                   
-                <div className="flex flex-col gap-4 sm:gap-5 mb-4 sm:mb-5">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex flex-col gap-4 sm:gap-5 md:gap-6 mb-4 sm:mb-5 md:mb-6">
+                  {/* Header Section - Enhanced for Desktop */}
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 sm:gap-4 md:gap-5">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 mb-2 sm:mb-3 break-words">
-                        {booking.subject} with {booking.tutor.user.name}
+                      <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-extrabold text-slate-900 mb-2 sm:mb-3 md:mb-4 break-words leading-tight">
+                        {booking.subject}
                       </h3>
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600">
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <p className="text-sm sm:text-base md:text-lg text-slate-700 mb-3 md:mb-4 font-semibold">
+                        with <span className="text-primary-700">{booking.tutor.user.name}</span>
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
+                        <span className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-white rounded-lg md:rounded-xl border border-slate-200 md:border-2 shadow-sm md:shadow-md hover:shadow-lg transition-shadow">
+                          <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-primary-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                          {new Date(booking.date).toLocaleDateString()}
+                          <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">{new Date(booking.date).toLocaleDateString()}</span>
                         </span>
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-white rounded-lg md:rounded-xl border border-slate-200 md:border-2 shadow-sm md:shadow-md hover:shadow-lg transition-shadow">
+                          <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-primary-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          {booking.time}
+                          <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">{booking.time}</span>
                         </span>
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <span className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-white rounded-lg md:rounded-xl border border-slate-200 md:border-2 shadow-sm md:shadow-md hover:shadow-lg transition-shadow">
+                          <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-primary-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          {booking.duration} {booking.duration === 1 ? 'hour' : 'hours'}
+                          <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">{booking.duration} {booking.duration === 1 ? 'hour' : 'hours'}</span>
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0 w-full sm:w-auto">
-                      <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md ${status.color} border-2 ${
+                    {/* Status Badge - Enhanced for Desktop */}
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-shrink-0 w-full md:w-auto">
+                      <div className={`px-3 sm:px-4 md:px-5 py-1.5 sm:py-2 md:py-2.5 rounded-xl md:rounded-2xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md md:shadow-lg ${status.color} border-2 ${
                         status.color.includes('yellow') ? 'border-yellow-400' : 
                         status.color.includes('red') ? 'border-red-400' : 
                         status.color.includes('green') ? 'border-green-400' : 
                         status.color.includes('indigo') ? 'border-indigo-400' : 
-                        'border-slate-400'
+                        'border-primary-400'
                       }`}>
                         {status.icon}
-                        {status.dotColor && <span className={`h-2.5 w-2.5 rounded-full ${status.dotColor}`} />}
+                        {status.dotColor && <span className={`h-2.5 w-2.5 md:h-3 md:w-3 rounded-full ${status.dotColor}`} />}
                         <span className="whitespace-nowrap">{status.text}</span>
                       </div>
                       {booking.payment_proof && !isRejectedStatus(booking) && (
-                        <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[10px] sm:text-xs md:text-sm font-bold bg-green-50 text-green-700 border-2 border-green-400 shadow-sm flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        <div className="px-3 sm:px-4 md:px-5 py-1.5 sm:py-2 md:py-2.5 rounded-xl md:rounded-2xl text-[10px] sm:text-xs md:text-sm font-bold bg-green-50 text-green-700 border-2 border-green-400 shadow-sm md:shadow-md flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
                           <span>Proof uploaded</span>
                         </div>
                       )}
                     </div>
                   </div>
                   {sessionRate > 0 && (
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 shadow-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs sm:text-sm font-semibold text-slate-700">Session Rate:</span>
-                        <span className="text-base sm:text-lg md:text-xl font-bold text-slate-900">₱{sessionRate.toLocaleString()}/hour</span>
-                      </div>
-                      {calculatedAmount > 0 && (
-                        <>
-                          <span className="hidden sm:inline text-blue-300 text-xl">•</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs sm:text-sm font-semibold text-slate-700">Total:</span>
-                            <span className="text-base sm:text-lg md:text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">₱{calculatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <div className="relative overflow-hidden bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 rounded-xl md:rounded-2xl border-2 border-primary-200/80 shadow-md md:shadow-lg p-4 sm:p-5 md:p-6">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-primary-200/20 rounded-full -mr-16 -mt-16 blur-2xl hidden md:block"></div>
+                      <div className="relative flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 md:gap-6">
+                        <div className="flex items-center gap-3 md:gap-4">
+                          <div className="p-2 md:p-3 bg-primary-100 rounded-lg md:rounded-xl shadow-sm">
+                            <svg className="h-5 w-5 md:h-6 md:w-6 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                           </div>
-                        </>
-                      )}
+                          <div>
+                            <span className="text-xs sm:text-sm md:text-base font-bold text-slate-600 block mb-0.5 md:mb-1 uppercase tracking-wide">Session Rate</span>
+                            <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-extrabold text-slate-900">₱{sessionRate.toLocaleString()}/hour</span>
+                          </div>
+                        </div>
+                        {calculatedAmount > 0 && (
+                          <>
+                            <div className="hidden sm:block w-px h-8 md:h-10 bg-primary-300"></div>
+                            <div className="flex items-center gap-3 md:gap-4">
+                              <div className="p-2 md:p-3 bg-primary-200 rounded-lg md:rounded-xl shadow-sm">
+                                <svg className="h-5 w-5 md:h-6 md:w-6 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                              <div>
+                                <span className="text-xs sm:text-sm md:text-base font-bold text-slate-600 block mb-0.5 md:mb-1 uppercase tracking-wide">Total Amount</span>
+                                <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-extrabold bg-gradient-to-r from-primary-600 via-primary-700 to-primary-600 bg-clip-text text-transparent">₱{calculatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
 
                 {/* Only show payment instructions for statuses that allow payment submission */}
                 {allowsPaymentSubmission(booking) && (
-                  <div className="bg-gradient-to-br from-blue-50/50 to-indigo-50/50 rounded-xl border-2 border-blue-200 p-4 sm:p-5 md:p-6 mb-4 shadow-sm">
-                      <h4 className="font-bold text-base sm:text-lg md:text-xl text-slate-800 mb-4 sm:mb-5 flex items-center gap-2">
-                        <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
-                        Payment Instructions
-                      </h4>
-                      <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-5">
-                        <div className="lg:col-span-2 space-y-3 sm:space-y-4">
-                          <p className="text-xs sm:text-sm md:text-base text-slate-700 font-medium mb-2 sm:mb-3">Choose an admin QR to pay to:</p>
-
-                        {/* If an admin has been selected for this booking, show only that large QR and a Change button. */}
-                        {selectedAdminByBooking[booking.id] ? (
-                          (() => {
-                            const adminId = selectedAdminByBooking[booking.id] as number;
-                            const a = admins.find(ad => ad.user_id === adminId);
-                            if (!a) return <div className="text-sm text-slate-500">Selected admin not found.</div>;
-                            return (
-                              <div className="flex flex-col items-center p-3 sm:p-4 md:p-5 bg-white rounded-lg sm:rounded-xl border-2 border-blue-200 shadow-sm">
-                                <img src={getFileUrl(a.qr_code_url)} alt={`Selected QR`} className="h-32 w-32 sm:h-40 sm:w-40 md:h-48 md:w-48 object-contain bg-white rounded-lg" />
-                                <p className="mt-3 sm:mt-4 text-sm sm:text-base font-semibold text-slate-800">{a.name}</p>
-                                <div className="mt-2 sm:mt-3 flex items-center gap-3 sm:gap-4">
-                                  <button 
-                                    onClick={() => { setQrModalUrl(getFileUrl(a.qr_code_url)); setQrModalTitle(a.name); setQrModalOpen(true); }} 
-                                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors touch-manipulation"
+                  <div className="relative overflow-hidden bg-gradient-to-br from-primary-50/80 via-primary-100/60 to-primary-50/80 rounded-xl md:rounded-2xl border-2 border-primary-200/80 p-4 sm:p-5 md:p-7 lg:p-8 mb-4 md:mb-6 shadow-lg md:shadow-xl">
+                      <div className="absolute top-0 right-0 w-40 h-40 bg-primary-200/20 rounded-full -mr-20 -mt-20 blur-3xl hidden md:block"></div>
+                      <div className="relative">
+                        <h4 className="font-extrabold text-base sm:text-lg md:text-2xl lg:text-3xl text-slate-900 mb-4 sm:mb-5 md:mb-6 flex items-center gap-2 md:gap-3">
+                          <div className="p-2 md:p-3 bg-primary-100 rounded-xl md:rounded-2xl shadow-md border-2 border-primary-200">
+                            <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 text-primary-700" />
+                          </div>
+                          Payment Instructions
+                        </h4>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6 lg:gap-8">
+                          {/* Admin QR Code Section */}
+                          <div className="flex flex-col items-center justify-center p-4 sm:p-5 md:p-6 lg:p-8 bg-white rounded-xl md:rounded-2xl border-2 border-primary-200 shadow-md md:shadow-lg">
+                            {admins.length > 0 ? (
+                              <>
+                                <p className="text-sm sm:text-base md:text-lg text-slate-700 font-bold mb-3 sm:mb-4 md:mb-5 text-center">Scan this QR code to pay:</p>
+                                <div className="relative">
+                                  <img 
+                                    src={getFileUrl(admins[0].qr_code_url)} 
+                                    alt={`${admins[0].name} QR`} 
+                                    className="h-48 w-48 sm:h-56 sm:w-56 md:h-64 md:w-64 lg:h-72 lg:w-72 object-contain bg-white rounded-xl md:rounded-2xl shadow-lg border-2 border-primary-100 p-2" 
+                                  />
+                                  <button
+                                    onClick={() => { 
+                                      setQrModalUrl(getFileUrl(admins[0].qr_code_url)); 
+                                      setQrModalTitle(admins[0].name); 
+                                      setQrModalOpen(true); 
+                                    }}
+                                    className="absolute top-2 right-2 p-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg shadow-md hover:shadow-lg transition-all"
+                                    title="View larger"
                                     style={{ WebkitTapHighlightColor: 'transparent' }}
                                   >
-                                    View
-                                  </button>
-                                  <button 
-                                    onClick={() => { setSelectedAdminByBooking(prev => { const p = { ...prev }; delete p[booking.id]; return p; }); }} 
-                                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors touch-manipulation"
-                                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                                  >
-                                    Change
+                                    <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                    </svg>
                                   </button>
                                 </div>
-                              </div>
-                            );
-                          })()
-                        ) : (
-                          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3">
-                            {admins.map((a) => (
-                              <button 
-                                key={a.user_id} 
-                                onClick={() => { setSelectedAdminByBooking(prev => ({ ...prev, [booking.id]: a.user_id })); }} 
-                                className={`flex flex-col items-center gap-2 p-2.5 sm:p-3 rounded-lg border-2 transition-all ${
-                                  selectedAdminByBooking[booking.id] === a.user_id 
-                                    ? 'border-blue-500 bg-blue-50 shadow-md' 
-                                    : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/50'
-                                } touch-manipulation`}
-                                style={{ WebkitTapHighlightColor: 'transparent' }}
-                              >
-                                <img src={getFileUrl(a.qr_code_url)} alt={`${a.name} QR`} className="h-16 w-16 sm:h-20 sm:w-20 md:h-24 md:w-24 object-contain bg-white border rounded-lg" />
-                                <span className="text-[10px] sm:text-xs md:text-sm font-medium truncate w-full text-center text-slate-700">{a.name}</span>
-                              </button>
-                            ))}
-                            {admins.length === 0 && (
-                              <div className="col-span-2 md:col-span-3 text-xs sm:text-sm text-slate-500 text-center py-4">
-                                No admin QR codes available.
+                                <p className="mt-4 sm:mt-5 md:mt-6 text-base sm:text-lg md:text-xl font-bold text-slate-900">{admins[0].name}</p>
+                                <p className="mt-2 text-xs sm:text-sm text-slate-600 text-center">Click the icon on the QR code to view larger</p>
+                              </>
+                            ) : (
+                              <div className="text-center py-8">
+                                <CreditCard className="h-12 w-12 sm:h-16 sm:w-16 text-slate-400 mx-auto mb-3" />
+                                <p className="text-sm sm:text-base text-slate-500">Admin QR code not available</p>
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
 
-                        <div className="lg:col-span-1 bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 md:p-5 border border-slate-200 shadow-sm space-y-3 sm:space-y-4">
+                          {/* Payment Form Section */}
+                          <div className="bg-white rounded-xl md:rounded-2xl p-4 sm:p-5 md:p-6 border-2 border-slate-200/80 shadow-md md:shadow-lg space-y-4 sm:space-y-5 md:space-y-6">
                         <div>
-                          <label className="block text-xs sm:text-sm md:text-base font-semibold text-slate-800 mb-1.5 sm:mb-2">Amount to Pay</label>
+                          <label className="block text-sm sm:text-base md:text-lg font-extrabold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
+                            <svg className="h-4 w-4 md:h-5 md:w-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Amount to Pay
+                          </label>
                           {calculatedAmount > 0 ? (
-                            <div className="text-lg sm:text-xl md:text-2xl font-bold text-slate-900 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 border border-blue-200">
+                            <div className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl md:rounded-2xl px-4 sm:px-5 md:px-6 py-3 sm:py-4 md:py-5 border-2 border-primary-200 shadow-lg">
                               ₱{calculatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                           ) : (
-                            <div className="text-xs sm:text-sm text-slate-500 bg-slate-50 rounded-lg px-3 py-2 border border-slate-200">
+                            <div className="text-sm sm:text-base text-slate-600 bg-slate-50 rounded-xl md:rounded-2xl px-4 sm:px-5 py-3 sm:py-4 border-2 border-slate-200 font-semibold">
                               Session rate not set
                             </div>
                           )}
                         </div>
                         
                         <div>
-                          <label className="block text-xs sm:text-sm md:text-base font-semibold text-slate-800 mb-1.5 sm:mb-2">Amount Paid</label>
+                          <label className="block text-sm sm:text-base md:text-lg font-extrabold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
+                            <svg className="h-4 w-4 md:h-5 md:w-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            Amount Paid
+                          </label>
                           <input 
                             type="number" 
                             min="0" 
                             step="0.01" 
                             value={amountByBooking[booking.id] || (calculatedAmount > 0 && !isRejectedStatus(booking) ? calculatedAmount.toFixed(2) : '')} 
                             onChange={(e) => setAmountByBooking(prev => ({ ...prev, [booking.id]: e.target.value }))} 
-                            className="w-full border-2 border-slate-300 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" 
+                            className="w-full border-2 border-slate-300 rounded-xl md:rounded-2xl px-4 sm:px-5 md:px-6 py-3 sm:py-3.5 md:py-4 text-sm sm:text-base md:text-lg font-semibold focus:ring-4 focus:ring-primary-200 focus:border-primary-500 transition-all shadow-sm hover:shadow-md" 
                             placeholder="0.00"
                           />
                           {calculatedAmount > 0 && !isRejectedStatus(booking) && (
@@ -815,11 +773,11 @@ const TuteePayment: React.FC = () => {
                               
                               return !selectedPaymentFiles[booking.id] || 
                                      uploadingPayment || 
-                                     !selectedAdminByBooking[booking.id] || 
+                                     admins.length === 0 || 
                                      !amountByBooking[booking.id] || 
                                      !hasValidAmount;
                             })()}
-                            className="w-full flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg sm:rounded-xl hover:from-blue-700 hover:to-indigo-700 active:from-blue-800 active:to-indigo-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg disabled:shadow-none text-sm sm:text-base font-semibold touch-manipulation"
+                            className="w-full flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-5 md:px-6 py-3 sm:py-3.5 md:py-4 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl md:rounded-2xl hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all shadow-lg md:shadow-xl hover:shadow-2xl disabled:shadow-none text-sm sm:text-base md:text-lg font-extrabold touch-manipulation transform hover:scale-[1.02] disabled:transform-none"
                             style={{ WebkitTapHighlightColor: 'transparent' }}
                           >
                             {uploadingPayment ? (
@@ -844,7 +802,7 @@ const TuteePayment: React.FC = () => {
                               : (!isNaN(amountPaid) && amountPaid > 0);
                             const missingRequirements = [];
                             
-                            if (!selectedAdminByBooking[booking.id]) missingRequirements.push('Please select an admin QR code');
+                            if (admins.length === 0) missingRequirements.push('Admin QR code not available');
                             if (!selectedPaymentFiles[booking.id]) missingRequirements.push('Please select a payment proof image');
                             if (!amountByBooking[booking.id]) missingRequirements.push('Please enter the amount paid');
                             else if (calculatedAmount > 0 && (isNaN(amountPaid) || amountPaid < calculatedAmount)) {
@@ -862,12 +820,13 @@ const TuteePayment: React.FC = () => {
                             ) : null;
                           })()}
                           <p className="text-[10px] sm:text-xs text-slate-500 leading-relaxed">
-                            Upload a screenshot of your payment to the selected admin QR (max 5MB, JPG/PNG).
+                            Upload a screenshot of your payment to the admin QR code above (max 5MB, JPG/PNG).
                           </p>
                         </div>
                       </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
                 )}
 
                 {/* Status-specific messages - using payment status */}
@@ -956,127 +915,144 @@ const TuteePayment: React.FC = () => {
 
       {/* Payment History Section */}
       {paymentHistory.length > 0 && (
-        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-slate-200 overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
-          {/* Modern Header - Matching website theme */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-5 md:p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
+        <div className="bg-white rounded-xl sm:rounded-2xl md:rounded-3xl shadow-xl md:shadow-2xl border-2 border-slate-200/80 overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
+          {/* Enhanced Header for Desktop */}
+          <div className="relative bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 p-4 sm:p-5 md:p-6 lg:p-6 text-white shadow-xl md:shadow-2xl overflow-hidden">
+            <div className="absolute inset-0 opacity-10 hidden md:block">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-white rounded-full -mr-24 -mt-24 blur-3xl"></div>
+              <div className="absolute bottom-0 left-0 w-36 h-36 bg-white rounded-full -ml-18 -mb-18 blur-3xl"></div>
+            </div>
+            <div className="relative flex items-center justify-between">
               <div className="flex items-center gap-3 sm:gap-4">
-                <div className="p-2 sm:p-2.5 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg">
+                <div className="p-2 sm:p-2.5 md:p-2.5 bg-white/20 backdrop-blur-sm rounded-xl shadow-lg border border-white/20">
                   <History className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" />
                 </div>
                 <div>
-                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1">Payment History</h2>
-                  <p className="text-xs sm:text-sm text-blue-100">{paymentHistory.length} {paymentHistory.length === 1 ? 'payment' : 'payments'} recorded</p>
+                  <h2 className="text-xl sm:text-2xl md:text-2xl lg:text-3xl font-extrabold mb-0.5 md:mb-1 tracking-tight">Payment History</h2>
+                  <p className="text-xs sm:text-sm text-white/90 font-medium">{paymentHistory.length} {paymentHistory.length === 1 ? 'payment' : 'payments'} recorded</p>
                 </div>
               </div>
             </div>
           </div>
           
-          {/* Payment Cards */}
-          <div className="p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4">
-            {paymentHistory.map((payment, index) => {
-              const status = getStatusDisplay(payment.status);
-              const tutorName = payment.tutor?.user?.name || 'Unknown Tutor';
-              const paymentDate = new Date(payment.created_at);
-              const isConfirmed = payment.status === 'confirmed' || payment.status === 'admin_confirmed';
-              const isRejected = payment.status === 'rejected';
-              
+          {/* Payment Cards - Compact Grid Layout for Desktop */}
+          <div className="p-4 sm:p-5 md:p-6 lg:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-5 lg:gap-6">
+              {paymentHistory.map((payment, index) => {
+                // Check if payment is linked to a booking with payment_pending status
+                const bookingStatus = (payment as any).bookingRequest?.status || '';
+                const effectivePaymentStatus = bookingStatus.toLowerCase() === 'payment_pending' 
+                  ? 'payment_pending' 
+                  : payment.status;
+                const status = getStatusDisplay(effectivePaymentStatus);
+                const tutorName = payment.tutor?.user?.name || 'Unknown Tutor';
+                const paymentDate = new Date(payment.created_at);
+                const isConfirmed = payment.status === 'confirmed' || payment.status === 'admin_confirmed';
+                const isRejected = payment.status === 'rejected';
+                
               return (
                 <div
                   key={payment.payment_id}
-                  className="group relative bg-gradient-to-br from-white to-blue-50/30 rounded-xl sm:rounded-2xl border-2 border-slate-200 hover:border-blue-300 shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden"
+                  className="group relative bg-gradient-to-br from-white via-primary-50/40 to-primary-100/30 rounded-xl sm:rounded-2xl border-2 border-slate-200/90 hover:border-primary-400/80 shadow-lg md:shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden transform hover:-translate-y-0.5"
                 >
-                  {/* Decorative gradient bar */}
-                  <div className={`absolute top-0 left-0 right-0 h-1 ${
-                    isConfirmed ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
-                    isRejected ? 'bg-gradient-to-r from-red-500 to-rose-500' :
-                    payment.status === 'pending' ? 'bg-gradient-to-r from-yellow-500 to-amber-500' :
-                    'bg-gradient-to-r from-blue-500 to-indigo-500'
+                  {/* Enhanced Decorative gradient bar */}
+                  <div className={`absolute top-0 left-0 right-0 h-1.5 md:h-2 ${
+                    isConfirmed ? 'bg-gradient-to-r from-green-400 via-emerald-500 to-green-600 shadow-md shadow-green-500/50' :
+                    isRejected ? 'bg-gradient-to-r from-red-400 via-rose-500 to-red-600 shadow-md shadow-red-500/50' :
+                    payment.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 shadow-md shadow-yellow-500/50' :
+                    'bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700 shadow-md shadow-primary-500/50'
                   }`} />
                   
-                  <div className="p-4 sm:p-5 md:p-6">
-                    {/* Header Row */}
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-5">
+                  {/* Decorative background elements - smaller on desktop */}
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-primary-200/10 rounded-full -mr-12 -mt-12 blur-2xl hidden md:block"></div>
+                  <div className="absolute bottom-0 left-0 w-20 h-20 bg-primary-300/10 rounded-full -ml-10 -mb-10 blur-2xl hidden md:block"></div>
+                  
+                  <div className="relative p-4 sm:p-5 md:p-5 lg:p-6">
+                    {/* Header Row - Compact */}
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
-                          <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 shadow-md ${status.color} border-2 ${
-                            status.color.includes('yellow') ? 'border-yellow-400' : 
-                            status.color.includes('red') ? 'border-red-400' : 
-                            status.color.includes('green') ? 'border-green-400' : 
-                            status.color.includes('indigo') ? 'border-indigo-400' : 
-                            'border-slate-400'
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 mb-3">
+                          <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg md:rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-md ${status.color} border-2 ${
+                            status.color.includes('yellow') ? 'border-yellow-400 bg-yellow-50' : 
+                            status.color.includes('red') ? 'border-red-400 bg-red-50' : 
+                            status.color.includes('green') ? 'border-green-400 bg-green-50' : 
+                            status.color.includes('indigo') ? 'border-indigo-400 bg-indigo-50' : 
+                            'border-primary-400 bg-primary-50'
                           }`}>
                             {status.icon}
                             {status.dotColor && <span className={`h-2.5 w-2.5 rounded-full ${status.dotColor}`} />}
                             <span className="whitespace-nowrap">{status.text}</span>
                           </div>
-                          <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs sm:text-sm font-semibold">
+                          <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-slate-100 to-slate-200 text-slate-700 rounded-lg text-xs sm:text-sm font-semibold shadow-sm border border-slate-300">
                             #{payment.payment_id}
                           </div>
                         </div>
                         
-                        {/* Amount - Prominent Display */}
-                        <div className="mb-4 sm:mb-5">
-                          <div className="inline-flex items-baseline gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl border-2 border-blue-200 shadow-sm">
-                            <span className="text-xs sm:text-sm text-slate-600 font-medium">Amount Paid</span>
-                            <span className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                              ₱{Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        </div>
+                         {/* Amount - Compact Display for Desktop */}
+                         <div className="mb-3 sm:mb-4">
+                           <div className="relative overflow-hidden inline-flex flex-col sm:flex-row sm:items-baseline gap-1.5 sm:gap-3 bg-gradient-to-br from-primary-50 via-primary-100/70 to-primary-50 px-4 sm:px-5 md:px-5 lg:px-6 py-2.5 sm:py-3 md:py-3 lg:py-3.5 rounded-xl md:rounded-2xl border-2 border-primary-300/80 shadow-lg md:shadow-xl w-full sm:w-auto">
+                             <div className="absolute top-0 right-0 w-20 h-20 bg-primary-200/30 rounded-full -mr-10 -mt-10 blur-2xl hidden md:block"></div>
+                             <span className="text-xs sm:text-sm text-slate-700 font-bold relative uppercase tracking-wide">Amount Paid</span>
+                             <span className="text-2xl sm:text-3xl md:text-3xl lg:text-4xl font-black bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 bg-clip-text text-transparent relative leading-tight">
+                               ₱{Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                             </span>
+                           </div>
+                         </div>
                         
-                        {/* Details Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4">
-                          <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
-                            <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg flex-shrink-0">
-                              <svg className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        {/* Compact Details Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 mb-3 sm:mb-4">
+                          <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200">
+                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg shadow-sm flex-shrink-0">
+                              <svg className="h-4 w-4 sm:h-5 sm:w-5 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                               </svg>
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-[10px] sm:text-xs text-slate-500 font-medium mb-0.5">Tutor</p>
-                              <p className="text-sm sm:text-base font-semibold text-slate-900 truncate">{tutorName}</p>
+                              <p className="text-[10px] sm:text-xs text-slate-500 font-bold mb-0.5 uppercase tracking-wide">Tutor</p>
+                              <p className="text-sm sm:text-base md:text-base font-bold text-slate-900 break-words">{tutorName}</p>
                             </div>
                           </div>
                           
                           {payment.subject && (
-                            <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-white rounded-lg border border-slate-200 shadow-sm">
-                              <div className="p-1.5 sm:p-2 bg-indigo-100 rounded-lg flex-shrink-0">
-                                <svg className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                            <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200">
+                              <div className="p-1.5 sm:p-2 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-lg shadow-sm flex-shrink-0">
+                                <svg className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                                 </svg>
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="text-[10px] sm:text-xs text-slate-500 font-medium mb-0.5">Subject</p>
-                                <p className="text-sm sm:text-base font-semibold text-slate-900 truncate">{payment.subject}</p>
+                                <p className="text-[10px] sm:text-xs text-slate-500 font-bold mb-0.5 uppercase tracking-wide">Subject</p>
+                                <p className="text-sm sm:text-base md:text-base font-bold text-slate-900 break-words">{payment.subject}</p>
                               </div>
                             </div>
                           )}
                           
-                          <div className="flex items-start gap-2 sm:gap-3 p-2.5 sm:p-3 bg-white rounded-lg border border-slate-200 shadow-sm sm:col-span-2">
-                            <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg flex-shrink-0">
-                              <svg className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200 sm:col-span-2">
+                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg shadow-sm flex-shrink-0">
+                              <svg className="h-4 w-4 sm:h-5 sm:w-5 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                               </svg>
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-[10px] sm:text-xs text-slate-500 font-medium mb-0.5">Payment Date</p>
-                              <p className="text-sm sm:text-base font-semibold text-slate-900">
+                              <p className="text-[10px] sm:text-xs text-slate-500 font-bold mb-0.5 uppercase tracking-wide">Payment Date</p>
+                              <p className="text-sm sm:text-base md:text-base font-bold text-slate-900">
                                 {paymentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                                <span className="text-slate-600 font-normal ml-2">at {paymentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span className="text-slate-600 font-medium ml-2 text-xs sm:text-sm">at {paymentDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
                               </p>
                             </div>
                           </div>
                         </div>
                         
-                        {/* Rejection Reason */}
+                        {/* Compact Rejection Reason */}
                         {payment.rejection_reason && (
-                          <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-br from-red-50 to-rose-50 border-2 border-red-200 rounded-xl shadow-sm">
-                            <div className="flex items-start gap-2 sm:gap-3">
-                              <Ban className="h-5 w-5 sm:h-6 sm:w-6 text-red-600 flex-shrink-0 mt-0.5" />
+                          <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-br from-red-50 via-rose-50 to-red-50 border-2 border-red-300 rounded-xl shadow-md">
+                            <div className="flex items-start gap-2.5 sm:gap-3">
+                              <div className="p-1.5 bg-red-100 rounded-lg flex-shrink-0">
+                                <Ban className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+                              </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs sm:text-sm font-bold text-red-900 mb-1.5">Rejection Reason</p>
-                                <p className="text-xs sm:text-sm text-red-800 leading-relaxed whitespace-pre-wrap break-words">
+                                <p className="text-xs sm:text-sm font-bold text-red-900 mb-1.5 uppercase tracking-wide">Rejection Reason</p>
+                                <p className="text-xs sm:text-sm text-red-800 leading-relaxed whitespace-pre-wrap break-words font-medium">
                                   {payment.rejection_reason}
                                 </p>
                               </div>
@@ -1084,43 +1060,44 @@ const TuteePayment: React.FC = () => {
                           </div>
                         )}
                       </div>
+                    </div>
                       
-                      {/* Action Buttons */}
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-start gap-2 sm:gap-3 flex-shrink-0 w-full sm:w-auto">
-                        {payment.payment_proof && (
-                          <a
-                            href={getFileUrl(payment.payment_proof)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                          >
-                            <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span>View Proof</span>
-                            <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                        )}
-                        {payment.admin_proof && (
-                          <a
-                            href={getFileUrl(payment.admin_proof)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl font-semibold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                          >
-                            <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span>Admin Proof</span>
-                            <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                        )}
-                      </div>
+                    {/* Compact Action Buttons */}
+                    <div className="flex flex-col sm:flex-row items-stretch gap-2.5 sm:gap-3 pt-3 md:pt-4 border-t-2 border-slate-300/80">
+                      {payment.payment_proof && (
+                        <a
+                          href={getFileUrl(payment.payment_proof)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group/btn flex items-center justify-center gap-2 px-4 sm:px-5 md:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-primary-600 via-primary-700 to-primary-600 hover:from-primary-700 hover:via-primary-800 hover:to-primary-700 text-white rounded-lg md:rounded-xl font-bold text-xs sm:text-sm md:text-base shadow-lg md:shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
+                        >
+                          <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span>View Proof</span>
+                          <svg className="h-4 w-4 sm:h-5 sm:w-5 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                      {payment.admin_proof && (
+                        <a
+                          href={getFileUrl(payment.admin_proof)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group/btn flex items-center justify-center gap-2 px-4 sm:px-5 md:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-primary-700 via-primary-600 to-primary-700 hover:from-primary-800 hover:via-primary-700 hover:to-primary-800 text-white rounded-lg md:rounded-xl font-bold text-xs sm:text-sm md:text-base shadow-lg md:shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105"
+                        >
+                          <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span>Admin Proof</span>
+                          <svg className="h-4 w-4 sm:h-5 sm:w-5 opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Student } from './student.entity';
 import { Tutor } from './tutor.entity';
+import { BookingRequest } from './booking-request.entity';
 
 @Entity('payments')
 export class Payment {
@@ -12,6 +13,9 @@ export class Payment {
 
   @Column()
   tutor_id: number;
+
+  @Column({ nullable: true })
+  booking_request_id?: number;
 
   @Column({ type: 'text', nullable: true })
   subject?: string;
@@ -36,6 +40,10 @@ export class Payment {
   @ManyToOne(() => Tutor, (tutor) => tutor.payments)
   @JoinColumn({ name: 'tutor_id' })
   tutor: Tutor;
+
+  @ManyToOne(() => BookingRequest, (booking) => booking.payments, { nullable: true })
+  @JoinColumn({ name: 'booking_request_id' })
+  bookingRequest?: BookingRequest;
 
   @Column({
     type: 'enum',

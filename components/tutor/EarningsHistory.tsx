@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import apiClient, { getFileUrl } from '../../services/api';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { useAuth } from '../../hooks/useAuth';
 import Modal from '../ui/Modal';
-import { DollarSign, TrendingUp, Clock, CheckCircle, Star, Calendar, X } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, CheckCircle, Star, Calendar, X, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../ui/Toast';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface Session {
   id: number;
@@ -140,12 +141,12 @@ const EarningsHistory: React.FC = () => {
       case 'completed': return 'text-green-600 bg-green-50 border-green-200';
       case 'pending': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
       case 'cancelled': return 'text-red-600 bg-red-50 border-red-200';
-      case 'approved': return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'approved': return 'text-primary-600 bg-primary-50 border-primary-200';
       case 'confirmed': return 'text-green-600 bg-green-50 border-green-200';
       case 'rejected': return 'text-red-600 bg-red-50 border-red-200';
       case 'refunded': return 'text-purple-600 bg-purple-50 border-purple-200';
       case 'paid': return 'text-green-600 bg-green-50 border-green-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      default: return 'text-slate-600 bg-slate-50 border-slate-200';
     }
   };
 
@@ -176,12 +177,53 @@ const EarningsHistory: React.FC = () => {
     return p.status === paymentsFilter;
   });
 
+  // Prepare chart data for payments over time
+  const chartData = useMemo(() => {
+    const last6Months = Array.from({ length: 6 }, (_, i) => {
+      const date = new Date();
+      date.setMonth(date.getMonth() - (5 - i));
+      return {
+        month: date.toLocaleDateString('en-US', { month: 'short' }),
+        monthIndex: date.getMonth(),
+        year: date.getFullYear()
+      };
+    });
+
+    return last6Months.map(({ month, monthIndex, year }) => {
+      const monthPayments = payments.filter(p => {
+        const paymentDate = new Date(p.created_at);
+        return paymentDate.getMonth() === monthIndex && paymentDate.getFullYear() === year;
+      });
+
+      const totalAmount = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const netAmount = totalAmount * 0.87; // After 13% service fee
+      const serviceFee = totalAmount * 0.13;
+
+      return {
+        month,
+        'Total Received': totalAmount,
+        'Net Earnings': netAmount,
+        'Service Fee': serviceFee
+      };
+    });
+  }, [payments]);
+
+  // Calculate service fee information
+  const totalReceived = useMemo(() => {
+    return payments
+      .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed')
+      .reduce((sum, p) => sum + Number(p.amount), 0);
+  }, [payments]);
+
+  const totalServiceFee = totalReceived * 0.13;
+  const netEarnings = totalReceived * 0.87;
+
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
       <Star
         key={i}
         className={`h-4 w-4 ${
-          i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'
+          i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-slate-300'
         }`}
       />
     ));
@@ -191,7 +233,7 @@ const EarningsHistory: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
           <p className="text-slate-600">Loading earnings data...</p>
         </div>
       </div>
@@ -199,76 +241,73 @@ const EarningsHistory: React.FC = () => {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex items-center justify-between">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6 pb-6 sm:pb-8 md:pb-10">
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 text-white shadow-2xl relative overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+        </div>
+        <div className="relative flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-2.5 md:gap-3">
-              <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 drop-shadow-lg flex items-center gap-2 sm:gap-3">
+              <DollarSign className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 flex-shrink-0" />
               <span className="truncate">Earnings & History</span>
             </h1>
-            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Track your completed sessions and earnings</p>
+            <p className="text-xs sm:text-sm md:text-base text-white/90 leading-tight">Track your completed sessions and earnings</p>
           </div>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4 lg:gap-6">
-        <Card className="p-3 sm:p-4 md:p-6 shadow -mx-2 sm:-mx-3 md:mx-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-1.5 sm:p-2 md:p-3 bg-green-100 rounded-full mr-2 sm:mr-3 md:mr-4 flex-shrink-0">
-              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-green-600" />
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+              <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Total Earnings</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Total Earnings</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700 truncate">
                 ₱{stats.total_earnings.toLocaleString()}
               </p>
             </div>
           </div>
-
-          {/* Bottom action row: View all payments */}
-          <div className="mt-2 sm:mt-3 flex justify-end">
-            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings/payments')} className="text-[10px] sm:text-xs md:text-sm py-1 sm:py-1.5">
-              View all
-            </Button>
-          </div>
         </Card>
 
-        <Card className="p-3 sm:p-4 md:p-6 shadow -mx-2 sm:-mx-3 md:mx-0">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-1.5 sm:p-2 md:p-2 bg-yellow-100 rounded-full mr-2 sm:mr-3 md:mr-4 flex-shrink-0">
-              <Clock className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-yellow-600" />
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+              <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Pending Earnings</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Pending Earnings</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700 truncate">
                 ₱{stats.pending_earnings.toLocaleString()}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-3 sm:p-4 md:p-6 shadow -mx-2 sm:-mx-3 md:mx-0">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-1.5 sm:p-2 md:p-2 bg-blue-100 rounded-full mr-2 sm:mr-3 md:mr-4 flex-shrink-0">
-              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-blue-600" />
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+              <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Completed Sessions</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">{stats.completed_sessions}</p>
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Completed Sessions</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700">{stats.completed_sessions}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-3 sm:p-4 md:p-6 shadow -mx-2 sm:-mx-3 md:mx-0">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
-            <div className="p-1.5 sm:p-2 md:p-2 bg-purple-100 rounded-full mr-2 sm:mr-3 md:mr-4 flex-shrink-0">
-              <Star className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-purple-600" />
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+              <Star className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs md:text-sm font-medium text-slate-500">Average Rating</p>
-              <p className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Average Rating</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700">
                 {stats.average_rating > 0 ? stats.average_rating.toFixed(1) : 'N/A'}
               </p>
             </div>
@@ -277,12 +316,14 @@ const EarningsHistory: React.FC = () => {
       </div>
 
       {/* Additional Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3 md:gap-4 lg:gap-6">
-        <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
-          <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-2.5 sm:mb-3 md:mb-4 flex items-center">
-            <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 mr-1.5 sm:mr-2 text-blue-600 flex-shrink-0" />
-            <span>Performance Overview</span>
-          </h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Performance Overview</h2>
+          </div>
           <div className="space-y-3 sm:space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-[10px] sm:text-xs md:text-sm text-slate-600">Total Hours Tutored</span>
@@ -309,143 +350,220 @@ const EarningsHistory: React.FC = () => {
           </div>
         </Card>
 
-        <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
-          <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-2.5 sm:mb-3 md:mb-4 flex items-center">
-            <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 mr-1.5 sm:mr-2 text-green-600 flex-shrink-0" />
-            <span>Payments</span>
-          </h2>
-          <div className="flex justify-end mb-2 sm:mb-3">
-            <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings/payments')} className="text-[10px] sm:text-xs md:text-sm py-1 sm:py-1.5">View all</Button>
-          </div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-2 sm:mb-3">
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="text-[10px] sm:text-xs md:text-sm px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">Pending: {pendingPaymentsCount}</span>
-              <span className="text-[10px] sm:text-xs md:text-sm px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Approved: {approvedPaymentsCount}</span>
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <div className="flex flex-wrap gap-1 sm:gap-1.5">
-              {[
-                { key: 'all', label: 'All' },
-                { key: 'pending', label: 'Pending' },
-                { key: 'approved', label: 'Approved' }
-              ].map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setPaymentsFilter(tab.key as any)}
-                  className={`px-2 sm:px-2.5 md:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-xs md:text-sm font-medium transition-colors touch-manipulation ${
-                    paymentsFilter === tab.key
-                      ? 'bg-green-100 text-green-700'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                  }`}
-                  style={{ WebkitTapHighlightColor: 'transparent' }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Payments</h2>
           </div>
-          <div className="space-y-2 sm:space-y-3 max-h-80 overflow-auto">
-            {filteredPayments.slice(0, 5).map(payment => (
-              <div key={payment.id || payment.payment_id} className="flex items-center justify-between p-2 sm:p-3 bg-slate-50 rounded-lg">
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 mb-1">
-                    <span className="text-xs sm:text-sm md:text-base font-medium text-slate-800 break-words">
-                      {payment.student_name || 'Unknown Student'}
-                    </span>
-                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium border flex-shrink-0 ${getStatusColor(payment.status)}`}>
-                      <div className="flex items-center space-x-0.5 sm:space-x-1">
-                        {getStatusIcon(payment.status)}
-                        <span className="whitespace-nowrap">{payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span>
-                      </div>
-                    </span>
+          
+          {/* Service Fee Information */}
+          <div className="mb-4 p-3 sm:p-4 bg-gradient-to-r from-amber-50 via-yellow-50 to-amber-50 rounded-xl border-2 border-amber-200 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
+                <Info className="h-4 w-4 sm:h-5 sm:w-5 text-amber-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs sm:text-sm font-bold text-amber-900 mb-1.5">Service Fee Information</h3>
+                <p className="text-[10px] sm:text-xs text-amber-800 mb-2">
+                  All payments received are subject to a <span className="font-bold">13% service fee</span> for using the TutorLink platform.
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 text-[10px] sm:text-xs">
+                  <div className="bg-white/60 rounded-lg p-2">
+                    <p className="text-amber-700 font-medium">Total Received</p>
+                    <p className="text-amber-900 font-bold text-sm sm:text-base">₱{totalReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
-                  <div className="text-xs text-slate-500">
-                    Payment ID: #{payment.payment_id || payment.id} • {new Date(payment.created_at).toLocaleDateString()}
-                    {payment.subject && (
-                      <span className="ml-2">• Subject: {payment.subject}</span>
-                    )}
-                    { (payment.status === 'confirmed' || payment.status === 'admin_confirmed') && payment.admin_note && (
-                      <span className="ml-2 text-green-600">✓ Approved by Admin</span>
-                    )}
-
-                    {payment.admin_payment_proof_url && (
-                      <div className="inline-flex items-center space-x-2 ml-2">
-                        <Button
-                          variant="secondary"
-                          disabled={!payment.admin_payment_proof_url}
-                          onClick={() => {
-                            // Only allow tutors to view the admin-uploaded proof here.
-                            if (!payment.admin_payment_proof_url) return;
-                            const srcPath = payment.admin_payment_proof_url as string;
-                            const url = getFileUrl(srcPath);
-                            setProofModalUrl(url);
-                            setProofModalTitle('Admin payment proof');
-                            setProofModalOpen(true);
-                            // mark as viewed so tutor can confirm after inspecting
-                            setViewedProofByPayment(prev => ({ ...prev, [payment.payment_id]: true }));
-                          }}
-                        >
-                          View admin proof
-                        </Button>
-
-                        {/* Always show a Confirm button for tutor action, but disable and explain why when necessary */}
-                        {(() => {
-                          const pid = payment.payment_id || payment.id;
-                          if (hiddenConfirm[pid]) return null;
-                          return (
-                            <Button
-                              className="ml-1"
-                              onClick={async () => {
-                                try {
-                                  await apiClient.patch(`/payments/${payment.payment_id}/confirm`);
-                                  // show a success toast so the tutor gets immediate feedback
-                                  notify('Payment confirmed. Booking updated to Upcoming.', 'success', {
-                                    label: 'Hide Confirm',
-                                    onClick: () => setHiddenConfirm(prev => ({ ...prev, [pid]: true }))
-                                  });
-                                  await fetchEarningsData(false);
-                                } catch (e) {
-                                  console.error('Failed to confirm payment', e);
-                                  notify('Failed to confirm payment. Please try again.', 'error');
-                                }
-                              }}
-                              variant="primary"
-                              disabled={
-                                // disabled if already confirmed or no admin proof or tutor hasn't viewed the admin proof yet
-                                payment.status === 'confirmed' ||
-                                payment.status === 'rejected' ||
-                                payment.status === 'refunded' ||
-                                !payment.admin_payment_proof_url ||
-                                !viewedProofByPayment[payment.payment_id]
-                              }
-                              title={
-                                payment.status === 'confirmed'
-                                  ? 'Already confirmed'
-                                  : !payment.admin_payment_proof_url
-                                    ? 'Waiting for admin to upload proof'
-                                    : !viewedProofByPayment[payment.payment_id]
-                                      ? 'Open the admin proof to enable Confirm'
-                                      : 'Confirm payment (mark as received)'
-                              }
-                            >
-                              Confirm
-                            </Button>
-                          );
-                        })()}
-                      </div>
-                    )}
+                  <div className="bg-white/60 rounded-lg p-2">
+                    <p className="text-amber-700 font-medium">Service Fee (13%)</p>
+                    <p className="text-amber-900 font-bold text-sm sm:text-base">₱{totalServiceFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                 </div>
-                <span className="font-semibold text-slate-800 ml-4">
-                  ₱{Number(payment.amount).toLocaleString()}
-                </span>
+                <div className="mt-2 pt-2 border-t border-amber-200 bg-white/60 rounded-lg p-2">
+                  <p className="text-amber-700 font-medium">Your Net Earnings</p>
+                  <p className="text-amber-900 font-bold text-base sm:text-lg">₱{netEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
               </div>
-            ))}
-            {filteredPayments.length === 0 && (
-              <p className="text-slate-500 text-center py-4">No payments found</p>
-            )}
+            </div>
+          </div>
+
+          {/* Payment Statistics */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-4">
+            <span className="text-[10px] sm:text-xs md:text-sm px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">Pending: {pendingPaymentsCount}</span>
+            <span className="text-[10px] sm:text-xs md:text-sm px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-primary-50 text-primary-700 border border-primary-200">Approved: {approvedPaymentsCount}</span>
           </div>
         </Card>
       </div>
+
+      {/* Payment Trends */}
+      <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+        <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3">Payment Trends (Last 6 Months)</h3>
+        <div className="bg-white rounded-lg p-3 sm:p-4 border border-slate-200">
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis 
+                dataKey="month" 
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                stroke="#cbd5e1"
+              />
+              <YAxis 
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                stroke="#cbd5e1"
+                tickFormatter={(value) => `₱${(value / 1000).toFixed(0)}k`}
+              />
+              <Tooltip 
+                formatter={(value: number) => [`₱${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '']}
+                contentStyle={{ 
+                  backgroundColor: 'white', 
+                  border: '1px solid #e2e8f0', 
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontSize: '12px'
+                }}
+              />
+              <Legend 
+                wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                iconType="rect"
+              />
+              <Bar dataKey="Total Received" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Net Earnings" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Service Fee" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* Payment History */}
+      <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-3">
+          <h3 className="text-sm sm:text-base font-semibold text-slate-800">Payment History</h3>
+          <div className="flex flex-wrap gap-1 sm:gap-1.5">
+            {[
+              { key: 'all', label: 'All' },
+              { key: 'pending', label: 'Pending' },
+              { key: 'approved', label: 'Approved' }
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setPaymentsFilter(tab.key as any)}
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-md hover:shadow-lg touch-manipulation ${
+                  paymentsFilter === tab.key
+                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                    : 'text-slate-600 hover:text-slate-800 bg-white border-2 border-slate-200 hover:border-primary-300'
+                }`}
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2 sm:space-y-3 max-h-96 overflow-auto">
+          {filteredPayments.map(payment => (
+            <div key={payment.id || payment.payment_id} className="flex items-center justify-between p-2 sm:p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 mb-1">
+                  <span className="text-xs sm:text-sm md:text-base font-medium text-slate-800 break-words">
+                    {payment.student_name || 'Unknown Student'}
+                  </span>
+                  <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium border flex-shrink-0 ${getStatusColor(payment.status)}`}>
+                    <div className="flex items-center space-x-0.5 sm:space-x-1">
+                      {getStatusIcon(payment.status)}
+                      <span className="whitespace-nowrap">{payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span>
+                    </div>
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500">
+                  Payment ID: #{payment.payment_id || payment.id} • {new Date(payment.created_at).toLocaleDateString()}
+                  {payment.subject && (
+                    <span className="ml-2">• Subject: {payment.subject}</span>
+                  )}
+                  { (payment.status === 'confirmed' || payment.status === 'admin_confirmed') && payment.admin_note && (
+                    <span className="ml-2 text-green-600">✓ Approved by Admin</span>
+                  )}
+
+                  {payment.admin_payment_proof_url && (
+                    <div className="inline-flex items-center space-x-2 ml-2 mt-1">
+                      <Button
+                        variant="secondary"
+                        disabled={!payment.admin_payment_proof_url}
+                        onClick={() => {
+                          if (!payment.admin_payment_proof_url) return;
+                          const srcPath = payment.admin_payment_proof_url as string;
+                          const url = getFileUrl(srcPath);
+                          setProofModalUrl(url);
+                          setProofModalTitle('Admin payment proof');
+                          setProofModalOpen(true);
+                          setViewedProofByPayment(prev => ({ ...prev, [payment.payment_id]: true }));
+                        }}
+                        className="text-[10px] sm:text-xs py-1 px-2"
+                      >
+                        View admin proof
+                      </Button>
+
+                      {(() => {
+                        const pid = payment.payment_id || payment.id;
+                        if (hiddenConfirm[pid]) return null;
+                        return (
+                          <Button
+                            className="ml-1 text-[10px] sm:text-xs py-1 px-2"
+                            onClick={async () => {
+                              try {
+                                await apiClient.patch(`/payments/${payment.payment_id}/confirm`);
+                                notify('Payment confirmed. Booking updated to Upcoming.', 'success', {
+                                  label: 'Hide Confirm',
+                                  onClick: () => setHiddenConfirm(prev => ({ ...prev, [pid]: true }))
+                                });
+                                await fetchEarningsData(false);
+                              } catch (e) {
+                                console.error('Failed to confirm payment', e);
+                                notify('Failed to confirm payment. Please try again.', 'error');
+                              }
+                            }}
+                            variant="primary"
+                            disabled={
+                              payment.status === 'confirmed' ||
+                              payment.status === 'rejected' ||
+                              payment.status === 'refunded' ||
+                              !payment.admin_payment_proof_url ||
+                              !viewedProofByPayment[payment.payment_id]
+                            }
+                            title={
+                              payment.status === 'confirmed'
+                                ? 'Already confirmed'
+                                : !payment.admin_payment_proof_url
+                                  ? 'Waiting for admin to upload proof'
+                                  : !viewedProofByPayment[payment.payment_id]
+                                    ? 'Open the admin proof to enable Confirm'
+                                    : 'Confirm payment (mark as received)'
+                            }
+                          >
+                            Confirm
+                          </Button>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="ml-4 text-right">
+                <span className="font-semibold text-slate-800 block">
+                  ₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                {(payment.status === 'confirmed' || payment.status === 'admin_confirmed') && (
+                  <span className="text-[10px] text-slate-500 block mt-0.5">
+                    Net: ₱{(Number(payment.amount) * 0.87).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+          {filteredPayments.length === 0 && (
+            <p className="text-slate-500 text-center py-4">No payments found</p>
+          )}
+        </div>
+      </Card>
 
       {/* Session History
       <Card className="p-4 sm:p-6">
@@ -462,8 +580,8 @@ const EarningsHistory: React.FC = () => {
                 onClick={() => setFilter(tab.key as any)}
                 className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                   filter === tab.key
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 {tab.label}
@@ -475,9 +593,9 @@ const EarningsHistory: React.FC = () => {
         <div className="space-y-4">
           {filteredSessions.length === 0 ? (
             <div className="text-center py-8">
-              <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No sessions found</h3>
-              <p className="text-gray-500">
+              <CheckCircle className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">No sessions found</h3>
+              <p className="text-slate-500">
                 {filter === 'all' 
                   ? "You haven't completed any sessions yet."
                   : `No ${filter} sessions found.`

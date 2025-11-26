@@ -24,7 +24,7 @@ export class PaymentsService {
 
   findAll(): Promise<Payment[]> {
     return this.paymentsRepository.find({
-      relations: ['student', 'student.user', 'tutor', 'tutor.user'],
+      relations: ['student', 'student.user', 'tutor', 'tutor.user', 'bookingRequest'],
       order: {
         created_at: 'DESC',
       },
@@ -74,6 +74,7 @@ export class PaymentsService {
     const payment = this.paymentsRepository.create({
       student_id: student.student_id,
       tutor_id: tutor.tutor_id as any,
+      booking_request_id: bookingId,
       amount: Number(amount),
       status: 'pending',
       dispute_status: 'none',
@@ -146,7 +147,7 @@ export class PaymentsService {
   async verifyPayment(id: number, status: 'confirmed' | 'rejected', adminProofFile?: any, rejectionReason?: string) {
     const payment = await this.paymentsRepository.findOne({ 
       where: { payment_id: id },
-      relations: ['tutor', 'tutor.user', 'student', 'student.user']
+      relations: ['tutor', 'tutor.user', 'student', 'student.user', 'bookingRequest']
     });
     if (!payment) throw new NotFoundException('Payment not found');
     // Admin verification now becomes a two-step flow:
@@ -184,27 +185,24 @@ export class PaymentsService {
       console.warn('verifyPayment: Failed to update Unreviewed Payments summary notifications', e);
     }
     // Update the booking to 'upcoming' immediately after admin confirmation
+    // Only update the specific booking request associated with this payment
     if (status === 'confirmed') {
       try {
-        const studentUserId = (payment as any)?.student?.user?.user_id;
-        const tutorId = (payment as any)?.tutor_id;
-        if (studentUserId && tutorId) {
-          const bookings = await this.bookingRepository.find({
-            where: {
-              student: { user_id: studentUserId } as any,
-              tutor: { tutor_id: tutorId } as any
-            },
+        const bookingRequestId = (payment as any)?.booking_request_id;
+        if (bookingRequestId) {
+          const booking = await this.bookingRepository.findOne({
+            where: { id: bookingRequestId } as any,
             relations: ['tutor', 'student']
           });
-          if (bookings && bookings.length > 0) {
-            for (const booking of bookings) {
-              (booking as any).status = 'upcoming';
-              await this.bookingRepository.save(booking as any);
-              console.log(`verifyPayment: Updated booking_id=${(booking as any).id} to status=upcoming`);
-            }
+          if (booking) {
+            (booking as any).status = 'upcoming';
+            await this.bookingRepository.save(booking as any);
+            console.log(`verifyPayment: Updated booking_id=${bookingRequestId} to status=upcoming`);
           } else {
-            console.warn(`verifyPayment: No matching booking found to update for tutor_id=${tutorId}, student_user_id=${studentUserId}`);
+            console.warn(`verifyPayment: No booking found with id=${bookingRequestId} associated with payment_id=${id}`);
           }
+        } else {
+          console.warn(`verifyPayment: Payment ${id} has no booking_request_id, cannot update booking status`);
         }
       } catch (err) {
         console.error('verifyPayment: Failed to update related booking status', err);
@@ -382,6 +380,7 @@ export class PaymentsService {
       const payment = this.paymentsRepository.create({
         student_id: student.student_id,
         tutor_id: tutor.tutor_id,
+        booking_request_id: bookingId,
         amount: Number(amount),
         status: 'pending',
         dispute_status: 'none',

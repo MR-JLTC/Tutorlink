@@ -29,7 +29,8 @@ export class UsersController {
       role: u.admin_profile ? 'admin' : (u.tutor_profile ? 'tutor' : 'student'),
       tutor_profile: u.tutor_profile ? {
         tutor_id: u.tutor_profile.tutor_id,
-        status: u.tutor_profile.status
+        status: u.tutor_profile.status,
+        activity_status: u.tutor_profile.activity_status ?? 'offline'
       } : null
     }));
   }

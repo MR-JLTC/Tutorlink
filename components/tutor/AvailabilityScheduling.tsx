@@ -231,7 +231,7 @@ const TimeRangePicker: React.FC<{ day: string; onAddRange: (startTime: string, e
       <button
         type="button"
         onClick={() => setShowPicker(true)}
-        className="flex items-center justify-center gap-2 w-full px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
+        className="flex items-center justify-center gap-2 w-full px-6 py-3.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white text-sm font-bold rounded-xl hover:from-primary-700 hover:to-primary-800 transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
       >
         <Plus className="h-5 w-5" />
         <span>Add Time Range</span>
@@ -240,40 +240,42 @@ const TimeRangePicker: React.FC<{ day: string; onAddRange: (startTime: string, e
   }
 
   return (
-    <div className="space-y-4 p-4 bg-white rounded-xl border-2 border-blue-300 shadow-lg">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-4 p-3 sm:p-4 md:p-5 bg-white rounded-xl border-2 border-primary-300 shadow-lg">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="space-y-2">
-          <label className="block text-xs font-bold text-blue-700 uppercase tracking-wide">Start Time</label>
+          <label className="block text-xs sm:text-sm font-bold text-primary-700 uppercase tracking-wide">Start Time</label>
           <input
             type="time"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
-            className="w-full px-4 py-3 text-base border-2 border-blue-300 rounded-xl bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-semibold text-slate-800 shadow-sm transition-all"
+            className="w-full px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 md:py-3.5 text-sm sm:text-base border-2 border-primary-300 rounded-xl bg-primary-50 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-semibold text-slate-800 shadow-sm transition-all min-w-0"
+            style={{ minWidth: '140px' }}
           />
         </div>
         <div className="space-y-2">
-          <label className="block text-xs font-bold text-blue-700 uppercase tracking-wide">End Time</label>
+          <label className="block text-xs sm:text-sm font-bold text-primary-700 uppercase tracking-wide">End Time</label>
           <input
             type="time"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
-            className="w-full px-4 py-3 text-base border-2 border-blue-300 rounded-xl bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-semibold text-slate-800 shadow-sm transition-all"
+            className="w-full px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 md:py-3.5 text-sm sm:text-base border-2 border-primary-300 rounded-xl bg-primary-50 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-semibold text-slate-800 shadow-sm transition-all min-w-0"
+            style={{ minWidth: '140px' }}
           />
         </div>
       </div>
-      <div className="flex items-center gap-3 pt-2">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 pt-2">
         <button
           type="button"
           onClick={handleAdd}
-          className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+          className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-primary-600 to-primary-700 text-white text-xs sm:text-sm font-bold rounded-xl hover:from-primary-700 hover:to-primary-800 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 min-h-[44px]"
         >
-          <Plus className="h-4 w-4" />
-          <span>Add Time Range</span>
+          <Plus className="h-4 w-4 flex-shrink-0" />
+          <span className="whitespace-nowrap">Add Time Range</span>
         </button>
         <button
           type="button"
           onClick={() => setShowPicker(false)}
-          className="px-6 py-3 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-200 transition-all shadow-sm border border-slate-300"
+          className="px-4 sm:px-6 py-2.5 sm:py-3 bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold rounded-xl hover:bg-slate-200 transition-all shadow-sm border border-slate-300 min-h-[44px] sm:w-auto w-full"
         >
           Cancel
         </button>
@@ -662,69 +664,73 @@ const AvailabilityScheduling: React.FC = () => {
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6 pb-4 sm:pb-6 md:pb-8">
       {/* Enhanced Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 lg:p-8 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
-        <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold mb-0.5 sm:mb-1 md:mb-2 flex items-center gap-2 sm:gap-2.5 md:gap-3">
-              <Calendar className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 lg:h-10 lg:w-10 flex-shrink-0" />
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 lg:p-8 text-white shadow-2xl relative overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+        </div>
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-1 drop-shadow-lg flex items-center gap-2 sm:gap-3">
+              <Calendar className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 lg:h-10 lg:w-10 flex-shrink-0" />
               <span className="truncate">Availability Scheduling</span>
             </h1>
-            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Manage your weekly availability and update your schedule anytime</p>
-        </div>
-        <div className="flex w-full sm:w-auto mt-1 sm:mt-0">
-          {isEditing ? (
+            <p className="text-xs sm:text-sm md:text-base text-white/90 leading-tight">Manage your weekly availability and update your schedule anytime</p>
+          </div>
+          <div className="flex w-full sm:w-auto mt-2 sm:mt-0">
+            {isEditing ? (
               <button 
                 onClick={saveAvailability} 
-                className="flex items-center justify-center space-x-1.5 sm:space-x-2 bg-white text-blue-600 px-3 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-3 rounded-lg sm:rounded-xl font-semibold hover:bg-blue-50 active:bg-blue-100 transition-all shadow-md hover:shadow-lg text-xs sm:text-sm md:text-base w-full sm:w-auto touch-manipulation"
+                className="flex items-center justify-center space-x-2 bg-white/95 backdrop-blur-sm text-primary-600 px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl font-semibold hover:bg-white transition-all shadow-xl hover:shadow-2xl text-xs sm:text-sm md:text-base w-full sm:w-auto touch-manipulation"
                 style={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <Save className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 flex-shrink-0" />
-              <span>Save Changes</span>
+                <Save className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                <span>Save Changes</span>
               </button>
             ) : (
               <button 
                 onClick={() => setIsEditing(true)} 
-                className="flex items-center justify-center space-x-1.5 sm:space-x-2 bg-white text-blue-600 px-3 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-3 rounded-lg sm:rounded-xl font-semibold hover:bg-blue-50 active:bg-blue-100 transition-all shadow-md hover:shadow-lg text-xs sm:text-sm md:text-base w-full sm:w-auto touch-manipulation"
+                className="flex items-center justify-center space-x-2 bg-white/95 backdrop-blur-sm text-primary-600 px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-xl font-semibold hover:bg-white transition-all shadow-xl hover:shadow-2xl text-xs sm:text-sm md:text-base w-full sm:w-auto touch-manipulation"
                 style={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 flex-shrink-0" />
-              <span>Edit Schedule</span>
+                <Edit className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                <span>Edit Schedule</span>
               </button>
-          )}
+            )}
           </div>
         </div>
       </div>
 
       {/* Current Schedule */}
       <Card className="p-0 overflow-hidden shadow-xl border-0 -mx-2 sm:-mx-3 md:mx-0">
-        <div className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200 px-3 sm:px-4 md:px-6 lg:px-8 py-3 sm:py-4 md:py-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
-            <h2 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-slate-800 flex items-center gap-1.5 sm:gap-2 md:gap-3">
-              <div className="p-1 sm:p-1.5 md:p-2 bg-blue-100 rounded-lg flex-shrink-0">
-                <Calendar className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-blue-600" />
+        <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 border-b-2 border-primary-200/50 px-4 sm:px-5 md:px-6 lg:px-8 py-4 sm:py-5 md:py-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+                <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
-              <span className="truncate">Weekly Schedule</span>
-          </h2>
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 w-full sm:w-auto">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Weekly Schedule</h2>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <button
                 onClick={() => setShowFilter(!showFilter)}
-                className={`flex items-center justify-center space-x-1 sm:space-x-1.5 md:space-x-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-all text-[10px] sm:text-xs md:text-sm touch-manipulation ${
+                className={`flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 rounded-xl font-semibold transition-all text-xs sm:text-sm shadow-lg hover:shadow-xl touch-manipulation ${
                   showFilter 
-                    ? 'bg-blue-600 text-white shadow-md' 
-                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 active:bg-blue-100'
+                    ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white' 
+                    : 'bg-white text-primary-700 border-2 border-primary-300 hover:bg-primary-50'
                 }`}
                 style={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <Filter className="h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4" />
+                <Filter className="h-4 w-4" />
                 <span>Filter</span>
               </button>
-          {isEditing && (
+              {isEditing && (
                 <button 
                   onClick={() => setIsEditing(false)}
-                  className="px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 active:bg-slate-300 transition-colors text-[10px] sm:text-xs md:text-sm flex-1 sm:flex-none touch-manipulation"
+                  className="px-3 sm:px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-semibold hover:bg-slate-200 transition-all shadow-md hover:shadow-lg text-xs sm:text-sm flex-1 sm:flex-none touch-manipulation"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
-                Cancel
+                  Cancel
                 </button>
               )}
             </div>
@@ -734,19 +740,21 @@ const AvailabilityScheduling: React.FC = () => {
         <div className="p-3 sm:p-4 md:p-6 lg:p-8">
           {/* Filter Controls - Always visible when filter is open */}
           {showFilter && (
-          <div className="mb-4 sm:mb-6 md:mb-8 p-3 sm:p-4 md:p-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl border-2 border-blue-200 shadow-lg">
-            <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
-              <div className="flex items-center space-x-1.5 sm:space-x-2">
-                <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 text-blue-600 flex-shrink-0" />
-                <h3 className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">Filter & View Options</h3>
+          <div className="mb-4 sm:mb-6 md:mb-8 p-4 sm:p-5 md:p-6 bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 rounded-xl sm:rounded-2xl border-2 border-primary-200/50 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+                  <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+                </div>
+                <h3 className="text-sm sm:text-base md:text-lg font-bold text-slate-800">Filter & View Options</h3>
               </div>
               <button
                 onClick={() => setShowFilter(false)}
-                className="text-slate-500 hover:text-slate-700 active:text-slate-900 p-1 rounded-full hover:bg-white active:bg-slate-100 transition-colors flex-shrink-0 touch-manipulation"
+                className="text-slate-500 hover:text-slate-700 hover:bg-slate-100 p-2 rounded-full transition-all flex-shrink-0 touch-manipulation"
                 title="Close filter"
                 style={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
               </button>
             </div>
             
@@ -762,10 +770,10 @@ const AvailabilityScheduling: React.FC = () => {
                     <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                       <button
                         onClick={() => applyPresetFilter('all')}
-                        className={`px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs rounded-lg font-medium transition-all touch-manipulation ${
+                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-xl font-semibold transition-all shadow-md hover:shadow-lg touch-manipulation ${
                           filterStartHour === 0 && filterEndHour === 23
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 active:bg-blue-100 hover:border-blue-300'
+                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                            : 'bg-white text-slate-700 border-2 border-primary-300 hover:bg-primary-50'
                         }`}
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
@@ -773,10 +781,10 @@ const AvailabilityScheduling: React.FC = () => {
                       </button>
                       <button
                         onClick={() => applyPresetFilter('business')}
-                        className={`px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs rounded-lg font-medium transition-all touch-manipulation ${
+                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-xl font-semibold transition-all shadow-md hover:shadow-lg touch-manipulation ${
                           filterStartHour === 9 && filterEndHour === 17
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 active:bg-blue-100 hover:border-blue-300'
+                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                            : 'bg-white text-slate-700 border-2 border-primary-300 hover:bg-primary-50'
                         }`}
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
@@ -784,10 +792,10 @@ const AvailabilityScheduling: React.FC = () => {
                       </button>
                       <button
                         onClick={() => applyPresetFilter('morning')}
-                        className={`px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs rounded-lg font-medium transition-all touch-manipulation ${
+                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-xl font-semibold transition-all shadow-md hover:shadow-lg touch-manipulation ${
                           filterStartHour === 6 && filterEndHour === 11
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 active:bg-blue-100 hover:border-blue-300'
+                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                            : 'bg-white text-slate-700 border-2 border-primary-300 hover:bg-primary-50'
                         }`}
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
@@ -795,10 +803,10 @@ const AvailabilityScheduling: React.FC = () => {
                       </button>
                       <button
                         onClick={() => applyPresetFilter('afternoon')}
-                        className={`px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs rounded-lg font-medium transition-all touch-manipulation ${
+                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-xl font-semibold transition-all shadow-md hover:shadow-lg touch-manipulation ${
                           filterStartHour === 12 && filterEndHour === 17
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 active:bg-blue-100 hover:border-blue-300'
+                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                            : 'bg-white text-slate-700 border-2 border-primary-300 hover:bg-primary-50'
                         }`}
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
@@ -806,10 +814,10 @@ const AvailabilityScheduling: React.FC = () => {
                       </button>
                       <button
                         onClick={() => applyPresetFilter('evening')}
-                        className={`px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs rounded-lg font-medium transition-all md:col-span-2 touch-manipulation ${
+                        className={`px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-xl font-semibold transition-all shadow-md hover:shadow-lg md:col-span-2 touch-manipulation ${
                           filterStartHour === 18 && filterEndHour === 23
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 active:bg-blue-100 hover:border-blue-300'
+                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                            : 'bg-white text-slate-700 border-2 border-primary-300 hover:bg-primary-50'
                         }`}
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
@@ -827,7 +835,7 @@ const AvailabilityScheduling: React.FC = () => {
                         <select
                           value={filterStartHour}
                           onChange={(e) => setFilterStartHour(parseInt(e.target.value, 10))}
-                          className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                          className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 shadow-sm"
                         >
                           {Array.from({ length: 24 }, (_, i) => (
                             <option key={i} value={i}>
@@ -842,7 +850,7 @@ const AvailabilityScheduling: React.FC = () => {
                         <select
                           value={filterEndHour}
                           onChange={(e) => setFilterEndHour(parseInt(e.target.value, 10))}
-                          className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                          className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 shadow-sm"
                         >
                           {Array.from({ length: 24 }, (_, i) => (
                             <option key={i} value={i}>
@@ -863,13 +871,13 @@ const AvailabilityScheduling: React.FC = () => {
                   
                   {/* Display Mode Toggle */}
         <div className="space-y-2 sm:space-y-3">
-                    <div className="flex gap-1.5 sm:gap-2">
+                    <div className="flex gap-2">
                       <button
                         onClick={() => setDisplayMode('30min')}
-                        className={`flex-1 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 rounded-lg font-medium transition-all text-[10px] sm:text-xs md:text-sm touch-manipulation ${
+                        className={`flex-1 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg text-xs sm:text-sm touch-manipulation ${
                           displayMode === '30min'
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 active:bg-blue-100 hover:border-blue-300'
+                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                            : 'bg-white text-slate-700 border-2 border-primary-300 hover:bg-primary-50'
                         }`}
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
@@ -877,10 +885,10 @@ const AvailabilityScheduling: React.FC = () => {
                       </button>
                       <button
                         onClick={() => setDisplayMode('hourly')}
-                        className={`flex-1 px-2.5 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 rounded-lg font-medium transition-all text-[10px] sm:text-xs md:text-sm touch-manipulation ${
+                        className={`flex-1 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl font-semibold transition-all shadow-md hover:shadow-lg text-xs sm:text-sm touch-manipulation ${
                           displayMode === 'hourly'
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50 active:bg-blue-100 hover:border-blue-300'
+                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white'
+                            : 'bg-white text-slate-700 border-2 border-primary-300 hover:bg-primary-50'
                         }`}
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
@@ -905,7 +913,7 @@ const AvailabilityScheduling: React.FC = () => {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
                 <div className="text-[10px] sm:text-xs text-slate-600">
                   <span className="font-medium">Showing:</span>{' '}
-                  <span className="text-blue-600 font-semibold">{displaySlots.length}</span>{' '}
+                  <span className="text-primary-600 font-semibold">{displaySlots.length}</span>{' '}
                   {displaySlots.length === 1 ? 'slot' : 'slots'} 
                   {' '}({filterStartHour.toString().padStart(2, '0')}:00 - {displayMode === 'hourly' ? `${(filterEndHour - 1).toString().padStart(2, '0')}:59` : `${filterEndHour.toString().padStart(2, '0')}:59`})
                 </div>
@@ -915,7 +923,7 @@ const AvailabilityScheduling: React.FC = () => {
                     setFilterEndHour(23);
                     setDisplayMode('30min');
                   }}
-                  className="text-[10px] sm:text-xs text-blue-600 hover:text-blue-700 active:text-blue-800 font-medium hover:underline touch-manipulation"
+                  className="text-[10px] sm:text-xs text-primary-600 hover:text-primary-700 active:text-primary-800 font-medium hover:underline touch-manipulation"
                   style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   Reset All Filters
@@ -984,7 +992,7 @@ const AvailabilityScheduling: React.FC = () => {
                       <div className="flex items-center space-x-2 sm:space-x-3 md:space-x-4 min-w-0 flex-1">
                 <input
                   type="checkbox"
-                          className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 rounded-lg border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer flex-shrink-0 touch-manipulation"
+                          className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 rounded-lg border-slate-300 text-primary-600 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 cursor-pointer flex-shrink-0 touch-manipulation"
                           checked={hasAnySelected}
                           onChange={() => handleDayToggle(day)}
                   disabled={!isEditing}
@@ -1013,7 +1021,7 @@ const AvailabilityScheduling: React.FC = () => {
                   {isEditing && (
                     <div className="px-3 sm:px-4 md:px-6 pb-4 sm:pb-5 md:pb-6 space-y-4 sm:space-y-5 md:space-y-6">
                       {/* Add New Time Range - Enhanced Design */}
-                      <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border-2 border-blue-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 shadow-xl hover:shadow-2xl transition-all">
+                      <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-purple-50 border-2 border-primary-300 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 shadow-xl hover:shadow-2xl transition-all">
                         <div className="flex items-start gap-2 sm:gap-3 md:gap-4 mb-3 sm:mb-4 md:mb-5">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-bold text-base sm:text-lg md:text-xl text-slate-800 mb-1">Add Available Time</h3>
@@ -1133,7 +1141,7 @@ const AvailabilityScheduling: React.FC = () => {
                                       key={`${range.start_time}-${range.end_time}-${idx}`}
                                       className={`rounded-xl sm:rounded-2xl transition-all duration-200 ${
                                         isEditing 
-                                          ? 'bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 border-2 border-blue-400 shadow-xl p-3 sm:p-4 md:p-5' 
+                                          ? 'bg-gradient-to-r from-primary-50 via-primary-100/50 to-primary-50 border-2 border-primary-400 shadow-xl p-3 sm:p-4 md:p-5' 
                                           : 'bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 border-2 border-green-200 hover:border-green-400 hover:shadow-lg p-3 sm:p-4 md:p-5 group'
                                       }`}
                                     >
@@ -1142,30 +1150,32 @@ const AvailabilityScheduling: React.FC = () => {
                                           // Edit Mode - Premium Design
                                           <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                             <div className="space-y-1.5 sm:space-y-2">
-                                              <label className="block text-[10px] sm:text-xs font-bold text-blue-700 uppercase tracking-wide flex items-center gap-1">
+                                              <label className="block text-[10px] sm:text-xs font-bold text-primary-700 uppercase tracking-wide flex items-center gap-1">
                                                 <Calendar className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                                                 Start Time
-              </label>
-                <input
-                  type="time"
+                                              </label>
+                                              <input
+                                                type="time"
                                                 value={editStartTime}
                                                 onChange={(e) => setEditStartTime(e.target.value)}
-                                                className="w-full px-2.5 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm md:text-base border-2 border-blue-400 rounded-lg sm:rounded-xl bg-white focus:ring-2 sm:focus:ring-4 focus:ring-blue-200 focus:border-blue-600 font-bold text-slate-800 shadow-lg transition-all"
+                                                className="w-full px-3 sm:px-4 md:px-5 py-2.5 sm:py-2.5 md:py-3 text-sm sm:text-sm md:text-base border-2 border-primary-400 rounded-lg sm:rounded-xl bg-white focus:ring-2 sm:focus:ring-4 focus:ring-primary-200 focus:border-primary-600 font-bold text-slate-800 shadow-lg transition-all min-w-0"
+                                                style={{ minWidth: '140px' }}
                                               />
                                             </div>
                                             <div className="space-y-1.5 sm:space-y-2">
-                                              <label className="block text-[10px] sm:text-xs font-bold text-blue-700 uppercase tracking-wide flex items-center gap-1">
+                                              <label className="block text-[10px] sm:text-xs font-bold text-primary-700 uppercase tracking-wide flex items-center gap-1">
                                                 <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                                                 End Time
                                               </label>
-                <input
-                  type="time"
+                                              <input
+                                                type="time"
                                                 value={editEndTime}
                                                 onChange={(e) => setEditEndTime(e.target.value)}
-                                                className="w-full px-2.5 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm md:text-base border-2 border-blue-400 rounded-lg sm:rounded-xl bg-white focus:ring-2 sm:focus:ring-4 focus:ring-blue-200 focus:border-blue-600 font-bold text-slate-800 shadow-lg transition-all"
-                />
-              </div>
-            </div>
+                                                className="w-full px-3 sm:px-4 md:px-5 py-2.5 sm:py-2.5 md:py-3 text-sm sm:text-sm md:text-base border-2 border-primary-400 rounded-lg sm:rounded-xl bg-white focus:ring-2 sm:focus:ring-4 focus:ring-primary-200 focus:border-primary-600 font-bold text-slate-800 shadow-lg transition-all min-w-0"
+                                                style={{ minWidth: '140px' }}
+                                              />
+                                            </div>
+                                          </div>
                                         ) : (
                                           // View Mode - Premium Design
                                           <div className="flex items-center gap-2 sm:gap-3 md:gap-4 flex-1 min-w-0">
@@ -1202,7 +1212,7 @@ const AvailabilityScheduling: React.FC = () => {
                                               <button
                                                 type="button"
                                                 onClick={() => saveEdit(idx)}
-                                                className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg sm:rounded-xl hover:from-blue-700 hover:to-indigo-700 active:from-blue-800 active:to-indigo-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-1.5 sm:gap-2 flex-1 sm:flex-none touch-manipulation"
+                                                className="px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-primary-600 to-primary-700 rounded-lg sm:rounded-xl hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-1.5 sm:gap-2 flex-1 sm:flex-none touch-manipulation"
                                                 title="Save changes"
                                                 style={{ WebkitTapHighlightColor: 'transparent' }}
                                               >
@@ -1224,7 +1234,7 @@ const AvailabilityScheduling: React.FC = () => {
                                               <button
                                                 type="button"
                                                 onClick={() => startEdit(idx, range)}
-                                                className="px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-blue-700 bg-blue-50 rounded-lg sm:rounded-xl hover:bg-blue-100 active:bg-blue-200 transition-all shadow-md hover:shadow-lg opacity-0 group-hover:opacity-100 border-2 border-blue-200 flex items-center justify-center gap-1.5 sm:gap-2 flex-1 sm:flex-none touch-manipulation"
+                                                className="px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-primary-700 bg-primary-50 rounded-lg sm:rounded-xl hover:bg-primary-100 active:bg-primary-200 transition-all shadow-md hover:shadow-lg opacity-0 group-hover:opacity-100 border-2 border-primary-200 flex items-center justify-center gap-1.5 sm:gap-2 flex-1 sm:flex-none touch-manipulation"
                                                 title="Edit this time range"
                                                 style={{ WebkitTapHighlightColor: 'transparent' }}
                                               >
@@ -1335,7 +1345,7 @@ const AvailabilityScheduling: React.FC = () => {
                                     {hourRanges.map((range, rIdx) => (
                                       <span
                                         key={rIdx}
-                                        className="px-3 py-1.5 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 rounded-lg text-sm font-medium border border-blue-200 shadow-sm"
+                                        className="px-3 py-1.5 bg-gradient-to-r from-primary-100 via-primary-100/50 to-primary-100 text-primary-800 rounded-lg text-sm font-medium border border-primary-200 shadow-sm"
                                       >
                                         {range.start_time} - {range.end_time}
                                       </span>
@@ -1358,7 +1368,7 @@ const AvailabilityScheduling: React.FC = () => {
                             {filteredRanges.map((range, idx) => (
                               <span
                                 key={idx}
-                                className="px-3 py-1.5 bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 rounded-lg text-sm font-medium border border-blue-200 shadow-sm"
+                                className="px-3 py-1.5 bg-gradient-to-r from-primary-100 via-primary-100/50 to-primary-100 text-primary-800 rounded-lg text-sm font-medium border border-primary-200 shadow-sm"
                               >
                                 {range.start_time} - {range.end_time}
                               </span>
@@ -1389,20 +1399,25 @@ const AvailabilityScheduling: React.FC = () => {
       {/* Change request feature removed */}
 
       {/* Schedule Summary */}
-      <Card className="p-4 sm:p-6">
-        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Schedule Summary</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="font-medium text-blue-800 mb-2">Available Days</h3>
-            <p className="text-2xl font-bold text-blue-600">
+      <Card className="p-5 sm:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+            <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          </div>
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Schedule Summary</h2>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 sm:p-5 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
+            <h3 className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Available Days</h3>
+            <p className="text-2xl sm:text-3xl font-bold text-primary-700">
               {Object.values(availability).filter((day: DayAvailability) => day.selectedSlots.size > 0).length}
             </p>
-            <p className="text-sm text-blue-600">out of 7 days</p>
+            <p className="text-xs sm:text-sm text-primary-600 mt-1">out of 7 days</p>
           </div>
           
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="font-medium text-green-800 mb-2">Total Hours</h3>
-            <p className="text-2xl font-bold text-green-600">
+          <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 sm:p-5 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
+            <h3 className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Total Hours</h3>
+            <p className="text-2xl sm:text-3xl font-bold text-primary-700">
               {(
                 Object.values(availability)
                   .reduce((total: number, day: DayAvailability) => {
@@ -1411,12 +1426,12 @@ const AvailabilityScheduling: React.FC = () => {
                   }, 0) as number
               ).toFixed(1)}
             </p>
-            <p className="text-sm text-green-600">hours per week</p>
+            <p className="text-xs sm:text-sm text-primary-600 mt-1">hours per week</p>
           </div>
           
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <h3 className="font-medium text-purple-800 mb-2">Total Slots</h3>
-            <p className="text-2xl font-bold text-purple-600">
+          <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 sm:p-5 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
+            <h3 className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Total Slots</h3>
+            <p className="text-2xl sm:text-3xl font-bold text-primary-700">
               {displayMode === 'hourly' 
                 ? (() => {
                     // Count total slots (in hourly view, each hour counts as 1 slot if both :00 and :30 are selected)
@@ -1439,7 +1454,7 @@ const AvailabilityScheduling: React.FC = () => {
                     .reduce((total: number, day: DayAvailability) => total + day.selectedSlots.size, 0)
               }
             </p>
-            <p className="text-sm text-purple-600">
+            <p className="text-xs sm:text-sm text-primary-600 mt-1">
               {displayMode === 'hourly' ? 'slots selected (hourly)' : '30-min slots selected'}
             </p>
           </div>

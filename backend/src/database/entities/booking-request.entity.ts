@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { Tutor } from './tutor.entity';
 import { User } from './user.entity';
+import { Payment } from './payment.entity';
 
 @Entity('booking_requests')
 export class BookingRequest {
@@ -83,4 +84,7 @@ export class BookingRequest {
 
   @Column({ type: 'timestamp', nullable: true })
   tutee_feedback_at?: Date;
+
+  @OneToMany(() => Payment, (payment) => payment.bookingRequest)
+  payments?: Payment[];
 }

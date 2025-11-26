@@ -135,6 +135,13 @@ export class TutorsController {
     return { tutor_id: tutorId };
   }
 
+  @Patch('by-user/:userId/online-status')
+  @UseGuards(JwtAuthGuard)
+  async updateOnlineStatus(@Param('userId') userId: string, @Body() body: { status: 'online' | 'offline' }) {
+    await this.tutorsService.updateOnlineStatus(+userId, body.status);
+    return { success: true, message: `Online status updated to ${body.status}` };
+  }
+
   @Get('by-email/:email')
   async getTutorByEmail(@Param('email') email: string) {
     return this.tutorsService.getTutorByEmail(email);

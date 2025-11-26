@@ -19,6 +19,7 @@ export interface University {
 export interface Course {
   course_id: number;
   course_name: string;
+  acronym?: string;
   university_id: number;
   university?: University; // Joined data
 }

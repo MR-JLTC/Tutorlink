@@ -5,7 +5,7 @@ import Card from '../ui/Card';
 import Modal from '../ui/Modal';
 import { useAuth } from '../../hooks/useAuth';
 import { useVerification } from '../../context/VerificationContext';
-import { FileText, Upload, CheckCircle, Clock, Plus, X, User, Camera, CreditCard } from 'lucide-react';
+import { FileText, Upload, CheckCircle, Clock, Plus, X, User, Camera, CreditCard, Edit } from 'lucide-react';
 
 interface TutorProfileData {
   profile_photo: string;
@@ -680,18 +680,22 @@ const ApplicationVerification: React.FC = () => {
 
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-6">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6 pb-6 sm:pb-8 md:pb-10">
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 text-white shadow-2xl relative overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+        </div>
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-2.5 md:gap-3">
-              <FileText className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 drop-shadow-lg flex items-center gap-2 sm:gap-3">
+              <FileText className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 flex-shrink-0" />
               <span className="truncate">Application & Verification</span>
             </h1>
-            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Manage your tutor application and subject expertise</p>
+            <p className="text-xs sm:text-sm md:text-base text-white/90 leading-tight">Manage your tutor application and subject expertise</p>
           </div>
-          <div className={`px-2.5 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 rounded-full text-[10px] sm:text-xs md:text-sm font-semibold bg-white text-slate-800 shadow flex-shrink-0 ${getStatusColor(applicationStatus).replace('bg-', 'border-').replace(' text-', ' ')}`}>
-            <div className="flex items-center space-x-1 sm:space-x-1.5 md:space-x-2">
+          <div className={`px-3 sm:px-4 md:px-5 py-1.5 sm:py-2 md:py-2.5 rounded-full text-xs sm:text-sm md:text-base font-semibold bg-white/95 backdrop-blur-sm text-slate-800 shadow-xl flex-shrink-0 border-2 ${getStatusColor(applicationStatus).replace('bg-', 'border-').replace(' text-', ' ')}`}>
+            <div className="flex items-center space-x-2">
               {getStatusIcon(applicationStatus)}
               <span className="whitespace-nowrap">{applicationStatus.charAt(0).toUpperCase() + applicationStatus.slice(1)}</span>
             </div>
@@ -713,7 +717,7 @@ const ApplicationVerification: React.FC = () => {
               <div className="mt-2.5 sm:mt-3 md:mt-4">
                 <Button 
                   onClick={() => window.location.href = '/tutor-registration'}
-                  className="w-full sm:w-auto bg-white text-blue-700 hover:bg-blue-50 border-2 border-blue-600 font-semibold text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
+                  className="w-full sm:w-auto bg-white text-primary-700 hover:bg-primary-50 border-2 border-primary-600 font-semibold text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
                 >
                   Complete Tutor Registration
                 </Button>
@@ -724,50 +728,54 @@ const ApplicationVerification: React.FC = () => {
       )}
 
       {/* Main Application Status */}
-      <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex items-center justify-between mb-2.5 sm:mb-3 md:mb-4">
-          <h2 className="text-base sm:text-lg md:text-xl font-semibold flex items-center">
-            <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5 mr-1.5 sm:mr-2 text-blue-600 flex-shrink-0" />
-            <span className="truncate">Main Application Status</span>
-          </h2>
+      <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+            <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          </div>
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Main Application Status</h2>
         </div>
         
         {applicationStatus?.toLowerCase() === 'approved' ? (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 sm:p-3 md:p-4">
+          <div className="bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 border-2 border-green-200/50 rounded-xl p-4 sm:p-5 shadow-lg">
             <div className="flex items-start sm:items-center">
-              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-green-600 mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0" />
+              <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl mr-3 flex-shrink-0 shadow-md">
+                <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm md:text-base font-medium text-green-800">Your application has been approved!</p>
-                <p className="text-[10px] sm:text-xs md:text-sm text-green-600 mt-1">You can now start accepting tutoring sessions.</p>
+                <p className="text-sm sm:text-base md:text-lg font-bold text-green-800">Your application has been approved!</p>
+                <p className="text-xs sm:text-sm text-green-700 mt-1.5">You can now start accepting tutoring sessions.</p>
               </div>
             </div>
           </div>
         ) : applicationStatus?.toLowerCase() === 'rejected' ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 sm:p-3 md:p-4">
+          <div className="bg-gradient-to-br from-red-50 via-rose-50 to-red-50 border-2 border-red-200/50 rounded-xl p-4 sm:p-5 shadow-lg">
             <div className="flex items-start">
-              <X className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-red-600 mr-2 sm:mr-3 flex-shrink-0 mt-0.5" />
+              <div className="p-2 bg-gradient-to-br from-red-500 to-red-600 rounded-xl mr-3 flex-shrink-0 shadow-md">
+                <X className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs sm:text-sm md:text-base font-medium text-red-800">Your application has been rejected</p>
-                <p className="text-[10px] sm:text-xs md:text-sm text-red-600 mt-1">Your application did not meet the requirements. Please review the feedback below and resubmit if needed.</p>
+                <p className="text-sm sm:text-base md:text-lg font-bold text-red-800">Your application has been rejected</p>
+                <p className="text-xs sm:text-sm text-red-700 mt-1.5">Your application did not meet the requirements. Please review the feedback below and resubmit if needed.</p>
                 
                 {/* Admin Rejection Reason - Always show this section when rejected */}
-                <div className="mt-2.5 sm:mt-3 p-2 sm:p-3 bg-red-100 border border-red-300 rounded-md">
-                  <p className="text-[10px] sm:text-xs md:text-sm font-medium text-red-800 mb-1">Rejection Reason:</p>
+                <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-br from-red-100 to-red-50 border-2 border-red-300/50 rounded-xl shadow-sm">
+                  <p className="text-xs sm:text-sm font-semibold text-red-800 mb-2">Rejection Reason:</p>
                   {adminNotes ? (
-                    <p className="text-[10px] sm:text-xs md:text-sm text-red-700 leading-relaxed whitespace-pre-wrap break-words">{adminNotes}</p>
+                    <p className="text-xs sm:text-sm text-red-700 leading-relaxed whitespace-pre-wrap break-words">{adminNotes}</p>
                   ) : (
-                    <p className="text-[10px] sm:text-xs md:text-sm text-red-600 italic">No specific rejection reason was provided. Please review your application and ensure all requirements are met before resubmitting.</p>
+                    <p className="text-xs sm:text-sm text-red-600 italic">No specific rejection reason was provided. Please review your application and ensure all requirements are met before resubmitting.</p>
                   )}
                 </div>
                 
-                <div className="mt-2.5 sm:mt-3 md:mt-4">
+                <div className="mt-3 sm:mt-4">
                   <Button 
                     onClick={async () => {
                       // Fetch fresh data before showing form
                       await fetchFullTutorDataForReapplication();
                       setShowReapplicationForm(true);
                     }}
-                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
+                    className="w-full sm:w-auto bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl text-xs sm:text-sm md:text-base py-2 sm:py-2.5 px-4 sm:px-5"
                   >
                     Reapply - Update Application
                   </Button>
@@ -776,12 +784,14 @@ const ApplicationVerification: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2.5 sm:p-3 md:p-4">
+          <div className="bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-50 border-2 border-yellow-200/50 rounded-xl p-4 sm:p-5 shadow-lg">
             <div className="flex items-start sm:items-center">
-              <Clock className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-yellow-600 mr-2 sm:mr-3 flex-shrink-0 mt-0.5 sm:mt-0" />
+              <div className="p-2 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-xl mr-3 flex-shrink-0 shadow-md">
+                <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm md:text-base font-medium text-yellow-800">⏳ Your application is pending review</p>
-                <p className="text-[10px] sm:text-xs md:text-sm text-yellow-600 mt-1">An admin will review your documents and approve your account.</p>
+                <p className="text-sm sm:text-base md:text-lg font-bold text-yellow-800">⏳ Your application is pending review</p>
+                <p className="text-xs sm:text-sm text-yellow-700 mt-1.5">An admin will review your documents and approve your account.</p>
               </div>
             </div>
           </div>
@@ -789,38 +799,43 @@ const ApplicationVerification: React.FC = () => {
       </Card>
 
       {/* Current Approved Subjects */}
-      <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0 mb-2.5 sm:mb-3 md:mb-4">
-          <h2 className="text-base sm:text-lg md:text-xl font-semibold">Approved Subjects of Expertise</h2>
+      <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Approved Subjects of Expertise</h2>
+          </div>
           {isVerified && (
             <Button 
               onClick={() => setShowNewSubjectForm(true)}
-              className="w-full sm:w-auto flex items-center justify-center space-x-1.5 sm:space-x-2 text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
+              className="w-full sm:w-auto flex items-center justify-center space-x-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl text-xs sm:text-sm md:text-base py-2 sm:py-2.5 px-4 sm:px-5"
             >
-              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <Plus className="h-4 w-4" />
               <span>Apply for New Subject</span>
             </Button>
           )}
         </div>
         
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+        <div className="flex flex-wrap gap-2 sm:gap-2.5">
           {subjectApplications
             .filter(app => app.status === 'approved')
             .map(app => (
               <span
                 key={app.id}
-                className="px-2 sm:px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2"
+                className="px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 border border-primary-400/30 flex items-center gap-1.5"
               >
-                <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 flex-shrink-0" />
+                <CheckCircle className="h-4 w-4 flex-shrink-0" />
                 <span className="break-words">{app.subject_name}</span>
               </span>
             ))}
           {subjectApplications.filter(app => app.status === 'approved').length === 0 && (
-            <div className="w-full text-center py-3 sm:py-4">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
-                <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-600 mx-auto mb-2" />
-                <p className="text-xs sm:text-sm md:text-base text-yellow-800 font-medium">No approved subjects yet</p>
-                <p className="text-[10px] sm:text-xs md:text-sm text-yellow-700 mt-1">
+            <div className="w-full text-center py-6">
+              <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-200 rounded-xl p-5 sm:p-6 shadow-lg">
+                <Clock className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-600 mx-auto mb-3" />
+                <p className="text-sm sm:text-base md:text-lg text-yellow-800 font-semibold mb-1">No approved subjects yet</p>
+                <p className="text-xs sm:text-sm text-yellow-700">
                   Your subject expertise applications are being reviewed by our admin team.
                 </p>
               </div>
@@ -831,15 +846,20 @@ const ApplicationVerification: React.FC = () => {
 
       {/* New Subject Application Form */}
       {showNewSubjectForm && (
-        <Card className="p-3 sm:p-4 md:p-6 border-2 border-blue-200 -mx-2 sm:-mx-3 md:mx-0">
-          <div className="flex items-center justify-between mb-2.5 sm:mb-3 md:mb-4">
-            <h3 className="text-sm sm:text-base md:text-lg font-semibold text-blue-800">Apply for Additional Subject</h3>
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border-2 border-primary-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+                <Plus className="h-5 w-5 text-white" />
+              </div>
+              <h3 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Apply for Additional Subject</h3>
+            </div>
             <button
               onClick={() => setShowNewSubjectForm(false)}
-              className="text-slate-500 hover:text-slate-700 flex-shrink-0 ml-2 p-1"
+              className="text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full p-2 transition-all flex-shrink-0"
               aria-label="Close form"
             >
-              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+              <X className="h-5 w-5" />
             </button>
           </div>
           
@@ -895,7 +915,7 @@ const ApplicationVerification: React.FC = () => {
               <p className="text-[10px] sm:text-xs text-slate-500 mb-1.5 sm:mb-2">
                 If your desired subject is not in the dropdown above, you can type a custom subject name here.
                 {isCustomInputDisabled && (
-                  <span className="text-blue-600 font-medium ml-1">
+                  <span className="text-primary-600 font-medium ml-1">
                     ✓ Subject found in dropdown and auto-selected!
                   </span>
                 )}
@@ -904,7 +924,7 @@ const ApplicationVerification: React.FC = () => {
                 type="text"
                 className={`w-full border rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm ${
                   isCustomInputDisabled 
-                    ? 'border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed' 
+                    ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed' 
                     : 'border-slate-300 bg-white'
                 }`}
                 placeholder={
@@ -927,7 +947,7 @@ const ApplicationVerification: React.FC = () => {
                 multiple
                 accept=".pdf,.png,.jpg,.jpeg"
                 onChange={handleNewSubjectDocsChange}
-                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
               />
               {newSubjectDocuments.length > 0 && (
                 <ul className="list-disc list-inside text-xs sm:text-sm text-slate-600 mt-2 space-y-1">
@@ -940,17 +960,17 @@ const ApplicationVerification: React.FC = () => {
             
             {/* Subject Preview */}
             {(subjectToAdd || otherSubject.trim()) && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 sm:p-3">
-                <h4 className="text-xs sm:text-sm font-medium text-blue-800 mb-1">Subject to be submitted:</h4>
-                <p className="text-xs sm:text-sm text-blue-700 break-words">
+              <div className="bg-primary-50 border border-primary-200 rounded-lg p-2.5 sm:p-3">
+                <h4 className="text-xs sm:text-sm font-medium text-primary-800 mb-1">Subject to be submitted:</h4>
+                <p className="text-xs sm:text-sm text-primary-700 break-words">
                   {subjectToAdd || otherSubject.trim()}
                   {subjectToAdd && otherSubject.trim() && (
-                    <span className="text-[10px] sm:text-xs text-blue-600 ml-2">
+                    <span className="text-[10px] sm:text-xs text-primary-600 ml-2">
                       (Using dropdown selection)
                     </span>
                   )}
                   {!subjectToAdd && otherSubject.trim() && (
-                    <span className="text-[10px] sm:text-xs text-blue-600 ml-2">
+                    <span className="text-[10px] sm:text-xs text-primary-600 ml-2">
                       (Custom subject)
                     </span>
                   )}
@@ -962,11 +982,11 @@ const ApplicationVerification: React.FC = () => {
               <Button 
                 onClick={submitNewSubjectApplication}
                 disabled={(!subjectToAdd && !otherSubject.trim()) || newSubjectDocuments.length === 0}
-                className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
+                className="w-full sm:w-auto bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl text-xs sm:text-sm md:text-base py-2 sm:py-2.5 px-4 sm:px-5"
               >
                 Submit Application
               </Button>
-              <Button variant="secondary" onClick={() => setShowNewSubjectForm(false)} className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2">
+              <Button variant="secondary" onClick={() => setShowNewSubjectForm(false)} className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-2 sm:py-2.5 px-4 sm:px-5">
                 Cancel
               </Button>
             </div>
@@ -976,11 +996,16 @@ const ApplicationVerification: React.FC = () => {
 
       {/* Subject Applications History */}
       {subjectApplications.length > 0 && (
-        <Card className="p-3 sm:p-4 md:p-6 -mx-2 sm:-mx-3 md:mx-0">
-          <h2 className="text-base sm:text-lg md:text-xl font-semibold mb-2.5 sm:mb-3 md:mb-4">Subject Application History</h2>
-          <div className="space-y-2.5 sm:space-y-3 md:space-y-4">
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Subject Application History</h2>
+          </div>
+          <div className="space-y-3 sm:space-y-4">
             {subjectApplications.map(app => (
-              <div key={app.id} className="p-2.5 sm:p-3 md:p-4 bg-slate-50 rounded-lg border">
+              <div key={app.id} className="p-4 sm:p-5 bg-gradient-to-br from-slate-50 via-white to-slate-50 rounded-xl border-2 border-slate-200/50 hover:border-primary-300 hover:shadow-lg transition-all duration-200">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-2">
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 md:gap-3 min-w-0 flex-1">
                     <span className="font-medium text-xs sm:text-sm md:text-base text-slate-800 break-words">{app.subject_name}</span>
@@ -997,34 +1022,36 @@ const ApplicationVerification: React.FC = () => {
                 </div>
                 
                 {app.status === 'rejected' && (
-                  <div className="mt-3 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg">
-                    <div className="flex items-start space-x-2 sm:space-x-3">
-                      <X className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="mt-4 p-4 sm:p-5 bg-gradient-to-br from-red-50 via-rose-50 to-red-50 border-2 border-red-200/50 rounded-xl shadow-lg">
+                    <div className="flex items-start space-x-3">
+                      <div className="p-2 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex-shrink-0 shadow-md">
+                        <X className="h-5 w-5 text-white" />
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-0 mb-2">
-                          <p className="text-xs sm:text-sm font-semibold text-red-800">❌ Application Rejected</p>
-                          <span className="text-xs text-red-600 whitespace-nowrap">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+                          <p className="text-sm sm:text-base font-bold text-red-800">❌ Application Rejected</p>
+                          <span className="text-xs sm:text-sm text-red-600 whitespace-nowrap font-semibold">
                             Rejected: {new Date(app.updated_at).toLocaleDateString()}
                           </span>
                         </div>
                         {app.admin_notes ? (
                           <div>
-                            <p className="text-xs sm:text-sm font-medium text-red-700 mb-1">Admin Feedback:</p>
-                            <div className="bg-red-100 border border-red-300 rounded-md p-2 sm:p-3">
+                            <p className="text-xs sm:text-sm font-semibold text-red-700 mb-2 uppercase tracking-wide">Admin Feedback:</p>
+                            <div className="bg-gradient-to-br from-red-100 to-red-50 border-2 border-red-300/50 rounded-xl p-3 sm:p-4 shadow-sm">
                               <p className="text-xs sm:text-sm text-red-800 leading-relaxed break-words">{app.admin_notes}</p>
                             </div>
                           </div>
                         ) : (
                           <div>
-                            <p className="text-xs sm:text-sm font-medium text-red-700 mb-1">No specific feedback provided</p>
-                            <p className="text-xs text-red-600">
+                            <p className="text-xs sm:text-sm font-semibold text-red-700 mb-2">No specific feedback provided</p>
+                            <p className="text-xs sm:text-sm text-red-600">
                               The application was rejected based on current requirements and standards. 
                               You can reapply with additional documentation or qualifications.
                             </p>
                           </div>
                         )}
-                        <div className="mt-3 p-2 bg-red-100 rounded-md">
-                          <p className="text-xs text-red-700 font-medium">
+                        <div className="mt-4 p-3 bg-gradient-to-br from-red-100 to-red-50 border-2 border-red-200/50 rounded-xl">
+                          <p className="text-xs sm:text-sm text-red-700 font-semibold">
                             💡 You can reapply for this subject by clicking "Apply for New Subject" above.
                           </p>
                         </div>
@@ -1034,10 +1061,12 @@ const ApplicationVerification: React.FC = () => {
                 )}
                 
                 {app.status === 'approved' && (
-                  <div className="mt-3 p-2 sm:p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-                      <p className="text-xs sm:text-sm text-green-800 font-medium">
+                  <div className="mt-4 p-4 sm:p-5 bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 border-2 border-green-200/50 rounded-xl shadow-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex-shrink-0 shadow-md">
+                        <CheckCircle className="h-5 w-5 text-white" />
+                      </div>
+                      <p className="text-sm sm:text-base text-green-800 font-semibold">
                         This subject is now part of your approved expertise areas!
                       </p>
                     </div>
@@ -1045,10 +1074,12 @@ const ApplicationVerification: React.FC = () => {
                 )}
                 
                 {app.status === 'pending' && (
-                  <div className="mt-3 p-2 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-yellow-600 flex-shrink-0" />
-                      <p className="text-xs sm:text-sm text-yellow-800">
+                  <div className="mt-4 p-4 sm:p-5 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-50 border-2 border-yellow-200/50 rounded-xl shadow-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-gradient-to-br from-yellow-500 to-amber-600 rounded-xl flex-shrink-0 shadow-md">
+                        <Clock className="h-5 w-5 text-white" />
+                      </div>
+                      <p className="text-sm sm:text-base text-yellow-800 font-semibold">
                         Your application is being reviewed by our admin team.
                       </p>
                     </div>
@@ -1057,17 +1088,19 @@ const ApplicationVerification: React.FC = () => {
 
                 {/* Supporting Documents */}
                 {app.documents && app.documents.length > 0 && (
-                  <div className="mt-3">
-                    <h5 className="text-xs sm:text-sm font-medium text-slate-700 mb-2">Supporting Documents:</h5>
-                    <ul className="space-y-1.5 sm:space-y-2">
+                  <div className="mt-4">
+                    <h5 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3 uppercase tracking-wide">Supporting Documents:</h5>
+                    <ul className="space-y-2">
                       {app.documents.map((doc) => (
-                        <li key={doc.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-slate-50 rounded p-2">
+                        <li key={doc.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-gradient-to-r from-slate-50 via-primary-50/50 to-slate-50 rounded-xl p-3 border-2 border-slate-200/50 hover:border-primary-300 hover:shadow-md transition-all">
                           <div className="flex items-center min-w-0 flex-1">
-                            <FileText className="h-4 w-4 mr-2 text-primary-600 flex-shrink-0"/>
+                            <div className="p-1.5 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg mr-2.5 flex-shrink-0">
+                              <FileText className="h-4 w-4 text-primary-600"/>
+                            </div>
                             <button
                               type="button"
                               onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
-                              className="text-primary-600 hover:underline truncate text-left text-xs sm:text-sm"
+                              className="text-primary-700 hover:text-primary-900 hover:underline truncate text-left text-xs sm:text-sm font-semibold"
                               title="Open file"
                             >
                               {doc.file_name}
@@ -1077,7 +1110,7 @@ const ApplicationVerification: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
-                              className="text-xs text-slate-600 hover:text-slate-900 px-2 py-1 bg-white rounded border border-slate-200 hover:bg-slate-50"
+                              className="text-xs px-3 py-1.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
                             >
                               Open
                             </button>
@@ -1095,17 +1128,22 @@ const ApplicationVerification: React.FC = () => {
 
       {/* Reapplication Form (only show if rejected and user wants to reapply) */}
       {applicationStatus === 'rejected' && showReapplicationForm && (
-        <Card className="p-3 sm:p-4 md:p-6 border-2 border-blue-200 -mx-2 sm:-mx-3 md:mx-0">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0 mb-2.5 sm:mb-3 md:mb-4">
-            <h2 className="text-base sm:text-lg md:text-xl font-semibold text-blue-800">
-              Update & Resubmit Your Application
-            </h2>
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border-2 border-primary-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+                <Edit className="h-5 w-5 text-white" />
+              </div>
+              <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                Update & Resubmit Your Application
+              </h2>
+            </div>
             <Button
               variant="secondary"
               onClick={() => setShowReapplicationForm(false)}
-              className="w-full sm:w-auto flex items-center justify-center text-xs sm:text-sm md:text-base py-1.5 sm:py-2"
+              className="w-full sm:w-auto flex items-center justify-center text-xs sm:text-sm md:text-base py-2 sm:py-2.5 px-4 sm:px-5"
             >
-              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+              <X className="h-4 w-4 mr-2" />
               Cancel
             </Button>
           </div>
@@ -1264,7 +1302,7 @@ const ApplicationVerification: React.FC = () => {
                   )}
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 md:gap-4 flex-1 w-full sm:w-auto">
-                  <label className="flex items-center justify-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700 active:bg-blue-800 transition-colors text-xs sm:text-sm md:text-base w-full sm:w-auto touch-manipulation" style={{ WebkitTapHighlightColor: 'transparent' }}>
+                  <label className="flex items-center justify-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-primary-600 text-white rounded-lg cursor-pointer hover:bg-primary-700 active:bg-primary-800 transition-colors text-xs sm:text-sm md:text-base w-full sm:w-auto touch-manipulation" style={{ WebkitTapHighlightColor: 'transparent' }}>
                     <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4 md:h-5 md:w-5" />
                     <span>Upload Photo</span>
                     <input type="file" accept="image/*" onChange={handleProfilePhotoChange} className="hidden" />
@@ -1393,7 +1431,7 @@ const ApplicationVerification: React.FC = () => {
                           multiple
                           accept=".pdf,.png,.jpg,.jpeg"
                           onChange={(e) => handleSubjectFileChange(subject, e)}
-                          className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                          className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
                         />
                         {(subjectFilesMap[subject] || []).length > 0 && (
                           <ul className="mt-2 space-y-1">
@@ -1434,7 +1472,7 @@ const ApplicationVerification: React.FC = () => {
                     setReapplicationDocuments(Array.from(e.target.files));
                   }
                 }}
-                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
               />
               {reapplicationDocuments.length > 0 && (
                 <ul className="list-disc list-inside text-xs sm:text-sm text-slate-600 mt-2 space-y-1">
@@ -1492,7 +1530,7 @@ const ApplicationVerification: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => addReapplicationTimeSlot(day)}
-                            className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 active:bg-blue-300 rounded-md flex-1 sm:flex-none touch-manipulation"
+                            className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-primary-100 text-primary-700 hover:bg-primary-200 active:bg-primary-300 rounded-md flex-1 sm:flex-none touch-manipulation"
                             style={{ WebkitTapHighlightColor: 'transparent' }}
                           >
                             Add Time Slot
@@ -1541,11 +1579,11 @@ const ApplicationVerification: React.FC = () => {
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-3 sm:pt-4 border-t">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4 sm:pt-5 border-t-2 border-slate-200">
               <Button 
                 variant="secondary" 
                 onClick={() => setShowReapplicationForm(false)}
-                className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2 order-2 sm:order-1"
+                className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-2 sm:py-2.5 px-4 sm:px-5 order-2 sm:order-1"
               >
                 Cancel
               </Button>
@@ -1661,7 +1699,7 @@ const ApplicationVerification: React.FC = () => {
                   }
                 }}
                 disabled={isSubmittingReapplication}
-                className="w-full sm:w-auto text-xs sm:text-sm md:text-base py-1.5 sm:py-2 order-1 sm:order-2"
+                className="w-full sm:w-auto bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl text-xs sm:text-sm md:text-base py-2 sm:py-2.5 px-4 sm:px-5 order-1 sm:order-2"
               >
                 {isSubmittingReapplication ? 'Submitting...' : 'Submit Reapplication'}
               </Button>
@@ -1682,7 +1720,7 @@ const ApplicationVerification: React.FC = () => {
           </>
         }
       >
-        <div className="w-full h-[70vh] bg-gray-100 rounded overflow-hidden flex items-center justify-center">
+        <div className="w-full h-[70vh] bg-slate-100 rounded overflow-hidden flex items-center justify-center">
           {previewType === 'application/pdf' ? (
             <iframe title="PDF" src={previewUrl} className="w-full h-full" />
           ) : previewType.startsWith('image/') || previewType === 'image/*' ? (

@@ -5,6 +5,7 @@ import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useToast } from '../ui/Toast';
 
 interface CourseWithDetails extends Course {
     university: University;
@@ -12,13 +13,14 @@ interface CourseWithDetails extends Course {
 }
 
 const CourseManagement: React.FC = () => {
+    const { notify } = useToast();
     const [courses, setCourses] = useState<CourseWithDetails[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [openCourseId, setOpenCourseId] = useState<number | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [universities, setUniversities] = useState<University[]>([]);
-    const [form, setForm] = useState<{ course_name: string; university_id: number; subject_name?: string } | null>(null);
+    const [form, setForm] = useState<{ course_name: string; university_id: number; acronym?: string; subject_name?: string } | null>(null);
     const [editCourse, setEditCourse] = useState<CourseWithDetails | null>(null);
     const [editSubject, setEditSubject] = useState<Subject | null>(null);
     
@@ -64,25 +66,32 @@ const CourseManagement: React.FC = () => {
         }
         setOpenCourseId(courseId);
         // Ensure form exists so the subject input is controlled and editable
-        setForm(prev => prev ?? { course_name: '', university_id: 0, subject_name: '' });
+        setForm(prev => prev ?? { course_name: '', university_id: 0, acronym: '', subject_name: '' });
     };
 
     const openAddCourse = () => {
-        setForm({ course_name: '', university_id: universities[0]?.university_id || 0 });
+        setForm({ course_name: '', university_id: universities[0]?.university_id || 0, acronym: '' });
         setIsModalOpen(true);
     }
 
     const saveCourse = async () => {
         if (!form) return;
-        if (editCourse) {
-            await apiClient.patch(`/courses/${editCourse.course_id}`, { course_name: form.course_name, university_id: form.university_id });
-        } else {
-            await apiClient.post('/courses', { course_name: form.course_name, university_id: form.university_id });
+        try {
+            if (editCourse) {
+                await apiClient.patch(`/courses/${editCourse.course_id}`, { course_name: form.course_name, university_id: form.university_id, acronym: form.acronym || '' });
+            } else {
+                await apiClient.post('/courses', { course_name: form.course_name, university_id: form.university_id, acronym: form.acronym || '' });
+            }
+            const response = await apiClient.get('/courses');
+            setCourses(response.data);
+            setIsModalOpen(false);
+            setEditCourse(null);
+            setError(null);
+            notify('Course saved successfully!', 'success');
+        } catch (error: any) {
+            const errorMessage = error.response?.data?.message || error.message || 'Failed to save course.';
+            notify(errorMessage, 'error');
         }
-        const response = await apiClient.get('/courses');
-        setCourses(response.data);
-        setIsModalOpen(false);
-        setEditCourse(null);
     }
 
     const addSubject = async (courseId: number) => {
@@ -95,13 +104,13 @@ const CourseManagement: React.FC = () => {
 
     const openEditCourse = (course: CourseWithDetails) => {
         setEditCourse(course);
-        setForm({ course_name: course.course_name, university_id: course.university.university_id });
+        setForm({ course_name: course.course_name, university_id: course.university.university_id, acronym: course.acronym || '' });
         setIsModalOpen(true);
     }
 
     const openEditSubject = (subject: Subject) => {
         setEditSubject(subject);
-        setForm(prev => ({ course_name: '', university_id: 0, subject_name: subject.subject_name }));
+        setForm(prev => ({ course_name: '', university_id: 0, acronym: '', subject_name: subject.subject_name }));
     }
 
     const saveSubject = async (courseId: number) => {
@@ -114,7 +123,6 @@ const CourseManagement: React.FC = () => {
     }
 
     if (loading) return <div>Loading courses...</div>;
-    if (error) return <div className="text-red-500">{error}</div>;
 
     return (
         <div>
@@ -131,8 +139,9 @@ const CourseManagement: React.FC = () => {
                             <tr>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12"></th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course Name</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acronym</th>
                                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">University</th>
-                                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -145,19 +154,20 @@ const CourseManagement: React.FC = () => {
                                             </button>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{course.course_name}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{course.acronym || 'N/A'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{course.university?.name || 'N/A'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm space-x-2">
+                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm space-x-2">
                                             <Button variant="secondary" onClick={() => openEditCourse(course)}>Edit</Button>
                                             <Button variant="danger" onClick={async () => { await apiClient.delete(`/courses/${course.course_id}`); const res = await apiClient.get('/courses'); setCourses(res.data); }}>Delete</Button>
                                         </td>
                                     </tr>
                                     {openCourseId === course.course_id && (
                                         <tr>
-                                            <td colSpan={4} className="p-0">
+                                            <td colSpan={5} className="p-0">
                                                 <div className="px-6 py-4 bg-gray-50">
                                                     <h4 className="text-sm font-semibold mb-2 ml-12">Subjects:</h4>
                                                     <div className="ml-0 sm:ml-12 mb-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 items-center">
-                                                        <input className="border border-slate-300 rounded px-2 py-1" placeholder="New subject name" value={form?.subject_name || ''} onChange={(e) => setForm(prev => ({ ...(prev ?? { course_name: '', university_id: 0 }), subject_name: e.target.value }))} />
+                                                        <input className="border border-slate-300 rounded px-2 py-1" placeholder="New subject name" value={form?.subject_name || ''} onChange={(e) => setForm(prev => ({ ...(prev ?? { course_name: '', university_id: 0, acronym: '' }), subject_name: e.target.value }))} />
                                                         <Button variant="secondary" onClick={() => addSubject(course.course_id)}>Add Subject</Button>
                                                     </div>
                                                     {course.subjects && course.subjects.length > 0 ? (
@@ -195,7 +205,7 @@ const CourseManagement: React.FC = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-semibold text-slate-900 truncate">{course.course_name}</h3>
-                                        <p className="text-sm text-slate-500 truncate">{course.university?.name || 'N/A'}</p>
+                                        <p className="text-sm text-slate-500 truncate">{course.acronym ? `(${course.acronym})` : ''} {course.university?.name || 'N/A'}</p>
                                     </div>
                                     <button 
                                         onClick={() => toggleSubjects(course.course_id)}
@@ -216,7 +226,7 @@ const CourseManagement: React.FC = () => {
                                                 className="border border-slate-300 rounded px-2 py-1 text-sm flex-1" 
                                                 placeholder="New subject name" 
                                                 value={form?.subject_name || ''} 
-                                                onChange={(e) => setForm(prev => ({ ...(prev ?? { course_name: '', university_id: 0 }), subject_name: e.target.value }))} 
+                                                onChange={(e) => setForm(prev => ({ ...(prev ?? { course_name: '', university_id: 0, acronym: '' }), subject_name: e.target.value }))} 
                                             />
                                             <Button variant="secondary" onClick={() => addSubject(course.course_id)} className="text-sm">Add Subject</Button>
                                         </div>
@@ -245,8 +255,8 @@ const CourseManagement: React.FC = () => {
                 </div>
             </Card>
 
-            <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditCourse(null); }} title={editCourse ? 'Edit Course' : 'Add Course'} footer={<>
-                <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+            <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditCourse(null); setError(null); }} title={editCourse ? 'Edit Course' : 'Add Course'} footer={<>
+                <Button variant="secondary" onClick={() => { setIsModalOpen(false); setEditCourse(null); setError(null); }}>Cancel</Button>
                 <Button onClick={saveCourse}>Save</Button>
             </>}>
                 {form && (
@@ -254,6 +264,10 @@ const CourseManagement: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium text-slate-700">Course Name</label>
                             <input className="mt-1 block w-full border border-slate-300 rounded-md px-3 py-2" value={form.course_name} onChange={(e) => setForm(prev => prev ? { ...prev, course_name: e.target.value } : prev)} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700">Acronym</label>
+                            <input className="mt-1 block w-full border border-slate-300 rounded-md px-3 py-2" value={form.acronym || ''} onChange={(e) => setForm(prev => prev ? { ...prev, acronym: e.target.value } : prev)} placeholder="e.g., CS, IT, BS" />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700">University</label>

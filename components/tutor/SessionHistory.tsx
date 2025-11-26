@@ -3,7 +3,7 @@ import apiClient from '../../services/api';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
-import { CheckCircle, History, Clock, Calendar, User, Upload, FileText } from 'lucide-react';
+import { CheckCircle, History, Clock, Calendar, User, Upload, FileText, Star, DollarSign, TrendingUp } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -24,6 +24,9 @@ interface BookingRequest {
   status: string;
   created_at: string;
   student_notes?: string;
+  rating?: number;
+  rating_comment?: string;
+  session_rate_per_hour?: number;
 }
 
 const SessionHistory: React.FC = () => {
@@ -34,6 +37,8 @@ const SessionHistory: React.FC = () => {
   const [proofModalOpen, setProofModalOpen] = useState(false);
   const [proofTarget, setProofTarget] = useState<BookingRequest | null>(null);
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [tutorId, setTutorId] = useState<number | null>(null);
+  const [sessionRate, setSessionRate] = useState<number | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000); // Rerender every minute
@@ -77,14 +82,25 @@ const SessionHistory: React.FC = () => {
     setLoading(true);
     try {
       const tutorRes = await apiClient.get(`/tutors/by-user/${user.user_id}/tutor-id`);
-      const tutorId = tutorRes.data?.tutor_id;
+      const fetchedTutorId = tutorRes.data?.tutor_id;
 
-      if (!tutorId) {
+      if (!fetchedTutorId) {
         setSessions([]);
         return;
       }
 
-      const res = await apiClient.get(`/tutors/${tutorId}/booking-requests`);
+      setTutorId(fetchedTutorId);
+
+      // Fetch tutor profile to get session rate
+      try {
+        const profileRes = await apiClient.get(`/tutors/${fetchedTutorId}/profile`);
+        setSessionRate(profileRes.data.session_rate_per_hour || null);
+      } catch (err) {
+        console.warn('Failed to fetch tutor profile for session rate:', err);
+      }
+
+      // Fetch booking requests
+      const res = await apiClient.get(`/tutors/${fetchedTutorId}/booking-requests`);
       
       let allBookings = [];
       if (Array.isArray(res.data)) {
@@ -95,7 +111,42 @@ const SessionHistory: React.FC = () => {
         allBookings = res.data.bookings;
       }
       
-      const historySessions = allBookings.filter((b: BookingRequest) => {
+      // Fetch ratings for each booking
+      const sessionsWithRatings = await Promise.all(
+        allBookings.map(async (b: any) => {
+          let rating = null;
+          let ratingComment = null;
+          
+          // Try to get rating from booking data first (check multiple possible field names)
+          if (b.rating !== undefined && b.rating !== null) {
+            rating = b.rating;
+            ratingComment = b.rating_comment || b.comment || b.tutee_comment || null;
+          } else if (b.tutee_rating !== undefined && b.tutee_rating !== null) {
+            rating = b.tutee_rating;
+            ratingComment = b.tutee_comment || b.comment || null;
+          } else {
+            // Try to fetch rating from API
+            try {
+              const ratingRes = await apiClient.get(`/bookings/${b.id}/rating`).catch(() => null);
+              if (ratingRes?.data?.rating) {
+                rating = ratingRes.data.rating;
+                ratingComment = ratingRes.data.comment || null;
+              }
+            } catch (err) {
+              // Rating endpoint might not exist, that's okay
+            }
+          }
+          
+          return {
+            ...b,
+            rating: rating,
+            rating_comment: ratingComment,
+            session_rate_per_hour: b.session_rate_per_hour || b.tutor?.session_rate_per_hour || null
+          };
+        })
+      );
+      
+      const historySessions = sessionsWithRatings.filter((b: BookingRequest) => {
         // Always show completed or awaiting_confirmation sessions
         if (b.status === 'completed' || b.status === 'awaiting_confirmation') {
           return true;
@@ -142,6 +193,32 @@ const SessionHistory: React.FC = () => {
     fetchHistory();
   }, [user, now]);
 
+  // Calculate payment received after 13% deduction
+  const calculatePaymentReceived = (session: BookingRequest): number => {
+    const rate = session.session_rate_per_hour || sessionRate || 0;
+    const duration = session.duration || 0;
+    const totalAmount = rate * duration;
+    // Deduct 13% platform fee
+    return totalAmount * 0.87;
+  };
+
+  // Render stars for rating
+  const renderStars = (rating: number) => {
+    return Array.from({ length: 5 }, (_, i) => (
+      <Star
+        key={i}
+        className={`h-4 w-4 ${
+          i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-slate-300'
+        }`}
+      />
+    ));
+  };
+
+  // Get completed sessions with ratings for the table
+  const completedSessionsWithData = sessions.filter(s => 
+    s.status === 'completed' || s.status === 'awaiting_confirmation'
+  );
+
   const handleMarkDone = async () => {
     if (!proofTarget || !proofFile) {
       toast.error('Please select a proof image to upload.');
@@ -178,18 +255,22 @@ const SessionHistory: React.FC = () => {
   };
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-6">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6 pb-6 sm:pb-8 md:pb-10">
       <ToastContainer aria-label="Notification messages" />
       
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 text-white shadow-2xl relative overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+        </div>
+        <div className="relative flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-2.5 md:gap-3">
-              <History className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 drop-shadow-lg flex items-center gap-2 sm:gap-3">
+              <History className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 flex-shrink-0" />
               <span className="truncate">Session History</span>
             </h1>
-            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">
+            <p className="text-xs sm:text-sm md:text-base text-white/90 leading-tight">
               View and manage your completed sessions
             </p>
           </div>
@@ -205,10 +286,12 @@ const SessionHistory: React.FC = () => {
           </div>
         </Card>
       ) : sessions.length === 0 ? (
-        <Card className="p-6 sm:p-8 text-center -mx-2 sm:-mx-3 md:mx-0">
-          <History className="h-10 w-10 sm:h-12 sm:w-12 text-slate-400 mx-auto mb-3 sm:mb-4" />
-          <h3 className="text-base sm:text-lg font-medium text-slate-900 mb-1">No Session History</h3>
-          <p className="text-xs sm:text-sm md:text-base text-slate-600">
+        <Card className="p-6 sm:p-8 text-center bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="p-3 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 flex items-center justify-center">
+            <History className="h-10 w-10 sm:h-12 sm:w-12 text-primary-600" />
+          </div>
+          <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">No Session History</h3>
+          <p className="text-sm sm:text-base text-slate-600">
             Your completed sessions will appear here.
           </p>
         </Card>
@@ -221,7 +304,7 @@ const SessionHistory: React.FC = () => {
             return (
               <Card 
                 key={session.id} 
-                className="group relative bg-gradient-to-br from-white to-blue-50/30 rounded-xl sm:rounded-2xl shadow-lg border-2 border-slate-200 hover:border-blue-300 p-4 sm:p-5 md:p-6 -mx-2 sm:-mx-3 md:mx-0 transition-all duration-300 overflow-hidden"
+                className="group relative bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border-2 border-slate-200/50 hover:border-primary-300 p-4 sm:p-5 md:p-6 -mx-2 sm:-mx-3 md:mx-0 transition-all duration-300 overflow-hidden hover:shadow-2xl"
               >
                 {/* Decorative gradient bar */}
                 <div className={`absolute top-0 left-0 right-0 h-1 ${
@@ -229,7 +312,7 @@ const SessionHistory: React.FC = () => {
                     ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
                   isAwaitingConfirmation
                     ? 'bg-gradient-to-r from-yellow-500 to-amber-500' :
-                    'bg-gradient-to-r from-blue-500 to-indigo-500'
+                    'bg-gradient-to-r from-primary-500 to-primary-700'
                 }`} />
                 
                 <div className="flex flex-col gap-4 sm:gap-5">
@@ -241,23 +324,23 @@ const SessionHistory: React.FC = () => {
                       </h3>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-600">
                         <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" />
+                          <User className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary-600" />
                           {session.student?.name || 'Student'}
                         </span>
                         <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </Calendar>
                           {new Date(session.date).toLocaleDateString()}
                         </span>
                         <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </Clock>
                           {session.time}
                         </span>
                         <span className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </Clock>
                           {session.duration} {session.duration === 1 ? 'hour' : 'hours'}
@@ -281,7 +364,7 @@ const SessionHistory: React.FC = () => {
                         <Button
                           onClick={() => { setProofTarget(session); setProofModalOpen(true); }}
                           disabled={loading}
-                          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:from-blue-800 active:to-indigo-800 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 touch-manipulation"
+                          className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-lg hover:shadow-xl transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 touch-manipulation"
                           style={{ WebkitTapHighlightColor: 'transparent' }}
                         >
                           <Upload className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -292,7 +375,7 @@ const SessionHistory: React.FC = () => {
                   </div>
                   
                   {/* Session Details */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-gradient-to-r from-primary-50 via-primary-100/50 to-primary-50 rounded-xl border-2 border-primary-200/50 shadow-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-xs sm:text-sm font-semibold text-slate-700">Created:</span>
                       <span className="text-xs sm:text-sm md:text-base font-medium text-slate-900">
@@ -307,10 +390,10 @@ const SessionHistory: React.FC = () => {
                   
                   {/* Student Notes */}
                   {session.student_notes && (
-                    <div className="p-3 sm:p-4 bg-gradient-to-br from-slate-50 to-blue-50/50 rounded-xl border-2 border-slate-200 shadow-sm">
+                    <div className="p-3 sm:p-4 bg-gradient-to-br from-slate-50 via-primary-50/50 to-slate-50 rounded-xl border-2 border-slate-200/50 shadow-sm">
                       <div className="flex items-start gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg flex-shrink-0 mt-0.5">
-                          <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                        <div className="p-2 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg flex-shrink-0 mt-0.5">
+                          <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="text-xs sm:text-sm md:text-base font-semibold text-slate-800 mb-1.5 sm:mb-2 flex items-center gap-2">
@@ -330,6 +413,159 @@ const SessionHistory: React.FC = () => {
         </div>
       )}
 
+      {/* Ratings and Earnings Table */}
+      {completedSessionsWithData.length > 0 && (
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex items-center gap-3 mb-4 sm:mb-5">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+              Session Ratings & Earnings
+            </h2>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gradient-to-r from-primary-50 via-primary-100/50 to-primary-50 border-b-2 border-primary-200">
+                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    Subject
+                  </th>
+                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    Student
+                  </th>
+                  <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    Rating
+                  </th>
+                  <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    Duration
+                  </th>
+                  <th className="px-3 sm:px-4 py-3 text-right text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    Payment Received
+                  </th>
+                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {completedSessionsWithData.map((session, index) => {
+                  const paymentReceived = calculatePaymentReceived(session);
+                  const rate = session.session_rate_per_hour || sessionRate || 0;
+                  const totalBeforeDeduction = rate * (session.duration || 0);
+                  
+                  return (
+                    <tr
+                      key={session.id}
+                      className={`border-b border-slate-200 hover:bg-primary-50/50 transition-colors ${
+                        index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                      }`}
+                    >
+                      <td className="px-3 sm:px-4 py-3 sm:py-4">
+                        <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">
+                          {session.subject}
+                        </span>
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 sm:py-4">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                          <span className="text-xs sm:text-sm md:text-base text-slate-700">
+                            {session.student?.name || 'Student'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 text-center">
+                        {session.rating ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-0.5">
+                              {renderStars(session.rating)}
+                            </div>
+                            <span className="text-xs sm:text-sm font-semibold text-slate-700">
+                              {session.rating.toFixed(1)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs sm:text-sm text-slate-400 italic">
+                            No rating
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Clock className="h-4 w-4 text-primary-600" />
+                          <span className="text-xs sm:text-sm md:text-base font-medium text-slate-700">
+                            {session.duration} {session.duration === 1 ? 'hr' : 'hrs'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 sm:py-4 text-right">
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-1.5">
+                            <DollarSign className="h-4 w-4 text-green-600" />
+                            <span className="text-xs sm:text-sm md:text-base font-bold text-green-700">
+                              ₱{paymentReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          {totalBeforeDeduction > 0 && (
+                            <span className="text-[10px] sm:text-xs text-slate-500 mt-0.5">
+                              (₱{totalBeforeDeduction.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} - 13%)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 sm:py-4">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                          <span className="text-xs sm:text-sm text-slate-600">
+                            {new Date(session.date).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gradient-to-r from-primary-50 via-primary-100/50 to-primary-50 border-t-2 border-primary-200">
+                  <td colSpan={3} className="px-3 sm:px-4 py-3 sm:py-4 text-xs sm:text-sm font-bold text-slate-700">
+                    Total
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-center">
+                    <span className="text-xs sm:text-sm md:text-base font-bold text-slate-800">
+                      {completedSessionsWithData.reduce((sum, s) => sum + (s.duration || 0), 0).toFixed(1)} hrs
+                    </span>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
+                      <span className="text-sm sm:text-base md:text-lg font-bold text-green-700">
+                        ₱{completedSessionsWithData.reduce((sum, s) => sum + calculatePaymentReceived(s), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-4 py-3 sm:py-4"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div className="mt-4 p-3 sm:p-4 bg-gradient-to-br from-primary-50 to-primary-100/50 border-2 border-primary-200/50 rounded-xl shadow-sm">
+            <p className="text-xs sm:text-sm text-primary-800 flex items-start gap-2">
+              <span className="font-bold">Note:</span>
+              <span>
+                Payment received is calculated as (Session Rate × Duration) minus 13% platform fee. 
+                Ratings are provided by students after session completion.
+              </span>
+            </p>
+          </div>
+        </Card>
+      )}
+
       {proofModalOpen && proofTarget && (
         <Modal
           isOpen={true}
@@ -339,7 +575,7 @@ const SessionHistory: React.FC = () => {
             <Button 
               onClick={handleMarkDone} 
               disabled={loading || !proofFile}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+              className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white shadow-lg hover:shadow-xl"
             >
               {loading ? 'Uploading...' : 'Confirm'}
             </Button>
@@ -363,7 +599,7 @@ const SessionHistory: React.FC = () => {
                 type="file" 
                 accept="image/*" 
                 onChange={(e) => setProofFile(e.target.files ? e.target.files[0] : null)}
-                className="w-full text-xs sm:text-sm md:text-base file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors"
+                className="w-full text-xs sm:text-sm md:text-base file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs sm:file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 transition-colors"
               />
               {proofFile && (
                 <div className="flex items-center gap-2 p-2.5 sm:p-3 bg-green-50 border border-green-200 rounded-lg">

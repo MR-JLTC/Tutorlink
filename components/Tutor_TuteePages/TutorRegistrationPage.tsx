@@ -23,9 +23,32 @@ const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Sat
 interface TutorRegistrationModalProps {
   isOpen?: boolean;
   onClose?: () => void;
+  // Props for hiding fields when used by tutee
+  hideEmailVerification?: boolean;
+  hideFullName?: boolean;
+  hideCourse?: boolean;
+  hideYearLevel?: boolean;
+  // Pre-filled values from tutee profile
+  prefilledEmail?: string;
+  prefilledFullName?: string;
+  prefilledCourseId?: number | string;
+  prefilledYearLevel?: string;
+  prefilledUniversityId?: number;
 }
 
-const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, onClose }) => {
+const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ 
+  isOpen, 
+  onClose,
+  hideEmailVerification = false,
+  hideFullName = false,
+  hideCourse = false,
+  hideYearLevel = false,
+  prefilledEmail = '',
+  prefilledFullName = '',
+  prefilledCourseId = '',
+  prefilledYearLevel = '',
+  prefilledUniversityId = ''
+}) => {
   const { notify } = useToast();
   const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(new Set<string>());
   const [isFileSelecting, setIsFileSelecting] = useState(false);
@@ -37,14 +60,14 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   
   // Navigation handler placeholder (kept for type compatibility where used internally)
   const handleNavigate = (page: Page) => {};
-  const [email, setEmail] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState(prefilledEmail);
+  const [fullName, setFullName] = useState(prefilledFullName);
   const [password, setPassword] = useState('');
   const [universities, setUniversities] = useState<{ university_id: number; name: string; email_domain: string; status: string }[]>([]);
-  const [universityId, setUniversityId] = useState<number | ''>('');
+  const [universityId, setUniversityId] = useState<number | ''>(prefilledUniversityId || '');
   const [emailDomainError, setEmailDomainError] = useState<string | null>(null);
   const [courses, setCourses] = useState<{ course_id: number; course_name: string; university_id: number }[]>([]);
-  const [courseId, setCourseId] = useState<string>(''); // '' | 'other' | course_id as string
+  const [courseId, setCourseId] = useState<string>(prefilledCourseId ? String(prefilledCourseId) : ''); // '' | 'other' | course_id as string
   const [courseInput, setCourseInput] = useState<string>('');
   const [subjectToAdd, setSubjectToAdd] = useState<string>('');
   const [availableSubjects, setAvailableSubjects] = useState<{ subject_id: number; subject_name: string }[]>([]);
@@ -55,7 +78,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   const [gcashQRImage, setGcashQRImage] = useState<File | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [bio, setBio] = useState('');
-  const [yearLevel, setYearLevel] = useState('');
+  const [yearLevel, setYearLevel] = useState(prefilledYearLevel);
   const [gcashNumber, setGcashNumber] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -63,7 +86,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   const [termsScrollProgress, setTermsScrollProgress] = useState(0); // Track scroll progress in terms modal
   const [sessionRate, setSessionRate] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(hideEmailVerification); // Auto-verify if email verification is hidden
   const [verificationCode, setVerificationCode] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
@@ -364,6 +387,16 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
     }
   };
 
+  // Safety mechanism: Reset isFileSelecting if it gets stuck
+  useEffect(() => {
+    if (isFileSelecting) {
+      const timeout = setTimeout(() => {
+        setIsFileSelecting(false);
+      }, 2000); // Reset after 2 seconds if still stuck
+      return () => clearTimeout(timeout);
+    }
+  }, [isFileSelecting]);
+
   // Fetch subjects based on selected university and course; lock when none selected
   useEffect(() => {
     (async () => {
@@ -425,6 +458,13 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
   }, []);
 
   useEffect(() => {
+    // Skip email verification logic if email verification is hidden (for tutee flow)
+    if (hideEmailVerification) {
+      setIsEmailVerified(true);
+      setEmailDomainError(null);
+      return;
+    }
+    
     if (!email || !universityId) {
       setEmailDomainError(null);
       setIsEmailVerified(false);
@@ -453,7 +493,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       // Check if there's an active verification code
       checkActiveVerificationCode(email);
     }
-  }, [email, universityId, universities]);
+  }, [email, universityId, universities, hideEmailVerification]);
 
   // Check if code has expired
   const isCodeExpired = useMemo(() => {
@@ -1309,8 +1349,17 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       return;
     }
     
-    if (!email || !password || !universityId || !fullName.trim()) {
-      notify('Please enter email, full name, password, and select your university.', 'error');
+    // Validation: Skip email/fullName checks if they're hidden (pre-filled from tutee)
+    if (!hideEmailVerification && !email) {
+      notify('Please enter email.', 'error');
+      return;
+    }
+    if (!hideFullName && !fullName.trim()) {
+      notify('Please enter full name.', 'error');
+      return;
+    }
+    if (!password || !universityId) {
+      notify('Please enter password and select your university.', 'error');
       return;
     }
     if (emailDomainError) {
@@ -1325,7 +1374,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
       notify('Password must be between 7 and 21 characters.', 'error');
       return;
     }
-    if (!yearLevel) {
+    if (!hideYearLevel && !yearLevel) {
       notify('Please select your year level.', 'error');
       return;
     }
@@ -1654,6 +1703,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
           {/* Account Info */}
           <div className="space-y-4 lg:space-y-3 mb-5 lg:mb-4">
             {/* Email Verification Section */}
+            {!hideEmailVerification && (
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 md:p-4 lg:p-3 rounded-lg sm:rounded-xl border border-blue-200 shadow-sm">
               <h3 className="text-base sm:text-lg lg:text-base font-semibold text-slate-800 mb-3 sm:mb-3 lg:mb-2 flex items-center">
                 <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1813,9 +1863,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 </div>
               </div>
             </div>
+            )}
 
             {/* Other Account Fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-3 lg:gap-3 p-3 sm:p-4 md:p-4 lg:p-3 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm items-start">
+              {!hideFullName && (
               <div className="w-full sm:col-span-2 lg:col-span-8">
                 <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1 lg:mb-0.5">Full Name</label>
                 <input 
@@ -1830,6 +1882,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                   required 
                 />
               </div>
+              )}
               
               <div className="w-full sm:col-span-2 lg:col-span-4">
                 <label className="block text-sm sm:text-base lg:text-sm text-slate-700 font-semibold mb-1 lg:mb-0.5">Password</label>
@@ -1873,6 +1926,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 </div>
               </div>
               
+              {!hideCourse && (
               <div className="w-full sm:col-span-2 lg:col-span-12">
                 <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Course</label>
                 <select
@@ -1893,10 +1947,12 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                   <p className="text-xs text-slate-500 mt-1">Select a university to enable course selection.</p>
                 )}
               </div>
+              )}
           </div>
 
           {/* Additional Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-3 lg:gap-3 mb-4 sm:mb-4 lg:mb-3 p-3 sm:p-4 md:p-4 lg:p-3 bg-white rounded-lg sm:rounded-xl border border-slate-200 shadow-sm items-start">
+            {!hideYearLevel && (
             <div className="w-full sm:col-span-1 lg:col-span-3">
               <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">Year Level</label>
               <select 
@@ -1905,7 +1961,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 className="w-full px-3 py-2 text-sm sm:text-base border border-slate-300 rounded-lg"
                 required
               >
-                <option value="">Select Year Level</option>
+                <option value="">None</option>
                 <option value="1">1st Year</option>
                 <option value="2">2nd Year</option>
                 <option value="3">3rd Year</option>
@@ -1915,6 +1971,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <option value="Post-Graduate">Post-Graduate</option> */}
               </select>
             </div>
+            )}
             <div className="w-full sm:col-span-1 lg:col-span-5">
               <label className="block text-sm sm:text-base text-slate-700 font-semibold mb-1">GCash Number</label>
               <input 
@@ -2373,7 +2430,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 Supporting Documents <span className="text-red-500">*</span>
               </label>
               <p className="text-xs text-slate-500">
-                Upload valid supporting documents (e.g., transcript, student ID, certification) to verify your credibility as a tutor.
+                Upload valid supporting documents (e.g., National ID, COR, academic achievements, transcript, student ID, certification) to verify your credibility as a tutor.
               </p>
 
               {/* Drag and Drop Area */}
@@ -2428,9 +2485,28 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
 
             {uploadedFiles.length > 0 && (
               <div className="mt-3 sm:mt-4">
-                <h4 className="font-semibold text-sm sm:text-base text-slate-700">Selected files:</h4>
-                <ul className="list-disc list-inside mt-2 space-y-1 text-xs sm:text-sm text-slate-600">
-                  {uploadedFiles.map((file, index) => <li key={index} className="truncate">{file.name}</li>)}
+                <h4 className="font-semibold text-sm sm:text-base text-slate-700 mb-2">Selected files:</h4>
+                <ul className="list-none space-y-2 text-xs sm:text-sm">
+                  {uploadedFiles.map((file, index) => (
+                    <li key={index} className="flex items-center justify-between bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-slate-700 font-medium truncate block" title={file.name}>{file.name}</span>
+                        <span className="text-xs text-slate-500">({(file.size / 1024).toFixed(1)} KB)</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="ml-3 text-red-600 hover:text-red-700 hover:underline flex-shrink-0 text-xs font-medium px-2 py-1 rounded transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+                        }}
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}
@@ -2478,16 +2554,38 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
               <button 
                 type="submit" 
                 className={`w-full font-bold py-2.5 sm:py-3 px-4 sm:px-6 text-sm sm:text-base rounded-lg transition-colors relative z-50 ${
-                  isEmailVerified && acceptedTerms && termsViewed && !isFileSelecting
+                  isEmailVerified && acceptedTerms && termsViewed
                     ? 'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2' 
                     : 'bg-gray-400 text-gray-600 cursor-not-allowed'
                 }`}
-                disabled={!isEmailVerified || !acceptedTerms || !termsViewed || isFileSelecting}
+                disabled={!isEmailVerified || !acceptedTerms || !termsViewed}
                 onClick={(e) => {
-                  // Only prevent if conditions aren't met or file selection is in progress
-                  if (!isEmailVerified || !acceptedTerms || !termsViewed || isFileSelecting) {
+                  // Only prevent if conditions aren't met
+                  if (!isEmailVerified || !acceptedTerms || !termsViewed) {
                     e.preventDefault();
                     e.stopPropagation();
+                    return;
+                  }
+                  
+                  // If file selection is in progress, wait a bit and try again
+                  if (isFileSelecting) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Reset file selecting state after a short delay and retry
+                    setTimeout(() => {
+                      setIsFileSelecting(false);
+                      // Retry submission after reset
+                      const form = e.currentTarget.form || document.getElementById('tutor-registration-form') as HTMLFormElement;
+                      if (form) {
+                        const syntheticEvent = {
+                          preventDefault: () => {},
+                          stopPropagation: () => {},
+                          target: form,
+                          currentTarget: form
+                        } as React.FormEvent<HTMLFormElement>;
+                        handleSubmit(syntheticEvent);
+                      }
+                    }, 500);
                     return;
                   }
                   
@@ -2529,8 +2627,6 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                     ? 'Please read the Terms and Conditions first' 
                     : !acceptedTerms 
                     ? 'Please accept the Terms and Conditions' 
-                    : isFileSelecting
-                    ? 'Please wait for file selection to complete'
                     : 'Submit your tutor application'
                 }
               >
@@ -2760,10 +2856,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({ isOpen, 
                 <ul className="list-disc pl-5 space-y-1">
                   <li>All payments are handled securely by TutorLink.</li>
                   <li>Tutors will receive their earnings after successful session verification.</li>
-                  <li>A small service fee may be deducted for operational costs.</li>
                   <li>Payments are typically released within 3–5 business days.</li>
                   <li>Tutors must not request or accept payments outside the Platform.</li>
                 </ul>
+                <h3 className="font-semibold">5.1. Service Fee Deduction</h3>
+                <p>All tutor earnings processed through the platform will be subject to a 13% service fee, automatically deducted to cover system and operational costs. The remaining 87% will be issued as the tutor's final payout. This fee is fixed and non-refundable.</p>
                 <h3 className="font-semibold">6. Conduct and Responsibilities</h3>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Act professionally and respectfully during sessions.</li>

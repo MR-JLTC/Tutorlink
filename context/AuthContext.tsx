@@ -12,7 +12,7 @@ interface AuthContextType {
   login: (email: string, password?: string) => Promise<void>;
   loginTutorTutee: (email: string, password: string) => Promise<string>;
   register: (details: { name: string; email: string; password: string; university_id?: number }) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -140,7 +140,17 @@ function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // If user is a tutor, set online status to offline
+    if (user && (user.role === 'tutor' || user.user_type === 'tutor')) {
+      try {
+        await apiClient.patch(`/tutors/by-user/${user.user_id}/online-status`, { status: 'offline' });
+      } catch (err) {
+        console.warn('Failed to update tutor online status on logout:', err);
+        // Don't block logout if this fails
+      }
+    }
+    
     const storageRole: AuthRoleKey | null = mapRoleToStorageKey(user?.role) ?? mapRoleToStorageKey(user?.user_type);
     if (storageRole) {
       clearRoleAuth(storageRole);
