@@ -157,7 +157,54 @@ const TuteeAfterSession: React.FC = () => {
   const handleFeedbackSubmit = async () => {
     if (!feedbackTarget) return;
     try {
+      // Submit feedback first
       await apiClient.post(`/users/bookings/${feedbackTarget.id}/feedback`, { rating, comment });
+      
+      // Fetch booking details to get tutor_id, student_id, and calculate amount
+      try {
+        const bookingResponse = await apiClient.get(`/users/me/bookings`);
+        const booking = Array.isArray(bookingResponse.data) 
+          ? bookingResponse.data.find((b: any) => b.id === feedbackTarget.id)
+          : null;
+        
+        if (booking) {
+          // Get tutor_id from booking - try multiple possible paths
+          const tutorId = booking.tutor?.tutor_id || 
+                         (booking.tutor?.id) || 
+                         (booking.tutor_id) ||
+                         null;
+          
+          const sessionRate = booking.tutor?.session_rate_per_hour || 
+                            booking.session_rate_per_hour || 
+                            0;
+          const duration = booking.duration || feedbackTarget.duration || 0;
+          const amount = sessionRate * duration;
+          
+          // Create payment record with sender='admin' only if we have tutorId and amount
+          if (tutorId && amount > 0) {
+            try {
+              await apiClient.post('/payments/request', {
+                bookingId: feedbackTarget.id,
+                tutorId: tutorId,
+                amount: amount,
+                subject: booking.subject || feedbackTarget.subject
+              });
+            } catch (requestError: any) {
+              console.error('Payment request failed:', requestError);
+              // Check if payment already exists (might have been created already)
+              if (requestError?.response?.status !== 400) {
+                throw requestError;
+              }
+            }
+          } else {
+            console.warn('Cannot create payment: missing tutorId or amount', { tutorId, amount, booking });
+          }
+        }
+      } catch (paymentError: any) {
+        console.error('Failed to create payment record:', paymentError);
+        // Don't show error to user if payment creation fails, as feedback was already submitted
+      }
+      
       toast.success('Feedback submitted successfully!');
       setFeedbackOpen(false);
       setFeedbackTarget(null);

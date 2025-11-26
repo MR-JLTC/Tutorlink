@@ -25,10 +25,10 @@ export class Payment {
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'admin_confirmed', 'confirmed', 'rejected', 'refunded'],
+    enum: ['pending', 'admin_confirmed', 'confirmed', 'admin_paid', 'rejected', 'refunded'],
     default: 'pending',
   })
-  status: 'pending' | 'admin_confirmed' | 'confirmed' | 'rejected' | 'refunded';
+  status: 'pending' | 'admin_confirmed' | 'confirmed' | 'admin_paid' | 'rejected' | 'refunded';
 
   @CreateDateColumn()
   created_at: Date;
@@ -63,4 +63,11 @@ export class Payment {
 
   @Column({ type: 'text', nullable: true })
   rejection_reason?: string;
+
+  @Column({
+    type: 'enum',
+    enum: ['admin', 'tutee'],
+    default: 'tutee',
+  })
+  sender: 'admin' | 'tutee';
 }

@@ -1638,7 +1638,7 @@ export class TutorsService {
 
     // Fetch all payments for this tutor with student and user relations
     const payments = await this.paymentRepository.find({
-      where: { tutor_id: tutor.tutor_id } as any,
+      where: { tutor_id: tutor.tutor_id, sender: 'tutee' } as any,
       relations: ['student', 'student.user', 'tutor', 'tutor.user'],
       order: { created_at: 'DESC' }
     });
@@ -1677,11 +1677,11 @@ export class TutorsService {
 
     // Fetch all payments for this tutor
     const payments = await this.paymentRepository.find({
-      where: { tutor_id: tutor.tutor_id } as any
+      where: { tutor_id: tutor.tutor_id, sender: 'tutee' } as any
     });
 
     // Calculate stats from payments
-    const confirmedPayments = payments.filter((p: any) => p.status === 'confirmed');
+    const confirmedPayments = payments.filter((p: any) => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid');
     const pendingPayments = payments.filter((p: any) => p.status === 'pending');
 
     const total_earnings = confirmedPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);

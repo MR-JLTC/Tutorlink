@@ -61,6 +61,9 @@ export class BookingRequest {
   @Column({ type: 'text', nullable: true })
   payment_proof: string;
 
+  @Column({ type: 'text', nullable: true })
+  session_proof_url?: string;
+
     @Column({ type: 'timestamp', nullable: true })
     tutor_marked_done_at?: Date;
 

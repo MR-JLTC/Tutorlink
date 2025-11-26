@@ -4,10 +4,37 @@ import { Payment } from '../../types';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Card from '../ui/Card';
-import { Upload } from 'lucide-react';
+import { Upload, Eye, DollarSign, Star } from 'lucide-react';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+interface CompletedBooking {
+    booking_id: number;
+    tutor: {
+        tutor_id: number;
+        name: string;
+        gcash_number: string | null;
+        gcash_qr_url: string | null;
+        session_rate_per_hour: number;
+    };
+    student: {
+        user_id: number;
+        name: string;
+    };
+    subject: string;
+    date: string;
+    time: string;
+    duration: number;
+    session_proof_url: string | null;
+    tutee_rating: number | null;
+    tutee_comment: string | null;
+    amount: number;
+    calculated_amount: number;
+}
 
 const PaymentManagement: React.FC = () => {
     const [payments, setPayments] = useState<Payment[]>([]);
+    const [completedBookings, setCompletedBookings] = useState<CompletedBooking[]>([]);
     const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
     const [disputeStatus, setDisputeStatus] = useState<'none' | 'open' | 'under_review' | 'resolved' | 'rejected'>('none');
     const [adminNote, setAdminNote] = useState('');
@@ -23,22 +50,74 @@ const PaymentManagement: React.FC = () => {
     const [selectedProofModalPayment, setSelectedProofModalPayment] = useState<Payment | null>(null);
     const [rejectModalPayment, setRejectModalPayment] = useState<Payment | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
+    const [viewProofBooking, setViewProofBooking] = useState<CompletedBooking | null>(null);
+    const [payBooking, setPayBooking] = useState<CompletedBooking | null>(null);
+    const [payBookingPayment, setPayBookingPayment] = useState<Payment | null>(null);
+    const [processingPayment, setProcessingPayment] = useState(false);
+    const [loadingPayment, setLoadingPayment] = useState(false);
 
     useEffect(() => {
-        const fetchPayments = async () => {
+        const fetchData = async () => {
             try {
                 setLoading(true);
-                const response = await apiClient.get('/payments');
-                setPayments(response.data);
+                const [paymentsRes, bookingsRes] = await Promise.all([
+                    apiClient.get('/payments'),
+                    apiClient.get('/payments/waiting-for-payment')
+                ]);
+                setPayments(paymentsRes.data);
+                setCompletedBookings(bookingsRes.data || []);
             } catch (e) {
-                setError('Failed to fetch payments.');
+                setError('Failed to fetch data.');
                 console.error(e);
             } finally {
                 setLoading(false);
             }
         };
-        fetchPayments();
+        fetchData();
     }, []);
+
+    const handlePayButtonClick = async (booking: CompletedBooking) => {
+        try {
+            setLoadingPayment(true);
+            setPayBooking(booking);
+            
+            // Fetch payment from payments table where sender='tutee' and booking_request_id matches
+            const allPayments = await apiClient.get('/payments');
+            const tuteePayment = allPayments.data.find((p: Payment) => 
+                (p as any).sender === 'tutee' && 
+                (p as any).booking_request_id === booking.booking_id
+            );
+            
+            setPayBookingPayment(tuteePayment || null);
+        } catch (e: any) {
+            console.error('Failed to fetch payment:', e);
+            toast.error('Failed to load payment information');
+        } finally {
+            setLoadingPayment(false);
+        }
+    };
+
+    const handleProcessPayment = async (bookingId: number) => {
+        try {
+            setProcessingPayment(true);
+            await apiClient.post(`/payments/process-admin-payment/${bookingId}`);
+            toast.success('Payment processed successfully');
+            setPayBooking(null);
+            setPayBookingPayment(null);
+            // Refresh data
+            const [paymentsRes, bookingsRes] = await Promise.all([
+                apiClient.get('/payments'),
+                apiClient.get('/payments/waiting-for-payment')
+            ]);
+            setPayments(paymentsRes.data);
+            setCompletedBookings(bookingsRes.data || []);
+        } catch (e: any) {
+            toast.error(e?.response?.data?.message || 'Failed to process payment');
+            console.error(e);
+        } finally {
+            setProcessingPayment(false);
+        }
+    };
 
     const verify = async (paymentId: number, status: 'confirmed' | 'rejected', adminFile?: File | null, rejectionReasonText?: string) => {
         try {
@@ -87,6 +166,8 @@ const PaymentManagement: React.FC = () => {
         setApproveProofFile(file);
     };
 
+
+    // Early returns must come AFTER all hooks
     if (loading) return <div>Loading payments...</div>;
     if (error) return <div className="text-red-500">{error}</div>;
 
@@ -95,12 +176,19 @@ const PaymentManagement: React.FC = () => {
         pending: 'bg-yellow-100 text-yellow-800',
         rejected: 'bg-red-100 text-red-800',
         refunded: 'bg-blue-100 text-blue-800',
+        admin_confirmed: 'bg-blue-100 text-blue-800',
+        admin_paid: 'bg-emerald-100 text-emerald-800',
     };
 
     const pendingCount = payments.filter(p => p.status === 'pending').length;
+    
+    // Separate payments: tutee payments (sender='tutee') and tutor payments (sender='admin', status='pending')
+    const tuteePayments = payments.filter(p => (p as any).sender === 'tutee');
+    const tutorPayments = payments.filter(p => (p as any).sender === 'admin' && p.status === 'pending');
 
     return (
         <div>
+            <ToastContainer aria-label="Notification messages" />
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Payment Management</h1>
                 {pendingCount > 0 && (
@@ -108,8 +196,118 @@ const PaymentManagement: React.FC = () => {
                         {pendingCount} pending
                     </div>
                 )}
+                {completedBookings.length > 0 && (
+                    <div className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                        {completedBookings.length} waiting for payment
+                    </div>
+                )}
             </div>
-            <Card>
+
+
+            {/* Completed Bookings Waiting for Payment */}
+            {completedBookings.length > 0 && (
+                <Card className="mb-6">
+                    <h2 className="text-xl font-bold text-slate-800 mb-4">Completed Sessions Waiting for Payment</h2>
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutor</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {completedBookings.map((booking) => (
+                                    <tr key={booking.booking_id}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{booking.tutor.name}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{booking.student.name}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{booking.subject}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(booking.date).toLocaleDateString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">₱{booking.calculated_amount.toFixed(2)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <div className="inline-flex items-center justify-center gap-2">
+                                                <Button 
+                                                    onClick={() => setViewProofBooking(booking)}
+                                                    variant="secondary"
+                                                    className="text-xs"
+                                                >
+                                                    <Eye className="h-4 w-4 mr-1" />
+                                                    View Proof
+                                                </Button>
+                                                <Button 
+                                                    onClick={() => handlePayButtonClick(booking)}
+                                                    className="text-xs"
+                                                    disabled={loadingPayment}
+                                                >
+                                                    <DollarSign className="h-4 w-4 mr-1" />
+                                                    {loadingPayment ? 'Loading...' : 'Pay'}
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="md:hidden space-y-3">
+                        {completedBookings.map((booking) => (
+                            <Card key={booking.booking_id} className="p-4">
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div>
+                                            <p className="text-slate-500 text-xs mb-1">Tutor</p>
+                                            <p className="font-medium text-slate-900 truncate">{booking.tutor.name}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 text-xs mb-1">Student</p>
+                                            <p className="font-medium text-slate-900 truncate">{booking.student.name}</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div>
+                                            <p className="text-slate-500 text-xs mb-1">Subject</p>
+                                            <p className="font-medium text-slate-900">{booking.subject}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 text-xs mb-1">Amount</p>
+                                            <p className="font-medium text-slate-900">₱{booking.calculated_amount.toFixed(2)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
+                                        <Button 
+                                            onClick={() => setViewProofBooking(booking)}
+                                            variant="secondary"
+                                            className="text-xs flex-1 sm:flex-none"
+                                        >
+                                            <Eye className="h-4 w-4 mr-1" />
+                                            View Proof
+                                        </Button>
+                                        <Button 
+                                            onClick={() => handlePayButtonClick(booking)}
+                                            className="text-xs flex-1 sm:flex-none"
+                                            disabled={loadingPayment}
+                                        >
+                                            <DollarSign className="h-4 w-4 mr-1" />
+                                            {loadingPayment ? 'Loading...' : 'Pay'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
+                </Card>
+            )}
+            
+            {/* Tutee Payments Table */}
+            <Card className="mb-6">
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Tutee Payments</h2>
                 {/* Desktop Table View */}
                 <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
@@ -125,7 +323,14 @@ const PaymentManagement: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {payments.map((payment) => (
+                            {tuteePayments.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-500">
+                                        No tutee payments found
+                                    </td>
+                                </tr>
+                            ) : (
+                                tuteePayments.map((payment) => (
                                 <tr key={payment.payment_id}>
                                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">#{payment.payment_id}</td> */}
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.student?.user?.name || 'N/A'}</td>
@@ -153,14 +358,20 @@ const PaymentManagement: React.FC = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
 
                 {/* Mobile Card View */}
                 <div className="md:hidden space-y-3">
-                    {payments.map((payment) => (
+                    {tuteePayments.length === 0 ? (
+                        <div className="text-center py-8 text-sm text-slate-500">
+                            No tutee payments found
+                        </div>
+                    ) : (
+                        tuteePayments.map((payment) => (
                         <Card key={payment.payment_id} className="p-4">
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
@@ -214,7 +425,125 @@ const PaymentManagement: React.FC = () => {
                                 </div>
                             </div>
                         </Card>
-                    ))}
+                        ))
+                    )}
+                </div>
+            </Card>
+
+            {/* Pending Payments to Tutors Table */}
+            <Card>
+                <h2 className="text-xl font-bold text-slate-800 mb-4">Pending Payments to Tutors</h2>
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutor</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {tutorPayments.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-500">
+                                        No pending payments to tutors found
+                                    </td>
+                                </tr>
+                            ) : (
+                                tutorPayments.map((payment) => (
+                                    <tr key={payment.payment_id}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.student?.user?.name || 'N/A'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.tutor?.user?.name || 'N/A'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(payment as any).subject || 'N/A'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{new Date(payment.created_at).toLocaleDateString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <div className="inline-flex items-center justify-center gap-2">
+                                                <Button 
+                                                    onClick={() => {
+                                                        // Find the booking for this payment
+                                                        const booking = completedBookings.find(b => b.booking_id === (payment as any).booking_request_id);
+                                                        if (booking) {
+                                                            handlePayButtonClick(booking);
+                                                        } else {
+                                                            toast.error('Booking not found for this payment');
+                                                        }
+                                                    }}
+                                                    disabled={loadingPayment}
+                                                    className="text-xs"
+                                                >
+                                                    <DollarSign className="h-4 w-4 mr-1" />
+                                                    {loadingPayment ? 'Loading...' : 'Pay Tutor'}
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                    {tutorPayments.length === 0 ? (
+                        <div className="text-center py-8 text-sm text-slate-500">
+                            No pending payments to tutors found
+                        </div>
+                    ) : (
+                        tutorPayments.map((payment) => (
+                            <Card key={payment.payment_id} className="p-4">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                            Pending
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div>
+                                            <p className="text-slate-500 text-xs mb-1">Student</p>
+                                            <p className="font-medium text-slate-900 truncate">{payment.student?.user?.name || 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 text-xs mb-1">Tutor</p>
+                                            <p className="font-medium text-slate-900 truncate">{payment.tutor?.user?.name || 'N/A'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div>
+                                            <p className="text-slate-500 text-xs mb-1">Subject</p>
+                                            <p className="font-medium text-slate-900">{(payment as any).subject || 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 text-xs mb-1">Amount</p>
+                                            <p className="font-medium text-slate-900">₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
+                                        <Button 
+                                            onClick={() => {
+                                                const booking = completedBookings.find(b => b.booking_id === (payment as any).booking_request_id);
+                                                if (booking) {
+                                                    handlePayButtonClick(booking);
+                                                } else {
+                                                    toast.error('Booking not found for this payment');
+                                                }
+                                            }}
+                                            disabled={loadingPayment}
+                                            className="text-xs flex-1 sm:flex-none"
+                                        >
+                                            <DollarSign className="h-4 w-4 mr-1" />
+                                            {loadingPayment ? 'Loading...' : 'Pay Tutor'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </Card>
+                        ))
+                    )}
                 </div>
             </Card>
 
@@ -548,6 +877,243 @@ const PaymentManagement: React.FC = () => {
                         )}
                     </Modal>
                 )}
+
+            {/* View Proof Modal for Completed Bookings */}
+            {viewProofBooking && (
+                <Modal
+                    isOpen={true}
+                    onClose={() => setViewProofBooking(null)}
+                    title={`Session Proof - ${viewProofBooking.subject}`}
+                    maxWidth="4xl"
+                    footer={
+                        <Button variant="secondary" onClick={() => setViewProofBooking(null)}>
+                            Close
+                        </Button>
+                    }
+                >
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p className="text-slate-500 font-medium mb-1">Tutor</p>
+                                <p className="font-semibold text-slate-900">{viewProofBooking.tutor.name}</p>
+                            </div>
+                            <div>
+                                <p className="text-slate-500 font-medium mb-1">Student</p>
+                                <p className="font-semibold text-slate-900">{viewProofBooking.student.name}</p>
+                            </div>
+                            <div>
+                                <p className="text-slate-500 font-medium mb-1">Date</p>
+                                <p className="font-semibold text-slate-900">{new Date(viewProofBooking.date).toLocaleDateString()}</p>
+                            </div>
+                            <div>
+                                <p className="text-slate-500 font-medium mb-1">Duration</p>
+                                <p className="font-semibold text-slate-900">{viewProofBooking.duration} {viewProofBooking.duration === 1 ? 'hour' : 'hours'}</p>
+                            </div>
+                        </div>
+
+                        {/* Session Proof Image */}
+                        {viewProofBooking.session_proof_url && (
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-800 mb-2">Tutor's Session Proof</h3>
+                                <div className="flex justify-center bg-white rounded-lg border-2 border-slate-200 p-4">
+                                    <img 
+                                        src={getFileUrl(viewProofBooking.session_proof_url)} 
+                                        alt="Session proof" 
+                                        className="max-h-[400px] w-auto object-contain rounded-lg shadow-md" 
+                                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400?text=No+Image'; }} 
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Tutee Rating and Comment */}
+                        {(viewProofBooking.tutee_rating || viewProofBooking.tutee_comment) && (
+                            <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-lg border-2 border-primary-200 p-4">
+                                <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                                    <Star className="h-5 w-5 text-yellow-500 fill-current" />
+                                    Student Feedback
+                                </h3>
+                                {viewProofBooking.tutee_rating && (
+                                    <div className="mb-3">
+                                        <p className="text-slate-600 font-medium mb-1">Rating</p>
+                                        <div className="flex items-center gap-1">
+                                            {Array.from({ length: 5 }, (_, i) => (
+                                                <Star
+                                                    key={i}
+                                                    className={`h-5 w-5 ${
+                                                        i < Math.floor(viewProofBooking.tutee_rating!) 
+                                                            ? 'text-yellow-400 fill-current' 
+                                                            : 'text-slate-300'
+                                                    }`}
+                                                />
+                                            ))}
+                                            <span className="ml-2 font-semibold text-slate-900">{viewProofBooking.tutee_rating}/5</span>
+                                        </div>
+                                    </div>
+                                )}
+                                {viewProofBooking.tutee_comment && (
+                                    <div>
+                                        <p className="text-slate-600 font-medium mb-1">Comment</p>
+                                        <p className="text-slate-800 bg-white rounded-lg p-3 border border-primary-200">
+                                            {viewProofBooking.tutee_comment}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </Modal>
+            )}
+
+            {/* Pay Modal for Completed Bookings */}
+            {payBooking && (
+                <Modal
+                    isOpen={true}
+                    onClose={() => {
+                        setPayBooking(null);
+                        setPayBookingPayment(null);
+                    }}
+                    title={`Pay Tutor - ${payBooking.subject}`}
+                    maxWidth="2xl"
+                    footer={
+                        <div className="flex items-center gap-2">
+                            <Button variant="secondary" onClick={() => {
+                                setPayBooking(null);
+                                setPayBookingPayment(null);
+                            }}>
+                                Cancel
+                            </Button>
+                            <Button 
+                                onClick={() => handleProcessPayment(payBooking.booking_id)}
+                                disabled={processingPayment || !payBookingPayment}
+                            >
+                                {processingPayment ? 'Processing Payment...' : 'Pay Tutor'}
+                            </Button>
+                        </div>
+                    }
+                >
+                    <div className="space-y-4">
+                        {loadingPayment ? (
+                            <div className="text-center py-8">
+                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+                                <p className="text-slate-600">Loading payment information...</p>
+                            </div>
+                        ) : payBookingPayment ? (
+                            <>
+                                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                                            <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-blue-900 mb-1">Payment Information</h4>
+                                            <p className="text-sm text-blue-800">
+                                                The tutee has already paid the full amount. You need to pay the tutor the net amount (after 13% platform fee deduction).
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                                    <div>
+                                        <p className="text-slate-500 font-medium mb-1">Tutor</p>
+                                        <p className="font-semibold text-slate-900">{payBooking.tutor.name}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-slate-500 font-medium mb-1">Student</p>
+                                        <p className="font-semibold text-slate-900">{payBooking.student.name}</p>
+                                    </div>
+                                </div>
+
+                                {/* Tutor GCash QR Code */}
+                                {payBooking.tutor.gcash_qr_url && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-slate-800 mb-2">Tutor's GCash QR Code</h3>
+                                        <div className="flex justify-center bg-white rounded-lg border-2 border-slate-200 p-4">
+                                            <img 
+                                                src={getFileUrl(payBooking.tutor.gcash_qr_url)} 
+                                                alt="GCash QR Code" 
+                                                className="max-h-[300px] w-auto object-contain rounded-lg shadow-md" 
+                                                onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300?text=QR+Not+Available'; }} 
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* GCash Number */}
+                                {payBooking.tutor.gcash_number && (
+                                    <div className="bg-primary-50 rounded-lg border-2 border-primary-200 p-4">
+                                        <p className="text-slate-600 font-medium mb-1">GCash Number</p>
+                                        <p className="text-2xl font-bold text-primary-900">{payBooking.tutor.gcash_number}</p>
+                                    </div>
+                                )}
+
+                                {/* Payment Flow: Tutee → Admin → Tutor */}
+                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 p-4 mb-4">
+                                    <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                                        <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                        </svg>
+                                        Payment Flow
+                                    </h3>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-200">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 bg-green-100 rounded-lg">
+                                                    <svg className="h-4 w-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </div>
+                                                <span className="text-slate-700 font-medium">Tutee Paid to Admin:</span>
+                                            </div>
+                                            <span className="font-bold text-green-700">₱{Number(payBookingPayment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className="flex items-center justify-center text-blue-600">
+                                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                            </svg>
+                                        </div>
+                                        <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-200">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-1.5 bg-red-100 rounded-lg">
+                                                    <svg className="h-4 w-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </div>
+                                                <span className="text-slate-700 font-medium">Platform Fee (13%):</span>
+                                            </div>
+                                            <span className="font-bold text-red-600">-₱{(Number(payBookingPayment.amount) * 0.13).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className="flex items-center justify-center text-blue-600">
+                                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                            </svg>
+                                        </div>
+                                        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-green-100 to-emerald-100 rounded-lg border-2 border-green-400">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-2 bg-green-600 rounded-lg">
+                                                    <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </div>
+                                                <span className="text-lg font-bold text-slate-900">Admin Pays to Tutor:</span>
+                                            </div>
+                                            <span className="text-2xl font-black text-green-700">₱{(Number(payBookingPayment.amount) * 0.87).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="text-center py-8">
+                                <p className="text-red-600 font-semibold mb-2">Payment Not Found</p>
+                                <p className="text-slate-600 text-sm">No payment found with sender='tutee' for this booking.</p>
+                            </div>
+                        )}
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };

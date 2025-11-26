@@ -98,4 +98,14 @@ export class PaymentsController {
     const userId = req.user?.user_id;
     return this.paymentsService.confirmByTutor(+id, userId);
   }
+
+  @Get('waiting-for-payment')
+  async getCompletedBookingsWaitingForPayment() {
+    return this.paymentsService.getCompletedBookingsWaitingForPayment();
+  }
+
+  @Post('process-admin-payment/:bookingId')
+  async processAdminPayment(@Param('bookingId') bookingId: string) {
+    return this.paymentsService.processAdminPayment(+bookingId);
+  }
 }

@@ -940,7 +940,8 @@ const TuteePayment: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-5 lg:gap-6">
               {paymentHistory.map((payment, index) => {
                 // Check if payment is linked to a booking with payment_pending status
-                const bookingStatus = (payment as any).bookingRequest?.status || '';
+                const bookingRequest = (payment as any).bookingRequest || (payment as any).booking_request;
+                const bookingStatus = bookingRequest?.status || '';
                 const effectivePaymentStatus = bookingStatus.toLowerCase() === 'payment_pending' 
                   ? 'payment_pending' 
                   : payment.status;
@@ -949,6 +950,14 @@ const TuteePayment: React.FC = () => {
                 const paymentDate = new Date(payment.created_at);
                 const isConfirmed = payment.status === 'confirmed' || payment.status === 'admin_confirmed';
                 const isRejected = payment.status === 'rejected';
+                
+                // Get session rate and duration for calculation
+                const sessionRate = payment.tutor?.session_rate_per_hour || 
+                                   bookingRequest?.tutor?.session_rate_per_hour || 
+                                   (payment as any).tutor?.session_rate_per_hour || 0;
+                const duration = bookingRequest?.duration || (payment as any).duration || 0;
+                const totalAmountToPay = sessionRate * duration;
+                const amountPaid = Number(payment.amount) || 0;
                 
               return (
                 <div
@@ -988,19 +997,51 @@ const TuteePayment: React.FC = () => {
                           </div>
                         </div>
                         
-                         {/* Amount - Compact Display for Desktop */}
+                         {/* Amount Paid - Compact Display for Desktop */}
                          <div className="mb-3 sm:mb-4">
-                           <div className="relative overflow-hidden inline-flex flex-col sm:flex-row sm:items-baseline gap-1.5 sm:gap-3 bg-gradient-to-br from-primary-50 via-primary-100/70 to-primary-50 px-4 sm:px-5 md:px-5 lg:px-6 py-2.5 sm:py-3 md:py-3 lg:py-3.5 rounded-xl md:rounded-2xl border-2 border-primary-300/80 shadow-lg md:shadow-xl w-full sm:w-auto">
-                             <div className="absolute top-0 right-0 w-20 h-20 bg-primary-200/30 rounded-full -mr-10 -mt-10 blur-2xl hidden md:block"></div>
+                           <div className="relative overflow-hidden inline-flex flex-col sm:flex-row sm:items-baseline gap-1.5 sm:gap-3 bg-gradient-to-br from-green-50 via-emerald-50/70 to-green-50 px-4 sm:px-5 md:px-5 lg:px-6 py-2.5 sm:py-3 md:py-3 lg:py-3.5 rounded-xl md:rounded-2xl border-2 border-green-300/80 shadow-lg md:shadow-xl w-full sm:w-auto">
+                             <div className="absolute top-0 right-0 w-20 h-20 bg-green-200/30 rounded-full -mr-10 -mt-10 blur-2xl hidden md:block"></div>
                              <span className="text-xs sm:text-sm text-slate-700 font-bold relative uppercase tracking-wide">Amount Paid</span>
-                             <span className="text-2xl sm:text-3xl md:text-3xl lg:text-4xl font-black bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 bg-clip-text text-transparent relative leading-tight">
-                               ₱{Number(payment.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                             <span className="text-2xl sm:text-3xl md:text-3xl lg:text-4xl font-black bg-gradient-to-r from-green-600 via-emerald-700 to-green-800 bg-clip-text text-transparent relative leading-tight">
+                               ₱{amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                              </span>
                            </div>
                          </div>
                         
                         {/* Compact Details Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5 mb-3 sm:mb-4">
+                          {/* Session Rate */}
+                          {sessionRate > 0 && (
+                            <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200">
+                              <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg shadow-sm flex-shrink-0">
+                                <svg className="h-4 w-4 sm:h-5 sm:w-5 text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] sm:text-xs text-slate-500 font-bold mb-0.5 uppercase tracking-wide">Session Rate</p>
+                                <p className="text-sm sm:text-base md:text-base font-bold text-slate-900">₱{sessionRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/hour</p>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Total Amount to Pay */}
+                          {totalAmountToPay > 0 && (
+                            <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200">
+                              <div className="p-1.5 sm:p-2 bg-gradient-to-br from-amber-100 to-amber-200 rounded-lg shadow-sm flex-shrink-0">
+                                <svg className="h-4 w-4 sm:h-5 sm:w-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] sm:text-xs text-slate-500 font-bold mb-0.5 uppercase tracking-wide">Total Amount to Pay</p>
+                                <p className="text-sm sm:text-base md:text-base font-bold text-slate-900">₱{totalAmountToPay.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                {duration > 0 && (
+                                  <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">({duration} {duration === 1 ? 'hour' : 'hours'})</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200">
                             <div className="p-1.5 sm:p-2 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg shadow-sm flex-shrink-0">
                               <svg className="h-4 w-4 sm:h-5 sm:w-5 text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">

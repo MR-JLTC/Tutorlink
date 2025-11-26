@@ -1,8 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Card from '../ui/Card';
 import apiClient from '../../services/api';
-import { Users, UserCheck, FileText, CheckCircle2, TrendingUp, CreditCard, University, BarChart3, Layers } from 'lucide-react';
+import { Users, UserCheck, FileText, CheckCircle2, TrendingUp, CreditCard, University, BarChart3, Layers, BookOpen } from 'lucide-react';
 import PesoSignIcon from '../icons/PesoSignIcon';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Payment } from '../../types';
+
+interface PaymentTrendPoint {
+  label: string;
+  amount: number;
+}
 
 interface Stats {
   totalUsers: number;
@@ -11,7 +18,7 @@ interface Stats {
   totalRevenue: number;
   confirmedSessions: number;
   mostInDemandSubjects: { subjectId: number; subjectName: string; sessions: number }[];
-  paymentOverview: { byStatus: Record<string, number>; recentConfirmedRevenue: number };
+  paymentOverview: { byStatus: Record<string, number>; recentConfirmedRevenue: number; trends: PaymentTrendPoint[] };
 }
 
 const StatCard: React.FC<{ icon: React.ElementType, title: string, value: string | number, color: string }> = ({ icon: Icon, title, value, color }) => {
@@ -39,21 +46,38 @@ const DashboardContent: React.FC = () => {
   const [courseDistribution, setCourseDistribution] = useState<{ courseName: string; tutors: number; tutees: number }[]>([]);
   const [subjectSessions, setSubjectSessions] = useState<{ subjectName: string; sessions: number }[]>([]);
   const [universityMap, setUniversityMap] = useState<Map<string, string>>(new Map());
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [monthsFilter, setMonthsFilter] = useState(6); // Default to 6 months
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         setLoading(true);
         const response = await apiClient.get('/dashboard/stats');
+        console.log('Dashboard stats response:', response.data);
+        console.log('Total Revenue:', response.data?.totalRevenue);
+        console.log('Payment Overview:', response.data?.paymentOverview);
         setStats(response.data);
       } catch (e) {
         setError('Failed to fetch dashboard statistics.');
-        console.error(e);
+        console.error('Dashboard fetch error:', e);
       } finally {
         setLoading(false);
       }
     };
     fetchStats();
+  }, []);
+
+  useEffect(() => {
+    const fetchPayments = async () => {
+      try {
+        const response = await apiClient.get('/payments');
+        setPayments(response.data || []);
+      } catch (e) {
+        console.error('Failed to fetch payments:', e);
+      }
+    };
+    fetchPayments();
   }, []);
 
   useEffect(() => {
@@ -133,6 +157,93 @@ const DashboardContent: React.FC = () => {
   const maxSubjectSessions = useMemo(() => {
     return subjectSessions.reduce((m, r) => Math.max(m, r.sessions), 0);
   }, [subjectSessions]);
+
+  // Prepare chart data for payment trends
+  const paymentChartData = useMemo(() => {
+    if (!stats?.paymentOverview?.trends) return [];
+    
+    return stats.paymentOverview.trends.map((trend) => ({
+      month: trend.label,
+      'Platform Revenue': trend.amount
+    }));
+  }, [stats]);
+
+  // Calculate most-in-demand subjects from payments
+  const mostDemandedSubjects = useMemo(() => {
+    const subjectCounts: Record<string, number> = {};
+    payments.forEach(payment => {
+      const subject = (payment as any).subject || 'Unknown';
+      subjectCounts[subject] = (subjectCounts[subject] || 0) + 1;
+    });
+    return Object.entries(subjectCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5);
+  }, [payments]);
+
+  // Calculate payment activity overview (13% of tutee payments)
+  const paymentActivity = useMemo(() => {
+    // Filter only payments with sender='tutee'
+    const tuteePayments = payments.filter(p => (p as any).sender === 'tutee');
+    
+    const totalPayments = tuteePayments.length;
+    const pendingPayments = tuteePayments.filter(p => p.status === 'pending').length;
+    const confirmedPayments = tuteePayments.filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid').length;
+    const rejectedPayments = tuteePayments.filter(p => p.status === 'rejected').length;
+    
+    // Calculate 13% of total amount from tutee payments
+    const totalAmount = tuteePayments.reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
+    const confirmedAmount = tuteePayments
+      .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
+      .reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
+    
+    return {
+      totalPayments,
+      pendingPayments,
+      confirmedPayments,
+      rejectedPayments,
+      totalAmount,
+      confirmedAmount
+    };
+  }, [payments]);
+
+  // Calculate payment trends chart data (13% of tutee payments)
+  const paymentTrendsData = useMemo(() => {
+    // Filter only payments with sender='tutee'
+    const tuteePayments = payments.filter(p => (p as any).sender === 'tutee');
+    
+    const lastNMonths = Array.from({ length: monthsFilter }, (_, i) => {
+      const date = new Date();
+      date.setMonth(date.getMonth() - (monthsFilter - 1 - i));
+      return {
+        month: date.toLocaleDateString('en-US', { month: 'short' }),
+        monthIndex: date.getMonth(),
+        year: date.getFullYear()
+      };
+    });
+
+    return lastNMonths.map(({ month, monthIndex, year }) => {
+      const monthPayments = tuteePayments.filter(p => {
+        const paymentDate = new Date(p.created_at);
+        return paymentDate.getMonth() === monthIndex && paymentDate.getFullYear() === year;
+      });
+
+      // Calculate 13% of amounts
+      const totalAmount = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
+      const confirmedAmount = monthPayments
+        .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
+        .reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
+      const pendingAmount = monthPayments
+        .filter(p => p.status === 'pending')
+        .reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
+
+      return {
+        month,
+        'Total': totalAmount,
+        'Confirmed': confirmedAmount,
+        'Pending': pendingAmount
+      };
+    });
+  }, [payments, monthsFilter]);
 
   const tutorGradient = 'linear-gradient(90deg, #6366f1, #8b5cf6)';
   const tuteeGradient = 'linear-gradient(90deg, #06b6d4, #22d3ee)';
@@ -259,54 +370,136 @@ const DashboardContent: React.FC = () => {
         )}
       </div>
 
+      {/* Most-in-Demand Subjects and Payment Activity Overview */}
       <div className="mt-6 sm:mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        {/* Most-in-Demand Subjects */}
         <Card className="p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h2 className="text-lg sm:text-xl font-semibold">Most In-demand Subjects</h2>
-            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <BookOpen className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800">Most-in-Demand Subjects</h2>
           </div>
-          {stats && stats.mostInDemandSubjects && stats.mostInDemandSubjects.length > 0 ? (
-            <ul className="divide-y divide-slate-200">
-              {stats.mostInDemandSubjects.map((s) => (
-                <li key={s.subjectId} className="py-3 flex items-center justify-between">
-                  <span className="text-slate-700">{s.subjectName}</span>
-                  <span className="text-slate-900 font-medium">{s.sessions} sessions</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-slate-500">No subject data yet.</p>
-          )}
+          <div className="space-y-3">
+            {mostDemandedSubjects.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4">No subject data available</p>
+            ) : (
+              mostDemandedSubjects.map(([subject, count], index) => (
+                <div key={subject} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary-100 text-primary-700 font-bold text-sm">
+                      {index + 1}
+                    </div>
+                    <span className="font-medium text-slate-900">{subject}</span>
+                  </div>
+                  <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-semibold">
+                    {count} {count === 1 ? 'payment' : 'payments'}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </Card>
 
+        {/* Payment Activity Overview */}
         <Card className="p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h2 className="text-lg sm:text-xl font-semibold">Payment Activity Overview</h2>
-            <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800">Platform Revenue Overview (13% of Tutee Payments)</h2>
           </div>
-          {stats && stats.paymentOverview ? (
-            <div className="space-y-3 sm:space-y-4">
-              <div>
-                <p className="text-xs sm:text-sm text-slate-500 mb-2">By status</p>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  {Object.entries(stats.paymentOverview.byStatus).map(([status, count]) => (
-                    <div key={status} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
-                      <span className="capitalize text-slate-700">{status}</span>
-                      <span className="font-semibold text-slate-900">{count as number}</span>
-                    </div>
-                  ))}
-                </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-xs text-blue-600 font-semibold mb-1">Total Payments</p>
+                <p className="text-xl font-bold text-blue-900">{paymentActivity.totalPayments}</p>
               </div>
-              <div className="pt-2 border-t border-slate-200">
-                <p className="text-xs sm:text-sm text-slate-500">Confirmed revenue (last 30 days)</p>
-                <p className="text-xl sm:text-2xl font-semibold text-slate-800">₱{stats.paymentOverview.recentConfirmedRevenue.toLocaleString()}</p>
+              <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <p className="text-xs text-yellow-600 font-semibold mb-1">Pending</p>
+                <p className="text-xl font-bold text-yellow-900">{paymentActivity.pendingPayments}</p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-xs text-green-600 font-semibold mb-1">Confirmed</p>
+                <p className="text-xl font-bold text-green-900">{paymentActivity.confirmedPayments}</p>
+              </div>
+              <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                <p className="text-xs text-red-600 font-semibold mb-1">Rejected</p>
+                <p className="text-xl font-bold text-red-900">{paymentActivity.rejectedPayments}</p>
               </div>
             </div>
-          ) : (
-            <p className="text-slate-500">No payment activity yet.</p>
-          )}
+            <div className="pt-3 border-t border-slate-200">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-slate-600">Platform Revenue (13% of Tutee Payments)</span>
+                <span className="text-lg font-bold text-slate-900">₱{paymentActivity.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-600">Confirmed Revenue (13%)</span>
+                <span className="text-lg font-bold text-green-700">₱{paymentActivity.confirmedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+          </div>
         </Card>
       </div>
+
+      {/* Payment Trends */}
+      <Card className="mt-4 sm:mt-6 mb-4 sm:mb-6 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800">Platform Revenue Trends (13% of Tutee Payments)</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="months-filter" className="text-sm text-slate-600 font-medium">Display:</label>
+            <select
+              id="months-filter"
+              value={monthsFilter}
+              onChange={(e) => setMonthsFilter(Number(e.target.value))}
+              className="px-3 py-2 border border-slate-300 rounded-md text-sm font-medium text-slate-700 bg-white hover:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+            >
+              <option value={3}>3 Months</option>
+              <option value={6}>6 Months</option>
+              <option value={12}>12 Months</option>
+            </select>
+          </div>
+        </div>
+        <div className="bg-white rounded-lg p-3 sm:p-4 border border-slate-200">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={paymentTrendsData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis 
+                dataKey="month" 
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                stroke="#cbd5e1"
+              />
+              <YAxis 
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                stroke="#cbd5e1"
+                tickFormatter={(value) => `₱${(value / 1000).toFixed(0)}k`}
+              />
+              <Tooltip 
+                formatter={(value: number) => [`₱${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '']}
+                contentStyle={{ 
+                  backgroundColor: 'white', 
+                  border: '1px solid #e2e8f0', 
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  fontSize: '12px'
+                }}
+              />
+              <Legend 
+                wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                iconType="rect"
+              />
+              <Bar dataKey="Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Confirmed" fill="#10b981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Pending" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
 
       {/* University distribution: tutors vs tutees */}
       <div className="mt-6 sm:mt-8 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">

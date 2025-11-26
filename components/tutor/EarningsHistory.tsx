@@ -71,6 +71,7 @@ const EarningsHistory: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending'>('all');
   const [paymentsFilter, setPaymentsFilter] = useState<'all' | 'pending' | 'approved'>('all');
   const [initialized, setInitialized] = useState(false);
+  const [monthsFilter, setMonthsFilter] = useState<number>(6);
 
   useEffect(() => {
     if (user?.user_id) {
@@ -143,6 +144,8 @@ const EarningsHistory: React.FC = () => {
       case 'cancelled': return 'text-red-600 bg-red-50 border-red-200';
       case 'approved': return 'text-primary-600 bg-primary-50 border-primary-200';
       case 'confirmed': return 'text-green-600 bg-green-50 border-green-200';
+      case 'admin_confirmed': return 'text-blue-600 bg-blue-50 border-blue-200';
+      case 'admin_paid': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
       case 'rejected': return 'text-red-600 bg-red-50 border-red-200';
       case 'refunded': return 'text-purple-600 bg-purple-50 border-purple-200';
       case 'paid': return 'text-green-600 bg-green-50 border-green-200';
@@ -157,6 +160,8 @@ const EarningsHistory: React.FC = () => {
       case 'cancelled': return <X className="h-4 w-4" />;
       case 'approved': return <CheckCircle className="h-4 w-4" />;
       case 'confirmed': return <CheckCircle className="h-4 w-4" />;
+      case 'admin_confirmed': return <CheckCircle className="h-4 w-4" />;
+      case 'admin_paid': return <DollarSign className="h-4 w-4" />;
       case 'rejected': return <X className="h-4 w-4" />;
       case 'refunded': return <DollarSign className="h-4 w-4" />;
       case 'paid': return <DollarSign className="h-4 w-4" />;
@@ -170,18 +175,18 @@ const EarningsHistory: React.FC = () => {
   });
 
   const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
-  const approvedPaymentsCount = payments.filter(p => p.status === 'confirmed').length;
+  const approvedPaymentsCount = payments.filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid').length;
   const filteredPayments = payments.filter(p => {
     if (paymentsFilter === 'all') return true;
-    if (paymentsFilter === 'approved') return p.status === 'confirmed';
+    if (paymentsFilter === 'approved') return p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid';
     return p.status === paymentsFilter;
   });
 
   // Prepare chart data for payments over time
   const chartData = useMemo(() => {
-    const last6Months = Array.from({ length: 6 }, (_, i) => {
+    const lastNMonths = Array.from({ length: monthsFilter }, (_, i) => {
       const date = new Date();
-      date.setMonth(date.getMonth() - (5 - i));
+      date.setMonth(date.getMonth() - (monthsFilter - 1 - i));
       return {
         month: date.toLocaleDateString('en-US', { month: 'short' }),
         monthIndex: date.getMonth(),
@@ -189,7 +194,7 @@ const EarningsHistory: React.FC = () => {
       };
     });
 
-    return last6Months.map(({ month, monthIndex, year }) => {
+    return lastNMonths.map(({ month, monthIndex, year }) => {
       const monthPayments = payments.filter(p => {
         const paymentDate = new Date(p.created_at);
         return paymentDate.getMonth() === monthIndex && paymentDate.getFullYear() === year;
@@ -206,17 +211,84 @@ const EarningsHistory: React.FC = () => {
         'Service Fee': serviceFee
       };
     });
+  }, [payments, monthsFilter]);
+
+  // Calculate total earnings from admin status payments only
+  const totalAdminEarnings = useMemo(() => {
+    return payments
+      .filter(p => p.status === 'admin_confirmed' || p.status === 'admin_paid')
+      .reduce((sum, p) => sum + Number(p.amount), 0);
   }, [payments]);
 
   // Calculate service fee information
   const totalReceived = useMemo(() => {
     return payments
-      .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed')
+      .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
       .reduce((sum, p) => sum + Number(p.amount), 0);
   }, [payments]);
 
   const totalServiceFee = totalReceived * 0.13;
   const netEarnings = totalReceived * 0.87;
+
+  // Calculate upcoming earnings: Sum payments with sender='tutee', subtract payments with sender='admin', then apply 13% deduction
+  const upcomingEarnings = useMemo(() => {
+    if (!payments || payments.length === 0) {
+      console.log('Upcoming Earnings: No payments found');
+      return 0;
+    }
+    
+    // Log all payments to see their structure
+    console.log('All payments for upcoming earnings calculation:', payments.map(p => ({
+      payment_id: p.payment_id || p.id,
+      amount: p.amount,
+      status: p.status,
+      sender: (p as any).sender,
+      tutor_id: (p as any).tutor_id || p.tutor_id
+    })));
+    
+    // Sum all payments with sender='tutee' for this tutor
+    const tuteePayments = payments.filter(p => {
+      const sender = (p as any)?.sender;
+      return sender === 'tutee';
+    });
+    
+    const tuteePaymentsTotal = tuteePayments.reduce((sum, p) => {
+      const amount = Number(p.amount) || 0;
+      return sum + amount;
+    }, 0);
+    
+    // Subtract all payments with sender='admin' for this tutor
+    const adminPayments = payments.filter(p => {
+      const sender = (p as any)?.sender;
+      return sender === 'admin';
+    });
+    
+    const adminPaymentsTotal = adminPayments.reduce((sum, p) => {
+      const amount = Number(p.amount) || 0;
+      return sum + amount;
+    }, 0);
+    
+    // Calculate net amount: (tutee payments - admin payments) * 0.87 (after 13% service fee)
+    const difference = tuteePaymentsTotal - adminPaymentsTotal;
+    const netAmount = difference * 0.87;
+    
+    // Debug logging
+    console.log('Upcoming Earnings Calculation:', {
+      totalPayments: payments.length,
+      tuteePaymentsCount: tuteePayments.length,
+      adminPaymentsCount: adminPayments.length,
+      tuteePaymentsTotal: tuteePaymentsTotal,
+      adminPaymentsTotal: adminPaymentsTotal,
+      difference: difference,
+      netAmount: netAmount,
+      tuteePayments: tuteePayments.map(p => ({ id: p.payment_id || p.id, amount: p.amount, sender: (p as any).sender })),
+      adminPayments: adminPayments.map(p => ({ id: p.payment_id || p.id, amount: p.amount, sender: (p as any).sender }))
+    });
+    
+    const result = Math.max(0, netAmount || 0);
+    console.log('Upcoming Earnings Final Result:', result);
+    return result;
+  }, [payments]);
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
@@ -259,7 +331,7 @@ const EarningsHistory: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
             <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
@@ -268,7 +340,7 @@ const EarningsHistory: React.FC = () => {
             <div className="min-w-0 flex-1">
               <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Total Earnings</p>
               <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700 truncate">
-                ₱{stats.total_earnings.toLocaleString()}
+                ₱{totalAdminEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -284,6 +356,21 @@ const EarningsHistory: React.FC = () => {
               <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700 truncate">
                 ₱{stats.pending_earnings.toLocaleString()}
               </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-emerald-50 rounded-xl sm:rounded-2xl shadow-xl border-2 border-emerald-200 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+          <div className="flex items-center">
+            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Upcoming Earnings</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-emerald-700 truncate">
+                ₱{(upcomingEarnings || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-[10px] sm:text-xs text-slate-500 mt-1">After 13% service fee</p>
             </div>
           </div>
         </Card>
@@ -380,8 +467,9 @@ const EarningsHistory: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-2 pt-2 border-t border-amber-200 bg-white/60 rounded-lg p-2">
-                  <p className="text-amber-700 font-medium">Your Net Earnings</p>
-                  <p className="text-amber-900 font-bold text-base sm:text-lg">₱{netEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-amber-700 font-medium">Upcoming Earnings</p>
+                  <p className="text-amber-900 font-bold text-base sm:text-lg">₱{upcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-[10px] sm:text-xs text-amber-700 mt-1">Amount to be received after successfully completing tutoring sessions</p>
                 </div>
               </div>
             </div>
@@ -397,7 +485,22 @@ const EarningsHistory: React.FC = () => {
 
       {/* Payment Trends */}
       <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
-        <h3 className="text-xs sm:text-sm font-semibold text-slate-700 mb-3">Payment Trends (Last 6 Months)</h3>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+          <h3 className="text-xs sm:text-sm font-semibold text-slate-700">Payment Trends</h3>
+          <div className="flex items-center gap-2">
+            <label htmlFor="months-filter" className="text-xs sm:text-sm text-slate-600 font-medium">Display:</label>
+            <select
+              id="months-filter"
+              value={monthsFilter}
+              onChange={(e) => setMonthsFilter(Number(e.target.value))}
+              className="px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg bg-white text-slate-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+            >
+              <option value={3}>Last 3 Months</option>
+              <option value={6}>Last 6 Months</option>
+              <option value={12}>Last 12 Months</option>
+            </select>
+          </div>
+        </div>
         <div className="bg-white rounded-lg p-3 sm:p-4 border border-slate-200">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
@@ -479,7 +582,7 @@ const EarningsHistory: React.FC = () => {
                   {payment.subject && (
                     <span className="ml-2">• Subject: {payment.subject}</span>
                   )}
-                  { (payment.status === 'confirmed' || payment.status === 'admin_confirmed') && payment.admin_note && (
+                  { (payment.status === 'confirmed' || payment.status === 'admin_confirmed' || payment.status === 'admin_paid') && payment.admin_note && (
                     <span className="ml-2 text-green-600">✓ Approved by Admin</span>
                   )}
 
@@ -524,13 +627,15 @@ const EarningsHistory: React.FC = () => {
                             variant="primary"
                             disabled={
                               payment.status === 'confirmed' ||
+                              payment.status === 'admin_confirmed' ||
+                              payment.status === 'admin_paid' ||
                               payment.status === 'rejected' ||
                               payment.status === 'refunded' ||
                               !payment.admin_payment_proof_url ||
                               !viewedProofByPayment[payment.payment_id]
                             }
                             title={
-                              payment.status === 'confirmed'
+                              payment.status === 'confirmed' || payment.status === 'admin_confirmed' || payment.status === 'admin_paid'
                                 ? 'Already confirmed'
                                 : !payment.admin_payment_proof_url
                                   ? 'Waiting for admin to upload proof'
@@ -551,7 +656,7 @@ const EarningsHistory: React.FC = () => {
                 <span className="font-semibold text-slate-800 block">
                   ₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
-                {(payment.status === 'confirmed' || payment.status === 'admin_confirmed') && (
+                {(payment.status === 'confirmed' || payment.status === 'admin_confirmed' || payment.status === 'admin_paid') && (
                   <span className="text-[10px] text-slate-500 block mt-0.5">
                     Net: ₱{(Number(payment.amount) * 0.87).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>

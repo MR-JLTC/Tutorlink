@@ -3,7 +3,7 @@ import apiClient from '../../services/api';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
-import { CheckCircle, History, Clock, Calendar, User, Upload, FileText, Star, DollarSign, TrendingUp } from 'lucide-react';
+import { CheckCircle, History, Clock, Calendar, User, Upload, FileText, Star, TrendingUp, BookOpen, Info } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -29,8 +29,25 @@ interface BookingRequest {
   session_rate_per_hour?: number;
 }
 
+interface Payment {
+  payment_id: number;
+  booking_request_id?: number;
+  student_id?: number;
+  tutor_id?: number;
+  amount: number;
+  sender?: string;
+  status?: string;
+  student?: {
+    student_id?: number;
+    user?: {
+      user_id?: number;
+    };
+  };
+}
+
 const SessionHistory: React.FC = () => {
   const [sessions, setSessions] = useState<BookingRequest[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const [now, setNow] = useState(new Date());
@@ -99,8 +116,17 @@ const SessionHistory: React.FC = () => {
         console.warn('Failed to fetch tutor profile for session rate:', err);
       }
 
-      // Fetch booking requests
-      const res = await apiClient.get(`/tutors/${fetchedTutorId}/booking-requests`);
+      // Fetch booking requests and all payments (to filter for admin payments)
+      const [res, allPaymentsRes] = await Promise.all([
+        apiClient.get(`/tutors/${fetchedTutorId}/booking-requests`),
+        apiClient.get('/payments').catch(() => ({ data: [] }))
+      ]);
+      
+      // Filter payments for this tutor with sender='admin'
+      const tutorPayments = (allPaymentsRes.data || []).filter((p: any) => 
+        p.tutor_id === fetchedTutorId && p.sender === 'admin'
+      );
+      setPayments(tutorPayments);
       
       let allBookings = [];
       if (Array.isArray(res.data)) {
@@ -111,40 +137,40 @@ const SessionHistory: React.FC = () => {
         allBookings = res.data.bookings;
       }
       
-      // Fetch ratings for each booking
-      const sessionsWithRatings = await Promise.all(
-        allBookings.map(async (b: any) => {
-          let rating = null;
-          let ratingComment = null;
-          
-          // Try to get rating from booking data first (check multiple possible field names)
-          if (b.rating !== undefined && b.rating !== null) {
-            rating = b.rating;
-            ratingComment = b.rating_comment || b.comment || b.tutee_comment || null;
-          } else if (b.tutee_rating !== undefined && b.tutee_rating !== null) {
-            rating = b.tutee_rating;
-            ratingComment = b.tutee_comment || b.comment || null;
-          } else {
-            // Try to fetch rating from API
-            try {
-              const ratingRes = await apiClient.get(`/bookings/${b.id}/rating`).catch(() => null);
-              if (ratingRes?.data?.rating) {
-                rating = ratingRes.data.rating;
-                ratingComment = ratingRes.data.comment || null;
-              }
-            } catch (err) {
-              // Rating endpoint might not exist, that's okay
-            }
+      const sessionsWithRatings = allBookings.map((b: any) => {
+        // Prefer rating info baked into the booking payload to avoid hitting legacy endpoints
+        const ratingSources = [
+          { value: b.rating, comment: b.rating_comment ?? b.comment ?? b.tutee_comment },
+          { value: b.tutee_rating, comment: b.tutee_comment ?? b.comment },
+          { value: b.feedback?.rating, comment: b.feedback?.comment },
+          { value: b.review?.rating, comment: b.review?.comment }
+        ];
+
+        let rating: number | null = null;
+        let ratingComment: string | null = null;
+        for (const source of ratingSources) {
+          const rawValue = source.value;
+          const parsedValue =
+            typeof rawValue === 'number'
+              ? rawValue
+              : typeof rawValue === 'string'
+              ? Number(rawValue)
+              : null;
+
+          if (parsedValue !== null && !Number.isNaN(parsedValue)) {
+            rating = parsedValue;
+            ratingComment = source.comment ?? null;
+            break;
           }
-          
-          return {
-            ...b,
-            rating: rating,
-            rating_comment: ratingComment,
-            session_rate_per_hour: b.session_rate_per_hour || b.tutor?.session_rate_per_hour || null
-          };
-        })
-      );
+        }
+
+        return {
+          ...b,
+          rating,
+          rating_comment: ratingComment,
+          session_rate_per_hour: b.session_rate_per_hour || b.tutor?.session_rate_per_hour || null
+        };
+      });
       
       const historySessions = sessionsWithRatings.filter((b: BookingRequest) => {
         // Always show completed or awaiting_confirmation sessions
@@ -193,13 +219,37 @@ const SessionHistory: React.FC = () => {
     fetchHistory();
   }, [user, now]);
 
-  // Calculate payment received after 13% deduction
+  // Calculate payment received from payments table (sender='admin', matched by booking_request_id and student_id)
   const calculatePaymentReceived = (session: BookingRequest): number => {
-    const rate = session.session_rate_per_hour || sessionRate || 0;
-    const duration = session.duration || 0;
-    const totalAmount = rate * duration;
-    // Deduct 13% platform fee
-    return totalAmount * 0.87;
+    // Find payment with sender='admin', matching booking_request_id
+    // Match by booking_request_id and student (via user_id from student.user or direct student_id)
+    const sessionStudentUserId = session.student?.user_id;
+    
+    const payment = payments.find(p => {
+      // Must have sender='admin' and matching booking_request_id
+      if (p.sender !== 'admin' || p.booking_request_id !== session.id) {
+        return false;
+      }
+      
+      // Match by student.user.user_id if available (payment includes student relation)
+      const paymentStudentUserId = (p as any).student?.user?.user_id;
+      if (paymentStudentUserId && sessionStudentUserId && paymentStudentUserId === sessionStudentUserId) {
+        return true;
+      }
+      
+      // If payment doesn't have student relation loaded, we can't match by student_id
+      // So we'll match only by booking_request_id and sender (assuming one payment per booking)
+      // This is a fallback - ideally payments should include student relations
+      return true;
+    });
+    
+    if (payment && payment.amount) {
+      // Deduct 13% platform fee from the payment amount
+      return Number(payment.amount) * 0.87;
+    }
+    
+    // Return 0 if no payment found (don't fallback to calculated amount)
+    return 0;
   };
 
   // Render stars for rating
@@ -218,6 +268,17 @@ const SessionHistory: React.FC = () => {
   const completedSessionsWithData = sessions.filter(s => 
     s.status === 'completed' || s.status === 'awaiting_confirmation'
   );
+
+  const totalCompletedHours = completedSessionsWithData.reduce((sum, s) => {
+    const duration = Number(s.duration ?? 0);
+    return sum + (Number.isNaN(duration) ? 0 : duration);
+  }, 0);
+
+  const totalCompletedEarnings = completedSessionsWithData.reduce((sum, s) => {
+    // Use the same logic as calculatePaymentReceived
+    const paymentReceived = calculatePaymentReceived(s);
+    return sum + (Number.isNaN(paymentReceived) ? 0 : paymentReceived);
+  }, 0);
 
   const handleMarkDone = async () => {
     if (!proofTarget || !proofFile) {
@@ -415,153 +476,328 @@ const SessionHistory: React.FC = () => {
 
       {/* Ratings and Earnings Table */}
       {completedSessionsWithData.length > 0 && (
-        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
-          <div className="flex items-center gap-3 mb-4 sm:mb-5">
-            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
-              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+        <Card className="p-3 sm:p-4 md:p-6 bg-gradient-to-br from-white via-slate-50/30 to-white rounded-xl sm:rounded-2xl shadow-xl border-2 border-slate-200/60 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6 pb-4 border-b-2 border-slate-200/60">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700 rounded-xl shadow-lg ring-2 ring-primary-200/50">
+                <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 bg-clip-text text-transparent">
+                  Session Ratings & Earnings
+                </h2>
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">
+                  {completedSessionsWithData.length} {completedSessionsWithData.length === 1 ? 'session' : 'sessions'} completed
+                </p>
+              </div>
             </div>
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-              Session Ratings & Earnings
-            </h2>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gradient-to-r from-primary-50 via-primary-100/50 to-primary-50 border-b-2 border-primary-200">
-                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
-                    Subject
-                  </th>
-                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
-                    Student
-                  </th>
-                  <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
-                    Rating
-                  </th>
-                  <th className="px-3 sm:px-4 py-3 text-center text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
-                    Duration
-                  </th>
-                  <th className="px-3 sm:px-4 py-3 text-right text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
-                    Payment Received
-                  </th>
-                  <th className="px-3 sm:px-4 py-3 text-left text-xs sm:text-sm font-bold text-slate-700 uppercase tracking-wide">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {completedSessionsWithData.map((session, index) => {
-                  const paymentReceived = calculatePaymentReceived(session);
-                  const rate = session.session_rate_per_hour || sessionRate || 0;
-                  const totalBeforeDeduction = rate * (session.duration || 0);
-                  
-                  return (
-                    <tr
-                      key={session.id}
-                      className={`border-b border-slate-200 hover:bg-primary-50/50 transition-colors ${
-                        index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
-                      }`}
-                    >
-                      <td className="px-3 sm:px-4 py-3 sm:py-4">
-                        <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">
-                          {session.subject}
+          {/* Desktop Table View */}
+          <div className="hidden lg:block overflow-x-auto -mx-3 sm:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <div className="overflow-hidden rounded-xl border-2 border-slate-200/60 shadow-inner">
+                <table className="min-w-full divide-y divide-slate-200/60">
+                  <thead className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700">
+                    <tr>
+                      <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
+                        Subject
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
+                        Student
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wider">
+                        Rating
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wider">
+                        Duration
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 text-right text-xs font-bold text-white uppercase tracking-wider">
+                        Payment Received
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
+                        Tutee Notes
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
+                        Date
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-200/60">
+                    {completedSessionsWithData.map((session, index) => {
+                      const paymentReceived = calculatePaymentReceived(session);
+                      // Find payment using same logic as calculatePaymentReceived
+                      const sessionStudentUserId = session.student?.user_id;
+                      const payment = payments.find(p => {
+                        if (p.sender !== 'admin' || p.booking_request_id !== session.id) {
+                          return false;
+                        }
+                        const paymentStudentUserId = (p as any).student?.user?.user_id;
+                        if (paymentStudentUserId && sessionStudentUserId && paymentStudentUserId === sessionStudentUserId) {
+                          return true;
+                        }
+                        return true; // Fallback: match by booking_request_id and sender only
+                      });
+                      
+                      return (
+                        <tr
+                          key={session.id}
+                          className={`hover:bg-gradient-to-r hover:from-primary-50/50 hover:to-slate-50/50 transition-all duration-200 ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+                          }`}
+                        >
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="p-1.5 bg-primary-100 rounded-lg mr-2">
+                                <BookOpen className="h-3.5 w-3.5 text-primary-700" />
+                              </div>
+                              <span className="text-sm font-semibold text-slate-800">
+                                {session.subject}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <div className="p-1 bg-primary-100 rounded-full">
+                                <User className="h-3.5 w-3.5 text-primary-700" />
+                              </div>
+                              <span className="text-sm font-medium text-slate-700">
+                                {session.student?.name || 'Student'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center">
+                            {session.rating ? (
+                              <div className="flex flex-col items-center gap-1.5">
+                                <div className="flex items-center gap-0.5">
+                                  {renderStars(session.rating)}
+                                </div>
+                                <span className="text-xs font-bold text-slate-700 bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-200">
+                                  {session.rating.toFixed(1)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400 italic">No rating</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg">
+                              <Clock className="h-3.5 w-3.5 text-primary-600" />
+                              <span className="text-sm font-semibold text-slate-700">
+                                {session.duration} {session.duration === 1 ? 'hr' : 'hrs'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-right">
+                            <div className="flex flex-col items-end">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-bold text-green-700">
+                                  ₱{paymentReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                              {payment && payment.amount && (
+                                <span className="text-[10px] text-slate-500 mt-0.5">
+                                  (₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} - 13%)
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            {session.rating_comment ? (
+                              <div className="max-w-xs">
+                                <p className="text-xs text-slate-700 line-clamp-2 break-words bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                                  {session.rating_comment}
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400 italic">No notes</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-primary-600" />
+                              <span className="text-xs text-slate-600">
+                                {new Date(session.date).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700">
+                    <tr>
+                      <td colSpan={3} className="px-4 py-4 text-sm font-bold text-white">
+                        Total
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="text-sm font-bold text-white bg-white/20 px-3 py-1 rounded-lg">
+                          {totalCompletedHours.toFixed(1)} hrs
                         </span>
                       </td>
-                      <td className="px-3 sm:px-4 py-3 sm:py-4">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-primary-600 flex-shrink-0" />
-                          <span className="text-xs sm:text-sm md:text-base text-slate-700">
-                            {session.student?.name || 'Student'}
+                      <td className="px-4 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-base font-bold text-white">
+                            ₱{totalCompletedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 py-3 sm:py-4 text-center">
-                        {session.rating ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex items-center gap-0.5">
-                              {renderStars(session.rating)}
-                            </div>
-                            <span className="text-xs sm:text-sm font-semibold text-slate-700">
-                              {session.rating.toFixed(1)}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs sm:text-sm text-slate-400 italic">
-                            No rating
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 sm:px-4 py-3 sm:py-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <Clock className="h-4 w-4 text-primary-600" />
-                          <span className="text-xs sm:text-sm md:text-base font-medium text-slate-700">
-                            {session.duration} {session.duration === 1 ? 'hr' : 'hrs'}
-                          </span>
+                      <td colSpan={2} className="px-4 py-4"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile/Tablet Card View */}
+          <div className="lg:hidden space-y-3 sm:space-y-4">
+            {completedSessionsWithData.map((session, index) => {
+              const paymentReceived = calculatePaymentReceived(session);
+              // Find payment using same logic as calculatePaymentReceived
+              const sessionStudentUserId = session.student?.user_id;
+              const payment = payments.find(p => {
+                if (p.sender !== 'admin' || p.booking_request_id !== session.id) {
+                  return false;
+                }
+                const paymentStudentUserId = (p as any).student?.user?.user_id;
+                if (paymentStudentUserId && sessionStudentUserId && paymentStudentUserId === sessionStudentUserId) {
+                  return true;
+                }
+                return true; // Fallback: match by booking_request_id and sender only
+              });
+              
+              return (
+                <div
+                  key={session.id}
+                  className="bg-gradient-to-br from-white to-slate-50/50 rounded-xl border-2 border-slate-200/60 shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden"
+                >
+                  {/* Card Header */}
+                  <div className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700 px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-white/20 rounded-lg">
+                          <BookOpen className="h-4 w-4 text-white" />
                         </div>
-                      </td>
-                      <td className="px-3 sm:px-4 py-3 sm:py-4 text-right">
-                        <div className="flex flex-col items-end">
-                          <div className="flex items-center gap-1.5">
-                            <DollarSign className="h-4 w-4 text-green-600" />
-                            <span className="text-xs sm:text-sm md:text-base font-bold text-green-700">
-                              ₱{paymentReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          {totalBeforeDeduction > 0 && (
-                            <span className="text-[10px] sm:text-xs text-slate-500 mt-0.5">
-                              (₱{totalBeforeDeduction.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} - 13%)
-                            </span>
-                          )}
+                        <h3 className="text-sm font-bold text-white truncate">{session.subject}</h3>
+                      </div>
+                      {session.rating && (
+                        <div className="flex items-center gap-1 bg-white/20 px-2 py-1 rounded-lg">
+                          {renderStars(session.rating)}
+                          <span className="text-xs font-bold text-white ml-1">{session.rating.toFixed(1)}</span>
                         </div>
-                      </td>
-                      <td className="px-3 sm:px-4 py-3 sm:py-4">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="h-4 w-4 text-primary-600 flex-shrink-0" />
-                          <span className="text-xs sm:text-sm text-slate-600">
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-4 space-y-3">
+                    {/* Student & Date Row */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                        <User className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-slate-500 font-medium">Student</p>
+                          <p className="text-xs font-semibold text-slate-800 truncate">{session.student?.name || 'Student'}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                        <Calendar className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-slate-500 font-medium">Date</p>
+                          <p className="text-xs font-semibold text-slate-800">
                             {new Date(session.date).toLocaleDateString('en-US', {
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric'
                             })}
-                          </span>
+                          </p>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gradient-to-r from-primary-50 via-primary-100/50 to-primary-50 border-t-2 border-primary-200">
-                  <td colSpan={3} className="px-3 sm:px-4 py-3 sm:py-4 text-xs sm:text-sm font-bold text-slate-700">
-                    Total
-                  </td>
-                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-center">
-                    <span className="text-xs sm:text-sm md:text-base font-bold text-slate-800">
-                      {completedSessionsWithData.reduce((sum, s) => sum + (s.duration || 0), 0).toFixed(1)} hrs
-                    </span>
-                  </td>
-                  <td className="px-3 sm:px-4 py-3 sm:py-4 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
-                      <span className="text-sm sm:text-base md:text-lg font-bold text-green-700">
-                        ₱{completedSessionsWithData.reduce((sum, s) => sum + calculatePaymentReceived(s), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
+                      </div>
                     </div>
-                  </td>
-                  <td className="px-3 sm:px-4 py-3 sm:py-4"></td>
-                </tr>
-              </tfoot>
-            </table>
+
+                    {/* Duration & Payment Row */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
+                        <Clock className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-slate-500 font-medium">Duration</p>
+                          <p className="text-xs font-semibold text-slate-800">
+                            {session.duration} {session.duration === 1 ? 'hr' : 'hrs'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="p-2 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
+                        <p className="text-[10px] text-green-600 font-medium mb-0.5">Payment Received</p>
+                        <div className="flex items-center gap-1">
+                          <p className="text-sm font-bold text-green-700">
+                            ₱{paymentReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        {payment && payment.amount && (
+                          <p className="text-[9px] text-green-600 mt-0.5">
+                            (₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} - 13%)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tutee Notes */}
+                    {session.rating_comment && (
+                      <div className="p-3 bg-gradient-to-br from-primary-50/50 to-slate-50 rounded-lg border border-primary-200/50">
+                        <div className="flex items-start gap-2">
+                          <FileText className="h-4 w-4 text-primary-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] text-primary-700 font-semibold mb-1 uppercase tracking-wide">Tutee Notes</p>
+                            <p className="text-xs text-slate-700 leading-relaxed break-words">{session.rating_comment}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Mobile Summary Card */}
+            <div className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700 rounded-xl p-4 shadow-lg border-2 border-primary-400">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-white">Total Summary</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/20 rounded-lg p-2.5">
+                  <p className="text-[10px] text-white/80 font-medium mb-1">Total Hours</p>
+                  <p className="text-base font-bold text-white">{totalCompletedHours.toFixed(1)} hrs</p>
+                </div>
+                <div className="bg-white/20 rounded-lg p-2.5">
+                  <p className="text-[10px] text-white/80 font-medium mb-1">Total Earnings</p>
+                  <div className="flex items-center gap-1">
+                    <p className="text-base font-bold text-white">
+                      ₱{totalCompletedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="mt-4 p-3 sm:p-4 bg-gradient-to-br from-primary-50 to-primary-100/50 border-2 border-primary-200/50 rounded-xl shadow-sm">
-            <p className="text-xs sm:text-sm text-primary-800 flex items-start gap-2">
-              <span className="font-bold">Note:</span>
-              <span>
-                Payment received is calculated as (Session Rate × Duration) minus 13% platform fee. 
-                Ratings are provided by students after session completion.
-              </span>
-            </p>
+          {/* Info Note */}
+          <div className="mt-4 sm:mt-5 p-3 sm:p-4 bg-gradient-to-br from-primary-50 via-amber-50/50 to-primary-50 border-2 border-primary-200/60 rounded-xl shadow-sm">
+            <div className="flex items-start gap-2.5">
+              <div className="p-1.5 bg-primary-100 rounded-lg flex-shrink-0">
+                <Info className="h-4 w-4 sm:h-5 sm:w-5 text-primary-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-primary-800 leading-relaxed">
+                  <span className="font-bold">Note:</span> Payment received is based on actual payments from the database (sender='admin') minus 13% platform fee. Ratings and notes are provided by students after session completion.
+                </p>
+              </div>
+            </div>
           </div>
         </Card>
       )}

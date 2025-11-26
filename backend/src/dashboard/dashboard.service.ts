@@ -40,13 +40,34 @@ export class DashboardService {
       where: { status: 'pending' },
     });
     
+    const PLATFORM_SHARE = 0.13;
+    const TUTEE_SENDER: 'tutee' = 'tutee';
+
+    // Calculate total revenue: 13% of tutee payments + full amount of admin payments
     const totalRevenueResult = await this.paymentsRepository
       .createQueryBuilder('payment')
-      .select('SUM(payment.amount)', 'sum')
-      .where('payment.status = :status', { status: 'confirmed' })
+      .select(`
+        COALESCE(SUM(
+          CASE 
+            WHEN payment.sender = :tuteeSender THEN payment.amount * :platformShare
+            ELSE payment.amount
+          END
+        ), 0)`, 'sum')
+      .where('(payment.status = :confirmed OR payment.status = :adminConfirmed OR payment.status = :adminPaid)', { 
+        confirmed: 'confirmed', 
+        adminConfirmed: 'admin_confirmed',
+        adminPaid: 'admin_paid',
+        tuteeSender: TUTEE_SENDER,
+        platformShare: PLATFORM_SHARE
+      })
       .getRawOne();
       
-    const totalRevenue = parseFloat(totalRevenueResult.sum) || 0;
+    const totalRevenue = Number((parseFloat(totalRevenueResult?.sum || '0') || 0).toFixed(2));
+    console.log(`[Dashboard] Total Revenue Query:`, {
+      result: totalRevenueResult,
+      sum: totalRevenueResult?.sum,
+      totalRevenue
+    });
 
     // Confirmed sessions (completed sessions)
     const confirmedSessions = await this.sessionsRepository.count({
@@ -80,7 +101,7 @@ export class DashboardService {
       sessions: Number(row.count),
     }));
 
-    // Payment activity overview: totals by status and recent payments sum (last 30 days)
+    // Payment activity overview: totals by status (all payments)
     const paymentStatusCountsRaw = await this.paymentsRepository
       .createQueryBuilder('payment')
       .select('payment.status', 'status')
@@ -93,14 +114,62 @@ export class DashboardService {
       return acc;
     }, {} as Record<string, number>);
 
+    // Recent confirmed revenue: 13% of tutee payments + full amount of admin payments (last 30 days)
     const recentPaymentsSumRaw = await this.paymentsRepository
       .createQueryBuilder('payment')
-      .select('COALESCE(SUM(payment.amount), 0)', 'sum')
+      .select(`
+        COALESCE(SUM(
+          CASE 
+            WHEN payment.sender = :tuteeSender THEN payment.amount * :platformShare
+            ELSE payment.amount
+          END
+        ), 0)`, 'sum')
       .where('payment.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)')
-      .andWhere('payment.status = :status', { status: 'confirmed' })
+      .andWhere('(payment.status = :confirmed OR payment.status = :adminConfirmed OR payment.status = :adminPaid)', { 
+        confirmed: 'confirmed', 
+        adminConfirmed: 'admin_confirmed',
+        adminPaid: 'admin_paid',
+        tuteeSender: TUTEE_SENDER,
+        platformShare: PLATFORM_SHARE
+      })
       .getRawOne();
 
-    const recentConfirmedRevenue = parseFloat(recentPaymentsSumRaw.sum) || 0;
+    const recentConfirmedRevenue = Number((parseFloat(recentPaymentsSumRaw?.sum || '0') || 0).toFixed(2));
+    console.log(`[Dashboard] Recent Confirmed Revenue:`, {
+      result: recentPaymentsSumRaw,
+      sum: recentPaymentsSumRaw?.sum,
+      recentConfirmedRevenue
+    });
+
+    // Payment trends: 13% of tutee payments + full amount of admin payments (last 6 months)
+    const paymentTrendsRaw = await this.paymentsRepository
+      .createQueryBuilder('payment')
+      .select("DATE_FORMAT(payment.created_at, '%Y-%m')", 'period')
+      .addSelect("DATE_FORMAT(payment.created_at, '%b %Y')", 'label')
+      .addSelect(`
+        COALESCE(SUM(
+          CASE 
+            WHEN payment.sender = :tuteeSender THEN payment.amount * :platformShare
+            ELSE payment.amount
+          END
+        ), 0)`, 'sum')
+      .where('(payment.status = :confirmed OR payment.status = :adminConfirmed)', { 
+        confirmed: 'confirmed', 
+        adminConfirmed: 'admin_confirmed',
+        tuteeSender: TUTEE_SENDER,
+        platformShare: PLATFORM_SHARE
+      })
+      .andWhere('payment.created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)')
+      .groupBy('period')
+      .addGroupBy('label')
+      .orderBy('period', 'ASC')
+      .getRawMany();
+
+    const paymentTrends = paymentTrendsRaw.map((row: any) => ({
+      label: row.label || row.period,
+      amount: Number((parseFloat(row.sum || '0') || 0).toFixed(2)),
+    }));
+    console.log(`[Dashboard] Payment Trends:`, paymentTrends);
 
     // University distribution: tutors vs tutees per university
     const tutorUniRaw = await this.tutorsRepository
@@ -224,6 +293,7 @@ export class DashboardService {
       paymentOverview: {
         byStatus: paymentStatusCounts,
         recentConfirmedRevenue,
+        trends: paymentTrends,
       },
       universityDistribution,
       userTypeTotals,
