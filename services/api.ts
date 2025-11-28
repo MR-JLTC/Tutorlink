@@ -2,8 +2,17 @@ import axios from 'axios';
 import { getActiveToken, getRoleForContext, clearRoleAuth } from '../utils/authRole';
 
 // The base URL for your NestJS backend
-const BACKEND_IP = import.meta.env.VITE_BACKEND_LAPTOP_IP || 'localhost';
-const API_BASE_URL = `http://${BACKEND_IP}:3000/api`;
+// Priority: VITE_BACKEND_URL (production) > VITE_BACKEND_LAPTOP_IP (local/ngrok) > localhost
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL 
+  || import.meta.env.VITE_BACKEND_LAPTOP_IP 
+  || 'localhost';
+
+// Check if BACKEND_URL is already a full URL or just a hostname
+const isFullUrl = BACKEND_URL.startsWith('http://') || BACKEND_URL.startsWith('https://');
+const backendBase = isFullUrl 
+  ? BACKEND_URL 
+  : `http://${BACKEND_URL}:3000`;
+const API_BASE_URL = `${backendBase}/api`;
 const API_ORIGIN = API_BASE_URL.replace(/\/?api$/, '');
 
 const apiClient = axios.create({

@@ -43,13 +43,13 @@ export class AppController {
     }),
     TypeOrmModule.forRoot({
       type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root', // Default XAMPP username
-      password: '',     // Default XAMPP password is empty
-      database: 'tutorlink',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '3306', 10),
+      username: process.env.DB_USERNAME || 'root',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_DATABASE || 'tutorlink',
       entities: Object.values(entities),
-      synchronize: true, // Note: synchronize: true is not recommended for production
+      synchronize: process.env.NODE_ENV !== 'production', // Only synchronize in development
     }),
     ScheduleModule.forRoot(),
     AuthModule,

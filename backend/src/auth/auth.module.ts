@@ -27,7 +27,7 @@ import { EmailModule } from '../email/email.module';
     EmailModule,
     PassportModule,
     JwtModule.register({
-      secret: 'SECRET_KEY_REPLACE_IN_PROD', // Use environment variables in production
+      secret: process.env.JWT_SECRET || 'SECRET_KEY_REPLACE_IN_PROD',
       signOptions: { expiresIn: '1d' },
     }),
   ],

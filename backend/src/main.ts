@@ -8,8 +8,14 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS so the frontend can communicate with the backend
+  const allowedOrigins = process.env.FRONTEND_URL 
+    ? [process.env.FRONTEND_URL, 'http://localhost:3001']
+    : ['http://localhost:3001', '*']; // Fallback for development
+  
   app.enableCors({
-    origin: '*', // For development, allow any origin. For production, restrict this to your frontend's domain.
+    origin: process.env.NODE_ENV === 'production' 
+      ? allowedOrigins.filter(origin => origin !== '*')
+      : '*', // Allow all origins in development
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -64,6 +70,8 @@ async function bootstrap() {
   // Use global pipes for validation
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  await app.listen(3000, '0.0.0.0');
+  const port = process.env.PORT || 3000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Server is running on port ${port}`);
 }
 bootstrap();
