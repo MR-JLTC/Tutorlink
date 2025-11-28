@@ -425,6 +425,22 @@ export class TutorsService {
     return { success: true, user_id: savedUser.user_id, tutor_id: (savedTutor as any).tutor_id };
   }
 
+  async getDocuments(tutorId: number) {
+    const tutor = await this.tutorsRepository.findOne({ where: { tutor_id: tutorId } });
+    if (!tutor) throw new NotFoundException('Tutor not found');
+    const documents = await this.documentsRepository.find({
+      where: { tutor: { tutor_id: tutorId } },
+      order: { document_id: 'DESC' }
+    });
+    return documents.map(doc => ({
+      id: doc.document_id,
+      document_id: doc.document_id,
+      file_url: doc.file_url,
+      file_name: doc.file_name,
+      file_type: doc.file_type
+    }));
+  }
+
   async saveDocuments(tutorId: number, files: any[]) {
     const tutor = await this.tutorsRepository.findOne({ where: { tutor_id: tutorId } });
     if (!tutor) throw new Error('Tutor not found');
@@ -1114,7 +1130,7 @@ export class TutorsService {
     return updatedTutorSubject;
   }
 
-  async submitSubjectApplication(tutorId: number, subjectName: string, files: any[]) {
+  async submitSubjectApplication(tutorId: number, subjectName: string, files: any[], isReapplication: boolean = false) {
     try {
       console.log('Starting subject application submission:', { tutorId, subjectName, filesCount: files?.length || 0 });
       
@@ -1267,9 +1283,24 @@ export class TutorsService {
         existingTutorSubject.status = 'pending';
         existingTutorSubject.admin_notes = null; // Clear previous admin notes
         savedTutorSubject = await this.tutorSubjectRepository.save(existingTutorSubject);
+        
+        // For reapplications, if no new files but existing documents exist, that's okay
+        // The existing documents will remain and the status will be changed to pending
+        if (isReapplication && (!files || files.length === 0)) {
+          const existingDocs = existingTutorSubject.documents || [];
+          if (existingDocs.length > 0) {
+            console.log(`Reapplying rejected subject "${trimmedName}" with ${existingDocs.length} existing documents (no new files)`);
+            // Status already changed to pending above, existing documents remain
+            return { success: true, message: 'Subject reapplication submitted successfully' };
+          }
+        }
       }
     } else {
       // Create new tutor subject with pending status
+      // For new applications, files are required
+      if (!files || files.length === 0) {
+        throw new Error('At least one file is required for new subject application');
+      }
       const tutorSubject = this.tutorSubjectRepository.create({
         tutor,
         subject,

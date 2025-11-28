@@ -52,6 +52,12 @@ export class TutorsController {
   }
 
   // Public upload of tutor documents after receiving tutor_id (pre-approval)
+  @Get(':tutorId/documents')
+  @UseGuards(JwtAuthGuard)
+  async getDocuments(@Param('tutorId') tutorId: string) {
+    return this.tutorsService.getDocuments(+tutorId);
+  }
+
   @Post(':tutorId/documents')
   @UseInterceptors(FilesInterceptor('files', 10, {
     storage: diskStorage({
@@ -220,20 +226,23 @@ export class TutorsController {
       }
     })
   }))
-  async submitSubjectApplication(@Param('tutorId') tutorId: string, @Body() body: any, @UploadedFiles() files: any[]) {
+  async submitSubjectApplication(@Param('tutorId') tutorId: string, @Body() body: any, @UploadedFiles() files?: any[]) {
     // FormData fields are available in req.body when using multer
     const subjectName = body?.subject_name || body?.subjectName || '';
-    console.log('Received subject application:', { tutorId, subjectName, filesCount: files?.length || 0, bodyKeys: Object.keys(body || {}) });
+    const isReapplication = body?.is_reapplication === 'true' || body?.is_reapplication === true;
+    console.log('Received subject application:', { tutorId, subjectName, filesCount: files?.length || 0, isReapplication, bodyKeys: Object.keys(body || {}) });
     
     if (!subjectName || !subjectName.trim()) {
       throw new Error('Subject name is required');
     }
     
-    if (!files || files.length === 0) {
+    // Allow reapplying rejected subjects even without new files (they may have existing documents)
+    // For new applications, files are still required
+    if ((!files || files.length === 0) && !isReapplication) {
       throw new Error('At least one file is required for subject application');
     }
     
-    return this.tutorsService.submitSubjectApplication(+tutorId, subjectName, files);
+    return this.tutorsService.submitSubjectApplication(+tutorId, subjectName, files || [], isReapplication);
   }
 
   // Availability change request endpoints removed as redundant

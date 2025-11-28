@@ -66,7 +66,21 @@ const ApplicationVerification: React.FC = () => {
   const [bio, setBio] = useState<string>('');
   const [reapplicationSubjects, setReapplicationSubjects] = useState<Set<string>>(new Set());
   const [subjectFilesMap, setSubjectFilesMap] = useState<Record<string, File[]>>({});
+  // Track existing documents from API (for subjects)
+  const [existingSubjectDocumentsMap, setExistingSubjectDocumentsMap] = useState<Record<string, Array<{
+    id: number;
+    file_url: string;
+    file_name: string;
+    file_type: string;
+  }>>>({});
   const [reapplicationDocuments, setReapplicationDocuments] = useState<File[]>([]);
+  // Track existing proof documents from API
+  const [existingProofDocuments, setExistingProofDocuments] = useState<Array<{
+    id: number;
+    file_url: string;
+    file_name: string;
+    file_type: string;
+  }>>([]);
   const [reapplicationAvailability, setReapplicationAvailability] = useState<Record<string, DayAvailability>>({});
   const [showReapplicationForm, setShowReapplicationForm] = useState(false);
   const [isSubmittingReapplication, setIsSubmittingReapplication] = useState(false);
@@ -279,17 +293,53 @@ const ApplicationVerification: React.FC = () => {
       // Wait for subjectApplications to be updated (will use the state that was just fetched)
       const currentSubjectApps = await apiClient.get(`/tutors/${tutorId}/subject-applications`);
       const subjectsSet = new Set<string>();
+      const initialSubjectFilesMap: Record<string, File[]> = {};
+      const initialExistingDocumentsMap: Record<string, Array<{
+        id: number;
+        file_url: string;
+        file_name: string;
+        file_type: string;
+      }>> = {};
+      
       (currentSubjectApps.data || []).forEach((app: any) => {
         subjectsSet.add(app.subject_name);
+        // Initialize new files array
+        initialSubjectFilesMap[app.subject_name] = [];
+        // Store existing documents from API
+        if (app.documents && Array.isArray(app.documents) && app.documents.length > 0) {
+          initialExistingDocumentsMap[app.subject_name] = app.documents.map((doc: any) => ({
+            id: doc.id,
+            file_url: doc.file_url,
+            file_name: doc.file_name,
+            file_type: doc.file_type
+          }));
+        } else {
+          initialExistingDocumentsMap[app.subject_name] = [];
+        }
       });
-      setReapplicationSubjects(subjectsSet);
       
-      // Initialize subject files map with empty arrays for all subjects
-      const initialSubjectFilesMap: Record<string, File[]> = {};
-      subjectsSet.forEach(subject => {
-        initialSubjectFilesMap[subject] = [];
-      });
+      setReapplicationSubjects(subjectsSet);
       setSubjectFilesMap(initialSubjectFilesMap);
+      setExistingSubjectDocumentsMap(initialExistingDocumentsMap);
+      
+      // Fetch general proof documents (tutor documents)
+      try {
+        // Use the new GET endpoint to fetch tutor documents directly
+        const documentsRes = await apiClient.get(`/tutors/${tutorId}/documents`).catch(() => ({ data: [] }));
+        if (documentsRes.data && Array.isArray(documentsRes.data) && documentsRes.data.length > 0) {
+          setExistingProofDocuments(documentsRes.data.map((doc: any) => ({
+            id: doc.document_id || doc.id,
+            file_url: doc.file_url,
+            file_name: doc.file_name,
+            file_type: doc.file_type
+          })));
+        } else {
+          setExistingProofDocuments([]);
+        }
+      } catch (e) {
+        console.error('Failed to fetch proof documents:', e);
+        setExistingProofDocuments([]);
+      }
       
       // Set availability
       if (availabilityRes.data && Array.isArray(availabilityRes.data)) {
@@ -406,6 +456,10 @@ const ApplicationVerification: React.FC = () => {
     if (!subjectFilesMap[subjectName]) {
       setSubjectFilesMap(prev => ({ ...prev, [subjectName]: [] }));
     }
+    // Initialize existing documents map if not present
+    if (!existingSubjectDocumentsMap[subjectName]) {
+      setExistingSubjectDocumentsMap(prev => ({ ...prev, [subjectName]: [] }));
+    }
   };
 
   const removeReapplicationSubject = (subjectName: string) => {
@@ -415,6 +469,11 @@ const ApplicationVerification: React.FC = () => {
       return next;
     });
     setSubjectFilesMap(prev => {
+      const next = { ...prev };
+      delete next[subjectName];
+      return next;
+    });
+    setExistingSubjectDocumentsMap(prev => {
       const next = { ...prev };
       delete next[subjectName];
       return next;
@@ -439,6 +498,20 @@ const ApplicationVerification: React.FC = () => {
       }
       return next;
     });
+  };
+
+  const removeExistingSubjectDocument = (subjectName: string, docId: number) => {
+    setExistingSubjectDocumentsMap(prev => {
+      const next = { ...prev };
+      if (next[subjectName]) {
+        next[subjectName] = next[subjectName].filter(doc => doc.id !== docId);
+      }
+      return next;
+    });
+  };
+
+  const removeExistingProofDocument = (docId: number) => {
+    setExistingProofDocuments(prev => prev.filter(doc => doc.id !== docId));
   };
 
   // Availability handlers for reapplication
@@ -1426,6 +1499,41 @@ const ApplicationVerification: React.FC = () => {
                         <label className="block text-[10px] sm:text-xs font-medium text-slate-700 mb-1">
                           Supporting Documents for {subject}
                         </label>
+                        
+                        {/* Display existing documents */}
+                        {(existingSubjectDocumentsMap[subject] || []).length > 0 && (
+                          <div className="mb-3">
+                            <p className="text-[10px] sm:text-xs text-slate-600 mb-1.5 font-medium">Previously uploaded documents:</p>
+                            <ul className="space-y-1.5">
+                              {(existingSubjectDocumentsMap[subject] || []).map((doc) => (
+                                <li key={doc.id} className="flex items-center justify-between text-xs sm:text-sm text-slate-700 bg-blue-50 border border-blue-200 p-1.5 sm:p-2 rounded">
+                                  <div className="flex items-center min-w-0 flex-1">
+                                    <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600 mr-2 flex-shrink-0" />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
+                                      className="text-blue-700 hover:text-blue-900 hover:underline truncate text-left flex-1 min-w-0"
+                                      title="Open file"
+                                    >
+                                      {doc.file_name}
+                                    </button>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeExistingSubjectDocument(subject, doc.id)}
+                                    className="text-red-600 hover:text-red-800 active:text-red-900 flex-shrink-0 p-1 touch-manipulation ml-2"
+                                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                                    aria-label="Remove document"
+                                    title="Remove this document"
+                                  >
+                                    <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
                         <input
                           type="file"
                           multiple
@@ -1434,22 +1542,25 @@ const ApplicationVerification: React.FC = () => {
                           className="w-full border border-slate-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
                         />
                         {(subjectFilesMap[subject] || []).length > 0 && (
-                          <ul className="mt-2 space-y-1">
-                            {(subjectFilesMap[subject] || []).map((file, idx) => (
-                              <li key={idx} className="flex items-center justify-between text-xs sm:text-sm text-slate-600 bg-white p-1.5 sm:p-2 rounded">
-                                <span className="break-words flex-1 min-w-0 pr-2">{file.name}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => removeSubjectFile(subject, idx)}
-                                  className="text-red-600 hover:text-red-800 active:text-red-900 flex-shrink-0 p-1 touch-manipulation"
-                                  style={{ WebkitTapHighlightColor: 'transparent' }}
-                                  aria-label="Remove file"
-                                >
-                                  <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
+                          <div className="mt-2">
+                            <p className="text-[10px] sm:text-xs text-slate-600 mb-1.5 font-medium">New documents to upload:</p>
+                            <ul className="space-y-1">
+                              {(subjectFilesMap[subject] || []).map((file, idx) => (
+                                <li key={idx} className="flex items-center justify-between text-xs sm:text-sm text-slate-600 bg-white p-1.5 sm:p-2 rounded border border-slate-200">
+                                  <span className="break-words flex-1 min-w-0 pr-2">{file.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSubjectFile(subject, idx)}
+                                    className="text-red-600 hover:text-red-800 active:text-red-900 flex-shrink-0 p-1 touch-manipulation"
+                                    style={{ WebkitTapHighlightColor: 'transparent' }}
+                                    aria-label="Remove file"
+                                  >
+                                    <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1463,6 +1574,41 @@ const ApplicationVerification: React.FC = () => {
               <label className="block text-xs sm:text-sm font-medium text-slate-700 mb-1.5 sm:mb-2">
                 Proof Documents <span className="text-red-500">*</span>
               </label>
+              
+              {/* Display existing proof documents */}
+              {existingProofDocuments.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[10px] sm:text-xs text-slate-600 mb-1.5 font-medium">Previously uploaded documents:</p>
+                  <ul className="space-y-1.5">
+                    {existingProofDocuments.map((doc) => (
+                      <li key={doc.id} className="flex items-center justify-between text-xs sm:text-sm text-slate-700 bg-blue-50 border border-blue-200 p-1.5 sm:p-2 rounded">
+                        <div className="flex items-center min-w-0 flex-1">
+                          <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-600 mr-2 flex-shrink-0" />
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
+                            className="text-blue-700 hover:text-blue-900 hover:underline truncate text-left flex-1 min-w-0"
+                            title="Open file"
+                          >
+                            {doc.file_name}
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeExistingProofDocument(doc.id)}
+                          className="text-red-600 hover:text-red-800 active:text-red-900 flex-shrink-0 p-1 touch-manipulation ml-2"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
+                          aria-label="Remove document"
+                          title="Remove this document"
+                        >
+                          <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
               <input
                 type="file"
                 multiple
@@ -1475,11 +1621,14 @@ const ApplicationVerification: React.FC = () => {
                 className="w-full border border-slate-300 rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
               />
               {reapplicationDocuments.length > 0 && (
-                <ul className="list-disc list-inside text-xs sm:text-sm text-slate-600 mt-2 space-y-1">
-                  {reapplicationDocuments.map((f, i) => (
-                    <li key={i} className="break-words">{f.name}</li>
-                  ))}
-                </ul>
+                <div className="mt-2">
+                  <p className="text-[10px] sm:text-xs text-slate-600 mb-1.5 font-medium">New documents to upload:</p>
+                  <ul className="list-disc list-inside text-xs sm:text-sm text-slate-600 space-y-1">
+                    {reapplicationDocuments.map((f, i) => (
+                      <li key={i} className="break-words">{f.name}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
 
@@ -1607,12 +1756,22 @@ const ApplicationVerification: React.FC = () => {
                     alert('Please add at least one subject of expertise');
                     return;
                   }
-                  // Check if all subjects have files
+                  // Check if all subjects have files (either existing or new)
                   const subjectsWithoutFiles = Array.from(reapplicationSubjects).filter(
-                    subject => !subjectFilesMap[subject] || subjectFilesMap[subject].length === 0
+                    subject => {
+                      const hasNewFiles = subjectFilesMap[subject] && subjectFilesMap[subject].length > 0;
+                      const hasExistingFiles = existingSubjectDocumentsMap[subject] && existingSubjectDocumentsMap[subject].length > 0;
+                      return !hasNewFiles && !hasExistingFiles;
+                    }
                   );
                   if (subjectsWithoutFiles.length > 0) {
                     alert(`Please add supporting documents for: ${subjectsWithoutFiles.join(', ')}`);
+                    return;
+                  }
+                  // Check if there are proof documents (either existing or new)
+                  const hasProofDocuments = existingProofDocuments.length > 0 || reapplicationDocuments.length > 0;
+                  if (!hasProofDocuments) {
+                    alert('Please add at least one proof document');
                     return;
                   }
                   
@@ -1650,17 +1809,34 @@ const ApplicationVerification: React.FC = () => {
                       });
                     }
 
-                    // Submit subjects with files
+                    // Submit all subjects (reapply all previously applied subjects)
                     for (const subject of Array.from(reapplicationSubjects)) {
                       const files = subjectFilesMap[subject] || [];
+                      const hasExistingDocs = existingSubjectDocumentsMap[subject] && existingSubjectDocumentsMap[subject].length > 0;
+                      
+                      // Submit subject application
+                      // If subject has new files, upload them
+                      // If subject only has existing documents, still reapply (backend will handle it)
+                      const form = new FormData();
+                      form.append('subject_name', subject);
+                      form.append('is_reapplication', 'true'); // Mark as reapplication
+                      
                       if (files.length > 0) {
-                        const form = new FormData();
-                        form.append('subject_name', subject);
+                        // Has new files - upload them
                         files.forEach(f => form.append('files', f));
-                        await apiClient.post(`/tutors/${tutorId}/subject-application`, form, {
-                          headers: { 'Content-Type': 'multipart/form-data' }
-                        });
                       }
+                      // If only has existing documents, form will have no files but is_reapplication flag
+                      // Backend will check for existing documents and allow the reapplication
+                      
+                      // Skip if no files and no existing documents (shouldn't happen due to validation)
+                      if (files.length === 0 && !hasExistingDocs) {
+                        console.warn(`Skipping subject "${subject}" - no files or existing documents`);
+                        continue;
+                      }
+                      
+                      await apiClient.post(`/tutors/${tutorId}/subject-application`, form, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                      });
                     }
 
                     // Upload new documents if any

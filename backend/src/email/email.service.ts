@@ -9,7 +9,7 @@ export class EmailService {
   constructor() {
     // Configure nodemailer transporter using Gmail SMTP with App Password
     // Ensure you set process.env.GMAIL_APP_PASSWORD
-    this.gmailUser = process.env.GMAIL_USER || 'johnemmanuel.devera@bisu.edu.ph';
+    this.gmailUser = process.env.GMAIL_USER || 'jhonlloydtcruz4@gmail.com';
     const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
 
     if (!gmailAppPassword) {

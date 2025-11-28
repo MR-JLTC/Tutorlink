@@ -107,12 +107,7 @@ const RegistrationPage: React.FC = () => {
   };
 
   const handleSendVerificationCode = async () => {
-    if (!email) {
-      notify('Please enter email first.', 'error');
-      return;
-    }
-    if (emailDomainError) {
-      notify(emailDomainError, 'error');
+    if (!email || emailDomainError) {
       return;
     }
 
@@ -189,7 +184,6 @@ const RegistrationPage: React.FC = () => {
       }
       
       setVerificationError(errorMessage);
-      notify(errorMessage, 'error');
     } finally {
       setIsSendingCode(false);
     }
@@ -277,7 +271,6 @@ const RegistrationPage: React.FC = () => {
       }
       
       setVerificationError(errorMessage);
-      notify(errorMessage, 'error');
     } finally {
       setIsVerifyingCode(false);
     }

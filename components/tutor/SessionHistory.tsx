@@ -3,7 +3,7 @@ import apiClient from '../../services/api';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
-import { CheckCircle, History, Clock, Calendar, User, Upload, FileText, Star, TrendingUp, BookOpen, Info } from 'lucide-react';
+import { CheckCircle, History, Clock, Calendar, User, Upload, FileText, Star, TrendingUp, BookOpen, Info, X } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -173,8 +173,8 @@ const SessionHistory: React.FC = () => {
       });
       
       const historySessions = sessionsWithRatings.filter((b: BookingRequest) => {
-        // Always show completed or awaiting_confirmation sessions
-        if (b.status === 'completed' || b.status === 'awaiting_confirmation') {
+        // Always show completed, awaiting_confirmation, or declined sessions
+        if (b.status === 'completed' || b.status === 'awaiting_confirmation' || b.status === 'declined') {
           return true;
         }
         
@@ -361,6 +361,7 @@ const SessionHistory: React.FC = () => {
           {sessions.map(session => {
             const isCompleted = session.status === 'completed';
             const isAwaitingConfirmation = session.status === 'awaiting_confirmation';
+            const isDeclined = session.status === 'declined';
             
             return (
               <Card 
@@ -373,6 +374,8 @@ const SessionHistory: React.FC = () => {
                     ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
                   isAwaitingConfirmation
                     ? 'bg-gradient-to-r from-yellow-500 to-amber-500' :
+                  isDeclined
+                    ? 'bg-gradient-to-r from-red-500 to-rose-500' :
                     'bg-gradient-to-r from-primary-500 to-primary-700'
                 }`} />
                 
@@ -421,17 +424,34 @@ const SessionHistory: React.FC = () => {
                           <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
                           <span className="whitespace-nowrap">Pending Confirmation</span>
                         </div>
-                      ) : (
-                        <Button
-                          onClick={() => { setProofTarget(session); setProofModalOpen(true); }}
-                          disabled={loading}
-                          className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-lg hover:shadow-xl transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 touch-manipulation"
-                          style={{ WebkitTapHighlightColor: 'transparent' }}
-                        >
-                          <Upload className="h-4 w-4 sm:h-5 sm:w-5" />
-                          <span>Mark as Done</span>
-                        </Button>
-                      )}
+                      ) : isDeclined ? (
+                        <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md text-red-700 bg-red-50 border-2 border-red-400">
+                          <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                          <span className="whitespace-nowrap">Declined</span>
+                        </div>
+                      ) : (() => {
+                        // Check if session duration has completed
+                        const start = parseSessionStart(session.date, session.time);
+                        const isSessionDurationCompleted = start ? (() => {
+                          const durationHours = session.duration || 1.0;
+                          const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+                          // Use the 'now' state variable that updates every minute
+                          return now >= end;
+                        })() : false;
+
+                        return isSessionDurationCompleted ? (
+                          <Button
+                            onClick={() => { setProofTarget(session); setProofModalOpen(true); }}
+                            disabled={loading}
+                            className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-lg hover:shadow-xl transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 touch-manipulation"
+                            style={{ WebkitTapHighlightColor: 'transparent' }}
+                          >
+                            <Upload className="h-4 w-4 sm:h-5 sm:w-5" />
+                            <span>Mark as Done</span>
+                          </Button>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                   

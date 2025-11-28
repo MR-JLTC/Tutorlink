@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from '../database/entities/user.entity';
 import { EmailVerificationRegistry } from '../database/entities/email-verification-registry.entity';
 import { EmailService } from '../email/email.service';
+import * as nodemailer from 'nodemailer';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -258,21 +259,28 @@ export class EmailVerificationService {
       console.log('Name:', name);
       console.log('Code:', verificationCode);
 
-      const transporter = require('nodemailer').createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_APP_PASSWORD
-        }
-      });
+      // Check for required environment variables first
+      const gmailUser = process.env.GMAIL_USER || 'johnemmanuel.devera@bisu.edu.ph';
+      const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
 
-      if (!process.env.GMAIL_APP_PASSWORD) {
+      if (!gmailAppPassword) {
         console.log('❌ GMAIL_APP_PASSWORD is not set!');
         throw new Error('Email service not configured');
       }
 
+      // Create transporter with explicit SMTP configuration (matching other services)
+      const transporter = nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port: 465,
+        secure: true,
+        auth: {
+          user: gmailUser,
+          pass: gmailAppPassword,
+        },
+      });
+
       const mailOptions = {
-        from: `"TUTORLINK" <${process.env.GMAIL_USER}>`,
+        from: `"TUTORLINK" <${gmailUser}>`,
         to: email,
         subject: 'TutorLink - Email Verification Code',
         html: `

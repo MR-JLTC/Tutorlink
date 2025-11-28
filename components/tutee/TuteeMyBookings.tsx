@@ -268,11 +268,11 @@ const TuteeMyBookings: React.FC = () => {
                             {statusDisplay.icon}
                             <span className="whitespace-nowrap">{statusDisplay.text}</span>
                           </div>
-                          {isUpcoming && (
+                          {/* {isUpcoming && (
                             <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs sm:text-sm font-semibold border border-blue-200">
                               Upcoming
                             </div>
-                          )}
+                          )} */}
                         </div>
                       </div>
                     </div>

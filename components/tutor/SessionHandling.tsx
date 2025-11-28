@@ -415,7 +415,7 @@ const SessionHandlingContent: React.FC = () => {
     }
 
     if (filter === 'all') {
-      // Show all requests that are not completed or cancelled
+      // Show all requests (including declined, but excluding completed and cancelled)
       return request.status !== 'completed' && request.status !== 'cancelled';
     } else if (filter === 'upcoming') {
       const eligibleStatusesForUpcomingTab = ['upcoming', 'confirmed'];
@@ -452,6 +452,7 @@ const isOverdue = (request: BookingRequest): boolean => {
 
 
 const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
+  // Only show button for 'upcoming' status sessions (explicitly exclude declined, cancelled, completed)
   if (r.status !== 'upcoming') return false;
 
   const start = parseSessionStart(r.date, r.time);
@@ -461,8 +462,8 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
   const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
   const now = new Date();
 
-  // Show button if session already started (in-progress) OR already ended
-  return start <= now;
+  // Show button only if session duration has completed (end time has passed)
+  return now >= end;
 };
 
 
@@ -678,7 +679,7 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                       <div className="mb-3">
                         <div className={`inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold gap-1.5 sm:gap-2 shadow-md border-2 ${getStatusColor(request.status)}`}>
                           {getStatusIcon(request.status)}
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: request.status === 'pending' ? '#eab308' : request.status === 'confirmed' ? '#16a34a' : request.status === 'awaiting_payment' ? '#f97316' : '#3b82f6' }} />
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: request.status === 'pending' ? '#eab308' : request.status === 'confirmed' ? '#16a34a' : request.status === 'awaiting_payment' ? '#f97316' : request.status === 'declined' ? '#dc2626' : '#3b82f6' }} />
                           <span className="whitespace-nowrap">{request.status.replace('_', ' ').charAt(0).toUpperCase() + request.status.replace('_', ' ').slice(1)}</span>
                         </div>
                       </div>

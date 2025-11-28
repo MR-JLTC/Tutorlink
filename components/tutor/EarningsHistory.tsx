@@ -182,7 +182,7 @@ const EarningsHistory: React.FC = () => {
     return p.status === paymentsFilter;
   });
 
-  // Prepare chart data for payments over time
+  // Prepare chart data for payments over time (only payments with sender = "admin")
   const chartData = useMemo(() => {
     const lastNMonths = Array.from({ length: monthsFilter }, (_, i) => {
       const date = new Date();
@@ -195,9 +195,13 @@ const EarningsHistory: React.FC = () => {
     });
 
     return lastNMonths.map(({ month, monthIndex, year }) => {
+      // Filter payments by sender = "admin" and date
       const monthPayments = payments.filter(p => {
         const paymentDate = new Date(p.created_at);
-        return paymentDate.getMonth() === monthIndex && paymentDate.getFullYear() === year;
+        const sender = (p as any)?.sender;
+        return paymentDate.getMonth() === monthIndex && 
+               paymentDate.getFullYear() === year &&
+               sender === 'admin';
       });
 
       const totalAmount = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -206,7 +210,7 @@ const EarningsHistory: React.FC = () => {
 
       return {
         month,
-        'Total Received': totalAmount,
+        'Total Amount to Receive': totalAmount,
         'Net Earnings': netAmount,
         'Service Fee': serviceFee
       };
@@ -458,7 +462,7 @@ const EarningsHistory: React.FC = () => {
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:gap-3 text-[10px] sm:text-xs">
                   <div className="bg-white/60 rounded-lg p-2">
-                    <p className="text-amber-700 font-medium">Total Received</p>
+                    <p className="text-amber-700 font-medium">Total Amount to Receive</p>
                     <p className="text-amber-900 font-bold text-sm sm:text-base">₱{totalReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div className="bg-white/60 rounded-lg p-2">
@@ -468,7 +472,7 @@ const EarningsHistory: React.FC = () => {
                 </div>
                 <div className="mt-2 pt-2 border-t border-amber-200 bg-white/60 rounded-lg p-2">
                   <p className="text-amber-700 font-medium">Upcoming Earnings</p>
-                  <p className="text-amber-900 font-bold text-base sm:text-lg">₱{upcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="text-amber-900 font-bold text-base sm:text-lg">₱{(totalReceived - totalServiceFee).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   <p className="text-[10px] sm:text-xs text-amber-700 mt-1">Amount to be received after successfully completing tutoring sessions</p>
                 </div>
               </div>
@@ -529,7 +533,7 @@ const EarningsHistory: React.FC = () => {
                 wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
                 iconType="rect"
               />
-              <Bar dataKey="Total Received" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Total Amount to Receive" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Net Earnings" fill="#10b981" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Service Fee" fill="#f59e0b" radius={[4, 4, 0, 0]} />
             </BarChart>
