@@ -25,13 +25,37 @@ export class EmailService {
         user: this.gmailUser,
         pass: gmailAppPassword,
       },
+      tls: {
+        // Do not fail on invalid certificates
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 10000, // 10 seconds timeout
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
     });
 
     // Optional: verify transporter on startup for clearer diagnostics
-    this.transporter.verify().catch((err: unknown) => {
-      // eslint-disable-next-line no-console
-      console.error('Email transporter verification failed:', err);
-    });
+    // Use a timeout to prevent hanging, and make it non-blocking
+    if (gmailAppPassword) {
+      const verifyPromise = Promise.race([
+        this.transporter.verify(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Verification timeout')), 5000)
+        )
+      ]);
+      
+      verifyPromise
+        .then(() => {
+          // eslint-disable-next-line no-console
+          console.log('✅ Email transporter verified successfully');
+        })
+        .catch((err: unknown) => {
+          // Only log as warning, not error, since email might still work
+          // eslint-disable-next-line no-console
+          console.warn('⚠️ Email transporter verification failed (emails may still work):', 
+            err instanceof Error ? err.message : 'Unknown error');
+        });
+    }
   }
 
   async sendContactEmail(contactData: {

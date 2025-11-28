@@ -97,15 +97,13 @@ const UpcomingSessionsPage: React.FC = () => {
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
       <ToastContainer />
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex items-center justify-between">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold mb-0.5 sm:mb-1 flex items-center gap-2 sm:gap-2.5 md:gap-3">
-              <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
-              <span className="truncate">Upcoming Sessions</span>
-            </h1>
-            <p className="text-[10px] sm:text-xs md:text-sm lg:text-base text-blue-100/90 leading-tight">Manage and mark your upcoming sessions</p>
-          </div>
+        <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+          <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white">Upcoming Sessions</h1>
         </div>
+        <p className="text-xs sm:text-sm md:text-base lg:text-lg text-blue-100/90 leading-relaxed">
+          Manage and mark your upcoming sessions
+        </p>
       </div>
       <div className="space-y-3 sm:space-y-4">
         {bookingRequests.length === 0 ? (

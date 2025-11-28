@@ -71,7 +71,7 @@ const TuteeLayout: React.FC<TuteeLayoutProps> = ({ children }) => {
         <div className="flex-1 flex flex-col min-h-0">
           <TuteeHeader onMenuClick={() => setIsMobileMenuOpen(true)} />
           <main className="flex-1 overflow-y-auto bg-slate-50">
-            <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
+            <div className="max-w-7xl mx-auto px-2 sm:px-3 md:px-4 lg:px-6 pt-1 sm:pt-1.5 md:pt-2 pb-3 sm:pb-4 md:pb-6 lg:pb-8 w-full">
               {children}
             </div>
           </main>

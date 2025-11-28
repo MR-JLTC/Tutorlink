@@ -47,6 +47,7 @@ const DashboardContent: React.FC = () => {
   const [subjectSessions, setSubjectSessions] = useState<{ subjectName: string; sessions: number }[]>([]);
   const [universityMap, setUniversityMap] = useState<Map<string, string>>(new Map());
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
   const [monthsFilter, setMonthsFilter] = useState(6); // Default to 6 months
 
   useEffect(() => {
@@ -78,6 +79,18 @@ const DashboardContent: React.FC = () => {
       }
     };
     fetchPayments();
+  }, []);
+
+  useEffect(() => {
+    const fetchPayouts = async () => {
+      try {
+        const response = await apiClient.get('/payments/payouts');
+        setPayouts(response.data || []);
+      } catch (e) {
+        console.error('Failed to fetch payouts:', e);
+      }
+    };
+    fetchPayouts();
   }, []);
 
   useEffect(() => {
@@ -136,10 +149,24 @@ const DashboardContent: React.FC = () => {
 
     const subjectRows = (stats as any).subjectSessions || (stats as any).mostInDemandSubjects || [];
     if (Array.isArray(subjectRows)) {
-      const normalizedSubjects = subjectRows.map((r: any) => ({
-        subjectName: r.subjectName || r.subject || r.subject_name || r.name || 'Unknown',
-        sessions: Number(r.sessions ?? r.count ?? r.sessionsCount ?? 0)
-      }));
+      console.log('Subject rows from backend:', subjectRows);
+      const normalizedSubjects = subjectRows.map((r: any) => {
+        // Try multiple possible field names to get the subject name
+        const subjectName = r.subjectName || r.subject || r.subject_name || r.name || null;
+        console.log('Processing subject row:', r, 'Extracted name:', subjectName);
+        
+        // If we still don't have a name, log it for debugging
+        if (!subjectName || subjectName === 'Unknown') {
+          console.warn('Subject name not found for row:', r);
+        }
+        
+        return {
+          subjectName: subjectName || 'Unknown',
+          sessions: Number(r.sessions ?? r.count ?? r.sessionsCount ?? 0)
+        };
+      }).filter(s => s.subjectName && s.subjectName !== 'Unknown'); // Filter out Unknown subjects
+      
+      console.log('Normalized subjects:', normalizedSubjects);
       setSubjectSessions(normalizedSubjects);
     } else {
       setSubjectSessions([]);
@@ -180,10 +207,26 @@ const DashboardContent: React.FC = () => {
       .slice(0, 5);
   }, [payments]);
 
+  // Calculate total revenue: 13% of payouts with status 'released'
+  const calculatedTotalRevenue = useMemo(() => {
+    // Filter only payouts with status='released'
+    const releasedPayouts = payouts.filter(p => 
+      p.status === 'released'
+    );
+    
+    // Sum the amount_released and calculate 13%
+    const totalAmount = releasedPayouts.reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
+    const totalRevenue = Number((totalAmount * 0.13).toFixed(2));
+    
+    return totalRevenue;
+  }, [payouts]);
+
   // Calculate payment activity overview (13% of tutee payments)
   const paymentActivity = useMemo(() => {
-    // Filter only payments with sender='tutee'
-    const tuteePayments = payments.filter(p => (p as any).sender === 'tutee');
+    // Filter only payments with sender='tutee' (exclude null, empty, or other values)
+    const tuteePayments = payments.filter(p => 
+      (p as any).sender === 'tutee' && (p as any).sender !== null && (p as any).sender !== undefined
+    );
     
     const totalPayments = tuteePayments.length;
     const pendingPayments = tuteePayments.filter(p => p.status === 'pending').length;
@@ -191,10 +234,12 @@ const DashboardContent: React.FC = () => {
     const rejectedPayments = tuteePayments.filter(p => p.status === 'rejected').length;
     
     // Calculate 13% of total amount from tutee payments
-    const totalAmount = tuteePayments.reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
-    const confirmedAmount = tuteePayments
-      .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
-      .reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
+    const totalAmount = Number((tuteePayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13).toFixed(2));
+    const confirmedAmount = Number((
+      tuteePayments
+        .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
+        .reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13
+    ).toFixed(2));
     
     return {
       totalPayments,
@@ -208,8 +253,10 @@ const DashboardContent: React.FC = () => {
 
   // Calculate payment trends chart data (13% of tutee payments)
   const paymentTrendsData = useMemo(() => {
-    // Filter only payments with sender='tutee'
-    const tuteePayments = payments.filter(p => (p as any).sender === 'tutee');
+    // Filter only payments with sender='tutee' (exclude null, empty, or other values)
+    const tuteePayments = payments.filter(p => 
+      (p as any).sender === 'tutee' && (p as any).sender !== null && (p as any).sender !== undefined
+    );
     
     const lastNMonths = Array.from({ length: monthsFilter }, (_, i) => {
       const date = new Date();
@@ -223,18 +270,23 @@ const DashboardContent: React.FC = () => {
 
     return lastNMonths.map(({ month, monthIndex, year }) => {
       const monthPayments = tuteePayments.filter(p => {
+        if (!p.created_at) return false;
         const paymentDate = new Date(p.created_at);
         return paymentDate.getMonth() === monthIndex && paymentDate.getFullYear() === year;
       });
 
       // Calculate 13% of amounts
-      const totalAmount = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
-      const confirmedAmount = monthPayments
-        .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
-        .reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
-      const pendingAmount = monthPayments
-        .filter(p => p.status === 'pending')
-        .reduce((sum, p) => sum + Number(p.amount), 0) * 0.13;
+      const totalAmount = Number((monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13).toFixed(2));
+      const confirmedAmount = Number((
+        monthPayments
+          .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
+          .reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13
+      ).toFixed(2));
+      const pendingAmount = Number((
+        monthPayments
+          .filter(p => p.status === 'pending')
+          .reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13
+      ).toFixed(2));
 
       return {
         month,
@@ -356,8 +408,8 @@ const DashboardContent: React.FC = () => {
             />
              <StatCard 
               icon={PesoSignIcon}
-              title="Total Revenue"
-              value={`₱${(stats.totalRevenue || 0).toLocaleString()}`}
+              title="Total Revenue (13% of Admin Payments)"
+              value={`₱${calculatedTotalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               color="bg-indigo-500"
             />
             <StatCard 
@@ -650,14 +702,14 @@ const DashboardContent: React.FC = () => {
                   <div className="flex-shrink-0 mx-auto sm:mx-0">
                     <Donut items={items} size={180} thickness={20} centerLabel={String(total)} centerSub={'Sessions'} />
                   </div>
-                  <div className="w-full sm:min-w-[300px] grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="w-full sm:min-w-[300px] space-y-2">
                     {items.map((it, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                        <span className="flex items-center gap-2 truncate"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: it.color }} /> <span className="truncate" title={it.label}>{it.label}</span></span>
-                        <span className="text-slate-700 font-semibold">{it.value} <span className="text-slate-400 font-normal">({Math.round((it.value / (total || 1)) * 100)}%)</span></span>
+                      <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+                        <span className="flex items-center gap-2 min-w-0 flex-1"><span className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: it.color }} /> <span className="break-words whitespace-normal font-medium text-slate-800" title={it.label}>{it.label}</span></span>
+                        <span className="text-slate-700 font-semibold flex-shrink-0 ml-2 whitespace-nowrap">{it.value} <span className="text-slate-400 font-normal">({Math.round((it.value / (total || 1)) * 100)}%)</span></span>
                       </div>
                     ))}
-                    <p className="text-xs text-slate-500">Total: {total}</p>
+                    <p className="text-xs text-slate-500 pt-1">Total: {total}</p>
                   </div>
                 </div>
               );

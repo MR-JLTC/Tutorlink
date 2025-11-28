@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, Tutor, Payment } from '../database/entities';
+import { User, Tutor, Payment, Payout } from '../database/entities';
 import { Session } from '../database/entities/session.entity';
 import { Subject } from '../database/entities/subject.entity';
 import { Student } from '../database/entities/student.entity';
@@ -27,6 +27,8 @@ export class DashboardService {
     private universitiesRepository: Repository<University>,
     @InjectRepository(Course)
     private coursesRepository: Repository<Course>,
+    @InjectRepository(Payout)
+    private payoutsRepository: Repository<Payout>,
   ) {}
 
   async getStats() {
@@ -41,32 +43,26 @@ export class DashboardService {
     });
     
     const PLATFORM_SHARE = 0.13;
-    const TUTEE_SENDER: 'tutee' = 'tutee';
 
-    // Calculate total revenue: 13% of tutee payments + full amount of admin payments
-    const totalRevenueResult = await this.paymentsRepository
-      .createQueryBuilder('payment')
-      .select(`
-        COALESCE(SUM(
-          CASE 
-            WHEN payment.sender = :tuteeSender THEN payment.amount * :platformShare
-            ELSE payment.amount
-          END
-        ), 0)`, 'sum')
-      .where('(payment.status = :confirmed OR payment.status = :adminConfirmed OR payment.status = :adminPaid)', { 
-        confirmed: 'confirmed', 
-        adminConfirmed: 'admin_confirmed',
-        adminPaid: 'admin_paid',
-        tuteeSender: TUTEE_SENDER,
-        platformShare: PLATFORM_SHARE
-      })
+    // Calculate total revenue: 13% of payouts with status 'released'
+    // Payouts represent money released to tutors, so we calculate 13% of that
+    const totalRevenueResult = await this.payoutsRepository
+      .createQueryBuilder('payout')
+      .select('COALESCE(SUM(payout.amount_released), 0)', 'sum')
+      .where('payout.status = :releasedStatus', { releasedStatus: 'released' })
       .getRawOne();
       
-    const totalRevenue = Number((parseFloat(totalRevenueResult?.sum || '0') || 0).toFixed(2));
+    // Calculate 13% of the total payout amounts
+    const totalAmount = Number(parseFloat(totalRevenueResult?.sum || '0') || 0);
+    const totalRevenue = Number((totalAmount * PLATFORM_SHARE).toFixed(2));
+    
     console.log(`[Dashboard] Total Revenue Query:`, {
       result: totalRevenueResult,
       sum: totalRevenueResult?.sum,
-      totalRevenue
+      totalAmount,
+      totalRevenue,
+      platformShare: PLATFORM_SHARE,
+      filters: 'payouts.status = "released"'
     });
 
     // Confirmed sessions (completed sessions)
@@ -114,22 +110,14 @@ export class DashboardService {
       return acc;
     }, {} as Record<string, number>);
 
-    // Recent confirmed revenue: 13% of tutee payments + full amount of admin payments (last 30 days)
+    // Recent confirmed revenue: 13% of payments (last 30 days)
     const recentPaymentsSumRaw = await this.paymentsRepository
       .createQueryBuilder('payment')
-      .select(`
-        COALESCE(SUM(
-          CASE 
-            WHEN payment.sender = :tuteeSender THEN payment.amount * :platformShare
-            ELSE payment.amount
-          END
-        ), 0)`, 'sum')
+      .select('COALESCE(SUM(payment.amount * :platformShare), 0)', 'sum')
       .where('payment.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)')
-      .andWhere('(payment.status = :confirmed OR payment.status = :adminConfirmed OR payment.status = :adminPaid)', { 
+      .andWhere('(payment.status = :confirmed OR payment.status = :paid)', { 
         confirmed: 'confirmed', 
-        adminConfirmed: 'admin_confirmed',
-        adminPaid: 'admin_paid',
-        tuteeSender: TUTEE_SENDER,
+        paid: 'paid',
         platformShare: PLATFORM_SHARE
       })
       .getRawOne();
@@ -141,22 +129,15 @@ export class DashboardService {
       recentConfirmedRevenue
     });
 
-    // Payment trends: 13% of tutee payments + full amount of admin payments (last 6 months)
+    // Payment trends: 13% of payments (last 6 months)
     const paymentTrendsRaw = await this.paymentsRepository
       .createQueryBuilder('payment')
       .select("DATE_FORMAT(payment.created_at, '%Y-%m')", 'period')
       .addSelect("DATE_FORMAT(payment.created_at, '%b %Y')", 'label')
-      .addSelect(`
-        COALESCE(SUM(
-          CASE 
-            WHEN payment.sender = :tuteeSender THEN payment.amount * :platformShare
-            ELSE payment.amount
-          END
-        ), 0)`, 'sum')
-      .where('(payment.status = :confirmed OR payment.status = :adminConfirmed)', { 
+      .addSelect('COALESCE(SUM(payment.amount * :platformShare), 0)', 'sum')
+      .where('(payment.status = :confirmed OR payment.status = :paid)', { 
         confirmed: 'confirmed', 
-        adminConfirmed: 'admin_confirmed',
-        tuteeSender: TUTEE_SENDER,
+        paid: 'paid',
         platformShare: PLATFORM_SHARE
       })
       .andWhere('payment.created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)')
@@ -274,14 +255,27 @@ export class DashboardService {
     const subjIdsAll = subjectSessionsRaw.map((r) => Number(r.subject_id)).filter(Boolean);
     const subjMapAll: Record<number, string> = {};
     if (subjIdsAll.length) {
-      const subjectsAll = await this.subjectsRepository.findByIds(subjIdsAll);
-      subjectsAll.forEach(s => { (subjMapAll as any)[(s as any).subject_id] = (s as any).name; });
+      // Use In() instead of deprecated findByIds
+      const subjectsAll = await this.subjectsRepository.find({
+        where: subjIdsAll.map(id => ({ subject_id: id }))
+      });
+      subjectsAll.forEach(s => { 
+        const subjectId = (s as any).subject_id;
+        const subjectName = (s as any).subject_name || (s as any).name;
+        if (subjectId && subjectName) {
+          subjMapAll[subjectId] = subjectName;
+        }
+      });
     }
-    const subjectSessions = subjectSessionsRaw.map((r: any) => ({
-      subjectId: Number(r.subject_id),
-      subjectName: subjMapAll[Number(r.subject_id)] || 'Unknown',
-      sessions: Number(r.sessions) || 0,
-    }));
+    const subjectSessions = subjectSessionsRaw.map((r: any) => {
+      const subjectId = Number(r.subject_id);
+      const subjectName = subjMapAll[subjectId] || 'Unknown';
+      return {
+        subjectId: subjectId,
+        subjectName: subjectName,
+        sessions: Number(r.sessions) || 0,
+      };
+    }).filter(s => s.subjectName !== 'Unknown'); // Filter out Unknown subjects
 
     return {
       totalUsers,

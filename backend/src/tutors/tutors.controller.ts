@@ -344,6 +344,12 @@ export class TutorsController {
     return this.tutorsService.getTutorPayments(+tutorId);
   }
 
+  @Get(':tutorId/payouts')
+  @UseGuards(JwtAuthGuard)
+  async getTutorPayouts(@Param('tutorId') tutorId: string) {
+    return this.tutorsService.getTutorPayouts(+tutorId);
+  }
+
   @Get(':tutorId/earnings-stats')
   @UseGuards(JwtAuthGuard)
   async getTutorEarningsStats(@Param('tutorId') tutorId: string) {

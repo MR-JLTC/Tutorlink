@@ -36,6 +36,7 @@ export class BookingRequest {
       'declined',
       'awaiting_payment',
       'payment_pending',
+      'admin_payment_pending',
       'payment_rejected',
       'payment_approved',
       'awaiting_confirmation',
@@ -51,6 +52,7 @@ export class BookingRequest {
     | 'declined'
     | 'awaiting_payment'
     | 'payment_pending'
+    | 'admin_payment_pending'
     | 'payment_rejected'
     | 'payment_approved'
     | 'awaiting_confirmation'

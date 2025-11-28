@@ -14,6 +14,7 @@ interface Session {
   time: string;
   duration: number;
   status: string;
+  isPendingCompletion?: boolean;
   tutee_rating?: number | null;
   tutee_comment?: string | null;
   student_notes?: string;
@@ -89,9 +90,11 @@ const TuteeAfterSession: React.FC = () => {
       const afterSessions = response.data
         .filter((booking: any) => {
           const status = (booking.status || '').toLowerCase();
-          if (status === 'completed' || status === 'awaiting_confirmation') {
+          // Show sessions that are completed, admin_payment_pending, or awaiting confirmation (tutor has marked as done)
+          if (status === 'completed' || status === 'admin_payment_pending' || status === 'awaiting_confirmation') {
             return true;
           }
+          // Show overdue sessions (past their end time) that haven't been marked as done by tutor yet
           const eligibleOverdueStatuses = ['upcoming', 'confirmed'];
           if (eligibleOverdueStatuses.includes(status)) {
             const start = parseSessionStart(booking.date, booking.time);
@@ -101,23 +104,38 @@ const TuteeAfterSession: React.FC = () => {
           }
           return false;
         })
-        .map((booking: any) => ({
-          id: booking.id || 0,
-          subject: booking.subject || 'Untitled Session',
-          date: booking.date || new Date().toISOString(),
-          time: booking.time || '00:00',
-          duration: booking.duration || 1,
-          status: (booking.status || '').toLowerCase(),
-          tutee_rating: booking.tutee_rating ?? null,
-          tutee_comment: booking.tutee_comment ?? null,
-          student_notes: booking.student_notes || '',
-          tutor: {
-            user: {
-              name: booking.tutor?.user?.name || 'Unknown Tutor'
+        .map((booking: any) => {
+          const status = (booking.status || '').toLowerCase().trim();
+          // Determine if this is a pending completion (overdue but not yet marked as done by tutor)
+          let isPendingCompletion = false;
+          if (status === 'upcoming' || status === 'confirmed') {
+            const start = parseSessionStart(booking.date, booking.time);
+            if (start) {
+              const end = new Date(start.getTime() + (booking.duration || 0) * 60 * 60 * 1000);
+              isPendingCompletion = now.getTime() > end.getTime();
             }
           }
-        }));
+          
+          return {
+            id: booking.id || 0,
+            subject: booking.subject || 'Untitled Session',
+            date: booking.date || new Date().toISOString(),
+            time: booking.time || '00:00',
+            duration: booking.duration || 1,
+            status: status, // Use the already trimmed and lowercased status
+            isPendingCompletion, // Add flag to identify pending completion sessions
+            tutee_rating: booking.tutee_rating ?? null,
+            tutee_comment: booking.tutee_comment ?? null,
+            student_notes: booking.student_notes || '',
+            tutor: {
+              user: {
+                name: booking.tutor?.user?.name || 'Unknown Tutor'
+              }
+            }
+          };
+        });
 
+      console.log('Fetched sessions:', afterSessions.map(s => ({ id: s.id, status: s.status, hasRating: !!s.tutee_rating })));
       setSessions(afterSessions);
       setError(null);
     } catch (err: any) {
@@ -136,14 +154,30 @@ const TuteeAfterSession: React.FC = () => {
     }
     console.log('handleSecondaryConfirm called for session ID:', confirmTargetSession.id);
     try {
+      setLoading(true);
       const res = await apiClient.post(`/users/bookings/${confirmTargetSession.id}/confirm-completion`);
       console.log('API response received:', res);
       if (res.data?.success) {
         console.log('API call successful, showing success toast.');
-        toast.success('Session confirmed!');
+        toast.success('Session confirmed! You can now leave feedback.');
+        
+        // Update the session status immediately in the state
+        setSessions(prevSessions => 
+          prevSessions.map(s => 
+            s.id === confirmTargetSession.id 
+              ? { ...s, status: 'completed' }
+              : s
+          )
+        );
+        
         setConfirmModalOpen(false);
         setConfirmTargetSession(null);
-        await fetchSessions();
+        
+        // Also refresh from server to ensure we have the latest data
+        setTimeout(async () => {
+          await fetchSessions();
+          console.log('Sessions refreshed after confirmation');
+        }, 300);
       } else {
         console.error('API call failed or did not return success:true. Response data:', res.data);
         throw new Error(res.data?.message || 'Failed to confirm session');
@@ -151,6 +185,8 @@ const TuteeAfterSession: React.FC = () => {
     } catch (e: any) {
       console.error('Failed to confirm session', e);
       toast.error(e?.response?.data?.message || e?.message || 'Failed to confirm session');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -254,11 +290,11 @@ const TuteeAfterSession: React.FC = () => {
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
       <ToastContainer />
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
           <Star className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-yellow-300 flex-shrink-0" />
           <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white">After Session</h1>
         </div>
-        <p className="text-xs sm:text-sm md:text-base text-blue-100 mt-1">
+        <p className="text-xs sm:text-sm md:text-base lg:text-lg text-blue-100/90 leading-relaxed">
           Leave feedback for your completed sessions.
         </p>
       </div>
@@ -296,21 +332,41 @@ const TuteeAfterSession: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex-shrink-0 flex flex-col items-end justify-between gap-2">
-                    {session.status === 'completed' ? (
+                    {session.isPendingCompletion ? (
+                      <span className="inline-flex items-center px-3 py-1.5 rounded-full bg-yellow-100 text-yellow-700 text-xs sm:text-sm font-semibold border border-yellow-300">
+                        Pending Completion
+                      </span>
+                    ) : session.status === 'awaiting_confirmation' ? (
+                      <Button 
+                        onClick={() => { 
+                          console.log('Setting confirm target session:', session);
+                          setConfirmTargetSession(session); 
+                          setConfirmModalOpen(true); 
+                        }} 
+                        className="bg-green-500 text-white hover:bg-green-600"
+                        disabled={loading}
+                      >
+                        Confirm Session
+                      </Button>
+                    ) : (session.status === 'completed' || session.status === 'admin_payment_pending') ? (
                       session.tutee_rating ? (
                         <div className="text-right">
                           <p className="text-sm font-medium text-slate-600 mb-1">Your Rating</p>
                           {renderStars(session.tutee_rating)}
                         </div>
                       ) : (
-                        <Button onClick={() => { setFeedbackTarget(session); setFeedbackOpen(true); }} className="bg-blue-500 text-white hover:bg-blue-600">
+                        <Button 
+                          onClick={() => { 
+                            console.log('Opening feedback modal for session:', session.id, 'Status:', session.status, 'Has rating:', !!session.tutee_rating);
+                            setFeedbackTarget(session); 
+                            setFeedbackOpen(true); 
+                          }} 
+                          className="bg-blue-500 text-white hover:bg-blue-600"
+                          disabled={loading}
+                        >
                           Leave Feedback
                         </Button>
                       )
-                    ) : session.status === 'awaiting_confirmation' ? (
-                      <Button onClick={() => { setConfirmTargetSession(session); setConfirmModalOpen(true); }} className="bg-green-500 text-white hover:bg-green-600">
-                        Confirm Session
-                      </Button>
                     ) : (
                       <span className="inline-flex items-center px-2 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-medium">
                         Completed
@@ -333,11 +389,35 @@ const TuteeAfterSession: React.FC = () => {
       {feedbackOpen && feedbackTarget && (
         <Modal
           isOpen={true}
-          onClose={() => { setFeedbackOpen(false); setFeedbackTarget(null); setRating(5); setComment(''); }}
+          onClose={() => { 
+            console.log('Closing feedback modal');
+            setFeedbackOpen(false); 
+            setFeedbackTarget(null); 
+            setRating(5); 
+            setComment(''); 
+          }}
           title={`Leave Feedback for ${feedbackTarget.subject}`}
           footer={<>
-            <Button onClick={handleFeedbackSubmit} disabled={loading}>Submit Feedback</Button>
-            <Button variant="secondary" onClick={() => { setFeedbackOpen(false); setFeedbackTarget(null); setRating(5); setComment(''); }}>Cancel</Button>
+            <Button 
+              onClick={() => {
+                console.log('Submitting feedback for session:', feedbackTarget);
+                handleFeedbackSubmit();
+              }} 
+              disabled={loading}
+            >
+              {loading ? 'Submitting...' : 'Submit Feedback'}
+            </Button>
+            <Button 
+              variant="secondary" 
+              onClick={() => { 
+                setFeedbackOpen(false); 
+                setFeedbackTarget(null); 
+                setRating(5); 
+                setComment(''); 
+              }}
+            >
+              Cancel
+            </Button>
           </>}
         >
           <div className="space-y-4">

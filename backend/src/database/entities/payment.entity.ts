@@ -1,12 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { Student } from './student.entity';
 import { Tutor } from './tutor.entity';
 import { BookingRequest } from './booking-request.entity';
+import { Subject } from './subject.entity';
+import { Payout } from './payout.entity';
 
 @Entity('payments')
 export class Payment {
   @PrimaryGeneratedColumn()
   payment_id: number;
+
+  @Column({ nullable: true })
+  booking_request_id?: number;
 
   @Column()
   student_id: number;
@@ -15,20 +20,27 @@ export class Payment {
   tutor_id: number;
 
   @Column({ nullable: true })
-  booking_request_id?: number;
-
-  @Column({ type: 'text', nullable: true })
-  subject?: string;
+  subject_id?: number;
 
   @Column('decimal', { precision: 10, scale: 2 })
   amount: number;
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'admin_confirmed', 'confirmed', 'admin_paid', 'rejected', 'refunded'],
+    enum: ['pending', 'paid', 'disputed', 'refunded', 'confirmed'],
     default: 'pending',
   })
-  status: 'pending' | 'admin_confirmed' | 'confirmed' | 'admin_paid' | 'rejected' | 'refunded';
+  status: 'pending' | 'paid' | 'disputed' | 'refunded' | 'confirmed';
+
+  @Column({
+    type: 'enum',
+    enum: ['none', 'open', 'under_revision', 'resolved', 'rejected'],
+    default: 'none',
+  })
+  dispute_status: 'none' | 'open' | 'under_revision' | 'resolved' | 'rejected';
+
+  @Column({ type: 'text', nullable: true })
+  payment_proof_url?: string;
 
   @CreateDateColumn()
   created_at: Date;
@@ -45,29 +57,10 @@ export class Payment {
   @JoinColumn({ name: 'booking_request_id' })
   bookingRequest?: BookingRequest;
 
-  @Column({
-    type: 'enum',
-    enum: ['none', 'open', 'under_review', 'resolved', 'rejected'],
-    default: 'none',
-  })
-  dispute_status: 'none' | 'open' | 'under_review' | 'resolved' | 'rejected';
+  @ManyToOne(() => Subject, { nullable: true })
+  @JoinColumn({ name: 'subject_id' })
+  subject?: Subject;
 
-  @Column({ type: 'text', nullable: true })
-  dispute_proof_url?: string;
-
-  @Column({ type: 'text', nullable: true })
-  admin_note?: string;
-
-  @Column({ type: 'text', nullable: true })
-  admin_payment_proof_url?: string;
-
-  @Column({ type: 'text', nullable: true })
-  rejection_reason?: string;
-
-  @Column({
-    type: 'enum',
-    enum: ['admin', 'tutee'],
-    default: 'tutee',
-  })
-  sender: 'admin' | 'tutee';
+  @OneToMany(() => Payout, (payout) => payout.payment)
+  payouts: Payout[];
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { 
   FileText, 
   User, 
@@ -15,6 +15,7 @@ import { logoBase64 } from '../../assets/logo';
 import { useVerification } from '../../context/VerificationContext';
 import apiClient from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import { useNotifications } from '../../context/NotificationContext';
 
 const tutorNavLinks = [
   { 
@@ -79,7 +80,13 @@ const tutorNavLinks = [
 const TutorSidebar: React.FC = () => {
   const { isVerified, applicationStatus, isLoading } = useVerification();
   const { user } = useAuth();
+  const { notifications, unreadCount } = useNotifications();
+  const location = useLocation();
   const [upcomingCount, setUpcomingCount] = useState<number>(0);
+  const [pendingBookingsCount, setPendingBookingsCount] = useState<number>(0);
+  const [unreviewedPaymentsCount, setUnreviewedPaymentsCount] = useState<number>(0);
+  const [hasApplicationUpdate, setHasApplicationUpdate] = useState<boolean>(false);
+  const [viewedPages, setViewedPages] = useState<Set<string>>(new Set());
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
@@ -115,22 +122,60 @@ const TutorSidebar: React.FC = () => {
     };
   }, [timeoutId]);
 
-  // Fetch number of upcoming sessions for current tutor user and refresh on focus
+  // Fetch booking data and check for new items
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       if (!user?.user_id) {
-        if (mounted) setUpcomingCount(0);
+        if (mounted) {
+          setUpcomingCount(0);
+          setPendingBookingsCount(0);
+          setUnreviewedPaymentsCount(0);
+        }
         return;
       }
       try {
-        const res = await apiClient.get('/users/me/bookings'); // Changed endpoint
-        const allBookings = res.data || [];
-        const upcoming = allBookings.filter(b => ['upcoming', 'confirmed'].includes(b.status)); // Filter on frontend
-        if (mounted) setUpcomingCount(upcoming.length); // Count filtered items
+        // Get tutor ID first
+        const tutorRes = await apiClient.get(`/tutors/by-user/${user.user_id}/tutor-id`);
+        const tutorId = tutorRes.data?.tutor_id;
+        
+        if (!tutorId) {
+          if (mounted) {
+            setUpcomingCount(0);
+            setPendingBookingsCount(0);
+            setUnreviewedPaymentsCount(0);
+          }
+          return;
+        }
+
+        // Fetch booking requests
+        const bookingsRes = await apiClient.get(`/tutors/${tutorId}/booking-requests`);
+        const allBookings = Array.isArray(bookingsRes.data) 
+          ? bookingsRes.data 
+          : Array.isArray(bookingsRes.data?.data) 
+          ? bookingsRes.data.data 
+          : [];
+        
+        // Count upcoming sessions
+        const upcoming = allBookings.filter((b: any) => ['upcoming', 'confirmed'].includes(b.status));
+        if (mounted) setUpcomingCount(upcoming.length);
+        
+        // Count pending bookings (need tutor action)
+        const pending = allBookings.filter((b: any) => b.status === 'pending');
+        if (mounted) setPendingBookingsCount(pending.length);
+        
+        // Count unreviewed payment proofs
+        const unreviewedPayments = allBookings.filter(
+          (b: any) => b.status === 'awaiting_payment' && !!b.payment_proof
+        );
+        if (mounted) setUnreviewedPaymentsCount(unreviewedPayments.length);
       } catch (err) {
-        console.error('Failed to load upcoming sessions count:', err);
-        if (mounted) setUpcomingCount(0);
+        console.error('Failed to load booking data:', err);
+        if (mounted) {
+          setUpcomingCount(0);
+          setPendingBookingsCount(0);
+          setUnreviewedPaymentsCount(0);
+        }
       }
     };
     load();
@@ -141,6 +186,38 @@ const TutorSidebar: React.FC = () => {
       window.removeEventListener('focus', onFocus);
     };
   }, [user?.user_id]);
+
+  // Check for application status updates (rejected status means needs attention)
+  useEffect(() => {
+    if (applicationStatus === 'rejected') {
+      setHasApplicationUpdate(true);
+    } else if (applicationStatus === 'approved' || applicationStatus === 'pending') {
+      // Check if there are unread notifications about application
+      const applicationNotifications = notifications.filter(
+        (n: any) => 
+          !n.is_read && 
+          (n.message?.toLowerCase().includes('application') || 
+           n.message?.toLowerCase().includes('verification') ||
+           n.message?.toLowerCase().includes('rejected') ||
+           n.message?.toLowerCase().includes('approved'))
+      );
+      setHasApplicationUpdate(applicationNotifications.length > 0);
+    } else {
+      setHasApplicationUpdate(false);
+    }
+  }, [applicationStatus, notifications]);
+
+  // Mark page as viewed when user navigates to it
+  useEffect(() => {
+    const currentPath = location.pathname;
+    // Check if current path matches any sidebar route
+    tutorNavLinks.forEach(({ to }) => {
+      if (currentPath === to || currentPath.startsWith(to + '/')) {
+        setViewedPages(prev => new Set(prev).add(to));
+      }
+    });
+  }, [location.pathname]);
+
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
@@ -180,22 +257,81 @@ const TutorSidebar: React.FC = () => {
                   }
                   onMouseEnter={() => handleMouseEnter(to)}
                   onMouseLeave={handleMouseLeave}
+                  onClick={() => {
+                    setViewedPages(prev => new Set(prev).add(to));
+                  }}
                 >
                   <div className="flex items-center space-x-3">
                       <Icon className={`h-5 w-5 ${hoveredItem === to ? 'text-blue-600' : 'text-slate-500'}`} />
                       <span className="font-medium text-sm">{label}</span>
-                      {/* Numeric badge for Upcoming Sessions */}
-                      {to === '/tutor-dashboard/upcoming-sessions' && upcomingCount > 0 && (
-                        <span className="ml-auto inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-600 text-white">
-                          {upcomingCount > 99 ? '99+' : upcomingCount}
-                        </span>
-                      )}
-                      {isFirstStep && (
-                        <div className="ml-auto">
-                          {applicationStatus === 'approved' ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <Clock className="h-4 w-4 text-yellow-500" />
+                      
+                      {/* Color dot indicators for new data */}
+                      {!isLocked && (
+                        <div className="ml-auto flex items-center gap-2">
+                          {/* Booking - Show dot if there are pending bookings or unreviewed payments AND page not viewed */}
+                          {to === '/tutor-dashboard/sessions' && 
+                           !viewedPages.has(to) &&
+                           (pendingBookingsCount > 0 || unreviewedPaymentsCount > 0) && (
+                            <div className="relative">
+                              <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"></div>
+                            </div>
+                          )}
+                          
+                          {/* Application - Show dot if rejected or has unread application notifications AND page not viewed */}
+                          {to === '/tutor-dashboard/application' && 
+                           !viewedPages.has(to) &&
+                           hasApplicationUpdate && (
+                            <div className="relative">
+                              <div className="h-2.5 w-2.5 rounded-full bg-orange-500 animate-pulse"></div>
+                            </div>
+                          )}
+                          
+                          {/* Earnings - Show dot if there are unread payment-related notifications AND page not viewed */}
+                          {to === '/tutor-dashboard/earnings' && 
+                           !viewedPages.has(to) &&
+                           notifications.some(
+                             (n: any) => !n.is_read && (
+                               n.type === 'payment' || 
+                               n.message?.toLowerCase().includes('payment') ||
+                               n.message?.toLowerCase().includes('earnings')
+                             )
+                           ) && (
+                            <div className="relative">
+                              <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse"></div>
+                            </div>
+                          )}
+                          
+                          {/* Session History - Show dot if there are sessions awaiting confirmation AND page not viewed */}
+                          {to === '/tutor-dashboard/session-history' && 
+                           !viewedPages.has(to) &&
+                           notifications.some(
+                             (n: any) => !n.is_read && (
+                               n.message?.toLowerCase().includes('session') ||
+                               n.message?.toLowerCase().includes('completed') ||
+                               n.message?.toLowerCase().includes('confirmation')
+                             )
+                           ) && (
+                            <div className="relative">
+                              <div className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse"></div>
+                            </div>
+                          )}
+                          
+                          {/* Numeric badge for Upcoming Sessions */}
+                          {to === '/tutor-dashboard/upcoming-sessions' && upcomingCount > 0 && (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-600 text-white">
+                              {upcomingCount > 99 ? '99+' : upcomingCount}
+                            </span>
+                          )}
+                          
+                          {/* Application status icon */}
+                          {isFirstStep && (
+                            <>
+                              {applicationStatus === 'approved' ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <Clock className="h-4 w-4 text-yellow-500" />
+                              )}
+                            </>
                           )}
                         </div>
                       )}

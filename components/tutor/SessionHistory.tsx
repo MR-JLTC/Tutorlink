@@ -91,6 +91,18 @@ const SessionHistory: React.FC = () => {
     return null;
   };
 
+  // Helper: Check if a session duration has completed (past its scheduled end time)
+  const hasSessionDurationCompleted = (b: BookingRequest): boolean => {
+    const start = parseSessionStart(b.date, b.time);
+    if (!start) return false;
+    
+    const durationHours = b.duration || 1.0;
+    const endTime = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+    
+    // Use the 'now' state variable that updates every minute for accurate time checks
+    return now.getTime() > endTime.getTime();
+  };
+
   const fetchHistory = async () => {
     if (!user?.user_id) {
       setSessions([]);
@@ -173,38 +185,11 @@ const SessionHistory: React.FC = () => {
       });
       
       const historySessions = sessionsWithRatings.filter((b: BookingRequest) => {
-        // Always show completed, awaiting_confirmation, or declined sessions
-        if (b.status === 'completed' || b.status === 'awaiting_confirmation' || b.status === 'declined') {
-          return true;
-        }
-        
-        // For other statuses, check if the session has ended (past its scheduled end time)
-        const start = parseSessionStart(b.date, b.time);
-        if (!start) {
-          // If we can't parse the date/time, only show if status is completed or awaiting_confirmation
-          return false;
-        }
-        
-        // Check if session is scheduled for today (same date as current date)
-        const currentDate = new Date();
-        const sessionDate = new Date(start);
-        const isToday = currentDate.getFullYear() === sessionDate.getFullYear() &&
-                       currentDate.getMonth() === sessionDate.getMonth() &&
-                       currentDate.getDate() === sessionDate.getDate();
-        
-        // If session is scheduled for today, show it in history
-        if (isToday) {
-          return true;
-        }
-        
-        // Otherwise, check if the session has ended (past its scheduled end time)
-        const durationHours = b.duration || 1.0;
-        const endTime = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
-        const currentTime = new Date();
-        
-        // Show session if it has ended (current time is past the scheduled end time)
-        // This includes sessions from any past date, not just today
-        return currentTime.getTime() > endTime.getTime();
+        // Show sessions with status "upcoming" (for marking as done)
+        // Also show "awaiting_confirmation" sessions (after tutor has marked as done with proof, waiting for tutee confirmation)
+        // Also show "completed" sessions (after tutee has confirmed and left feedback)
+        // Also show "admin_payment_pending" sessions (after tutee feedback, waiting for admin payment)
+        return b.status === 'upcoming' || b.status === 'awaiting_confirmation' || b.status === 'completed' || b.status === 'admin_payment_pending';
       });
       setSessions(historySessions);
     } catch (err) {
@@ -264,21 +249,46 @@ const SessionHistory: React.FC = () => {
     ));
   };
 
-  // Get completed sessions with ratings for the table
-  const completedSessionsWithData = sessions.filter(s => 
-    s.status === 'completed' || s.status === 'awaiting_confirmation'
+  // Get upcoming sessions for the table (only show "upcoming" status sessions)
+  const upcomingSessionsWithData = sessions.filter(s => 
+    s.status === 'upcoming'
   );
 
-  const totalCompletedHours = completedSessionsWithData.reduce((sum, s) => {
+  const totalUpcomingHours = upcomingSessionsWithData.reduce((sum, s) => {
     const duration = Number(s.duration ?? 0);
     return sum + (Number.isNaN(duration) ? 0 : duration);
   }, 0);
 
-  const totalCompletedEarnings = completedSessionsWithData.reduce((sum, s) => {
-    // Use the same logic as calculatePaymentReceived
-    const paymentReceived = calculatePaymentReceived(s);
-    return sum + (Number.isNaN(paymentReceived) ? 0 : paymentReceived);
+  const totalUpcomingEarnings = upcomingSessionsWithData.reduce((sum, s) => {
+    // Calculate expected earnings for upcoming sessions (after 13% service fee deduction)
+    const ratePerHour = s.session_rate_per_hour || sessionRate || 0;
+    const duration = Number(s.duration ?? 0);
+    const grossEarnings = ratePerHour * duration;
+    const expectedEarnings = grossEarnings * 0.87; // Deduct 13% service fee
+    return sum + (Number.isNaN(expectedEarnings) ? 0 : expectedEarnings);
   }, 0);
+
+  // Helper: Check if a session is eligible for "Mark as done" button
+  const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
+    // Only show button for 'upcoming' status sessions (explicitly exclude declined, cancelled, completed)
+    if (r.status !== 'upcoming') return false;
+
+    const start = parseSessionStart(r.date, r.time);
+    if (!start) return false;
+
+    const durationHours = r.duration || 1.0;
+    const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+
+    // Use the 'now' state variable that updates every minute for accurate time checks
+    // Show button only if session duration has completed (end time has passed)
+    return now >= end;
+  };
+
+  const handleMarkDoneSimple = (session: BookingRequest) => {
+    // Open the proof upload modal instead of directly marking as done
+    setProofTarget(session);
+    setProofModalOpen(true);
+  };
 
   const handleMarkDone = async () => {
     if (!proofTarget || !proofFile) {
@@ -290,7 +300,7 @@ const SessionHistory: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('file', proofFile);
-      formData.append('status', 'awaiting_confirmation'); // Explicitly set status in form data
+      formData.append('status', 'awaiting_confirmation'); // Set status to awaiting_confirmation after proof upload (waiting for tutee to confirm)
 
       const res = await apiClient.post(
         `/tutors/booking-requests/${proofTarget.id}/complete`, 
@@ -299,7 +309,7 @@ const SessionHistory: React.FC = () => {
       );
 
       if (res.data?.success) {
-        toast.success('Session marked, awaiting tutee confirmation.');
+        toast.success('Session proof uploaded. Waiting for tutee confirmation.');
         setProofModalOpen(false);
         setProofTarget(null);
         setProofFile(null);
@@ -351,17 +361,18 @@ const SessionHistory: React.FC = () => {
           <div className="p-3 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 flex items-center justify-center">
             <History className="h-10 w-10 sm:h-12 sm:w-12 text-primary-600" />
           </div>
-          <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">No Session History</h3>
+          <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">No Upcoming Sessions</h3>
           <p className="text-sm sm:text-base text-slate-600">
-            Your completed sessions will appear here.
+            Your upcoming sessions will appear here.
           </p>
         </Card>
       ) : (
         <div className="space-y-3 sm:space-y-4">
           {sessions.map(session => {
-            const isCompleted = session.status === 'completed';
+            const isUpcoming = session.status === 'upcoming';
             const isAwaitingConfirmation = session.status === 'awaiting_confirmation';
-            const isDeclined = session.status === 'declined';
+            const isCompleted = session.status === 'completed';
+            const isAdminPaymentPending = session.status === 'admin_payment_pending';
             
             return (
               <Card 
@@ -370,12 +381,12 @@ const SessionHistory: React.FC = () => {
               >
                 {/* Decorative gradient bar */}
                 <div className={`absolute top-0 left-0 right-0 h-1 ${
-                  isCompleted 
+                  isCompleted || isAdminPaymentPending
                     ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
                   isAwaitingConfirmation
                     ? 'bg-gradient-to-r from-yellow-500 to-amber-500' :
-                  isDeclined
-                    ? 'bg-gradient-to-r from-red-500 to-rose-500' :
+                  isUpcoming
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-500' :
                     'bg-gradient-to-r from-primary-500 to-primary-700'
                 }`} />
                 
@@ -412,46 +423,42 @@ const SessionHistory: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 flex-shrink-0 w-full sm:w-auto">
-                      {isCompleted ? (
+                      {isCompleted && (
                         <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md text-green-700 bg-green-50 border-2 border-green-400">
                           <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
-                          <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
                           <span className="whitespace-nowrap">Completed</span>
                         </div>
-                      ) : isAwaitingConfirmation ? (
+                      )}
+                      {isAdminPaymentPending && (
+                        <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md text-indigo-700 bg-indigo-50 border-2 border-indigo-400">
+                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span className="whitespace-nowrap">Payment Pending</span>
+                        </div>
+                      )}
+                      {isAwaitingConfirmation && (
                         <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md text-yellow-700 bg-yellow-50 border-2 border-yellow-400">
                           <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
-                          <span className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
-                          <span className="whitespace-nowrap">Pending Confirmation</span>
+                          <span className="whitespace-nowrap">Awaiting Confirmation</span>
                         </div>
-                      ) : isDeclined ? (
-                        <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md text-red-700 bg-red-50 border-2 border-red-400">
-                          <X className="h-4 w-4 sm:h-5 sm:w-5" />
-                          <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
-                          <span className="whitespace-nowrap">Declined</span>
+                      )}
+                      {isUpcoming && !isSessionEligibleForMarkAsDone(session) && (
+                        <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm md:text-base font-bold flex items-center gap-1.5 sm:gap-2 shadow-md text-blue-700 bg-blue-50 border-2 border-blue-400">
+                          <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+                          <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                          <span className="whitespace-nowrap">Upcoming</span>
                         </div>
-                      ) : (() => {
-                        // Check if session duration has completed
-                        const start = parseSessionStart(session.date, session.time);
-                        const isSessionDurationCompleted = start ? (() => {
-                          const durationHours = session.duration || 1.0;
-                          const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
-                          // Use the 'now' state variable that updates every minute
-                          return now >= end;
-                        })() : false;
-
-                        return isSessionDurationCompleted ? (
-                          <Button
-                            onClick={() => { setProofTarget(session); setProofModalOpen(true); }}
-                            disabled={loading}
-                            className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 text-white rounded-lg sm:rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-lg hover:shadow-xl transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center gap-2 touch-manipulation"
-                            style={{ WebkitTapHighlightColor: 'transparent' }}
-                          >
-                            <Upload className="h-4 w-4 sm:h-5 sm:w-5" />
-                            <span>Mark as Done</span>
-                          </Button>
-                        ) : null;
-                      })()}
+                      )}
+                      {isSessionEligibleForMarkAsDone(session) && (
+                        <Button
+                          onClick={() => handleMarkDoneSimple(session)}
+                          disabled={loading}
+                          className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 text-white rounded-xl px-4 sm:px-5 py-2 sm:py-2.5 shadow-md hover:shadow-lg transition-all text-xs sm:text-sm md:text-base font-semibold flex items-center justify-center gap-2 w-full sm:w-auto touch-manipulation min-h-[44px]"
+                          style={{ WebkitTapHighlightColor: 'transparent' }}
+                        >
+                          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                          <span>Mark as done</span>
+                        </Button>
+                      )}
                     </div>
                   </div>
                   
@@ -468,6 +475,30 @@ const SessionHistory: React.FC = () => {
                       </span>
                     </div>
                   </div>
+                  
+                  {/* Tutee Rating */}
+                  {session.rating && (
+                    <div className="p-3 sm:p-4 bg-gradient-to-br from-yellow-50 via-amber-50/50 to-yellow-50 border-2 border-yellow-200 rounded-xl shadow-sm">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <div className="p-2 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-lg flex-shrink-0 mt-0.5">
+                          <Star className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-600 fill-current" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-xs sm:text-sm md:text-base font-semibold text-slate-800 mb-1.5 sm:mb-2 flex items-center gap-2">
+                            Student Rating
+                          </h4>
+                          <div className="flex items-center gap-2 mb-2">
+                            {renderStars(session.rating)}
+                          </div>
+                          {session.rating_comment && (
+                            <p className="text-xs sm:text-sm md:text-base text-slate-700 leading-relaxed whitespace-pre-wrap break-words italic">
+                              "{session.rating_comment}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Student Notes */}
                   {session.student_notes && (
@@ -494,21 +525,21 @@ const SessionHistory: React.FC = () => {
         </div>
       )}
 
-      {/* Ratings and Earnings Table */}
-      {completedSessionsWithData.length > 0 && (
-        <Card className="p-3 sm:p-4 md:p-6 bg-gradient-to-br from-white via-slate-50/30 to-white rounded-xl sm:rounded-2xl shadow-xl border-2 border-slate-200/60 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+      {/* Upcoming Sessions Table */}
+      {upcomingSessionsWithData.length > 0 && (
+        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white via-primary-50/20 to-white rounded-xl sm:rounded-2xl shadow-xl border-2 border-primary-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6 pb-4 border-b-2 border-slate-200/60">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700 rounded-xl shadow-lg ring-2 ring-primary-200/50">
-                <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-6 pb-4 border-b-2 border-primary-200/50">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="p-3 sm:p-3.5 bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700 rounded-xl shadow-lg ring-2 ring-primary-200/50">
+                <TrendingUp className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
               </div>
               <div>
-                <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 bg-clip-text text-transparent">
-                  Session Ratings & Earnings
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800">
+                  Upcoming Sessions
                 </h2>
-                <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">
-                  {completedSessionsWithData.length} {completedSessionsWithData.length === 1 ? 'session' : 'sessions'} completed
+                <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                  {upcomingSessionsWithData.length} {upcomingSessionsWithData.length === 1 ? 'session' : 'sessions'} scheduled
                 </p>
               </div>
             </div>
@@ -528,16 +559,13 @@ const SessionHistory: React.FC = () => {
                         Student
                       </th>
                       <th scope="col" className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wider">
-                        Rating
-                      </th>
-                      <th scope="col" className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wider">
                         Duration
                       </th>
                       <th scope="col" className="px-4 py-3.5 text-right text-xs font-bold text-white uppercase tracking-wider">
-                        Payment Received
+                        Expected Earnings (After 13% Fee)
                       </th>
                       <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
-                        Tutee Notes
+                        Student Notes
                       </th>
                       <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
                         Date
@@ -545,20 +573,12 @@ const SessionHistory: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200/60">
-                    {completedSessionsWithData.map((session, index) => {
-                      const paymentReceived = calculatePaymentReceived(session);
-                      // Find payment using same logic as calculatePaymentReceived
-                      const sessionStudentUserId = session.student?.user_id;
-                      const payment = payments.find(p => {
-                        if (p.sender !== 'admin' || p.booking_request_id !== session.id) {
-                          return false;
-                        }
-                        const paymentStudentUserId = (p as any).student?.user?.user_id;
-                        if (paymentStudentUserId && sessionStudentUserId && paymentStudentUserId === sessionStudentUserId) {
-                          return true;
-                        }
-                        return true; // Fallback: match by booking_request_id and sender only
-                      });
+                    {upcomingSessionsWithData.map((session, index) => {
+                      // Calculate expected earnings for upcoming session (after 13% service fee deduction)
+                      const ratePerHour = session.session_rate_per_hour || sessionRate || 0;
+                      const duration = Number(session.duration ?? 0);
+                      const grossEarnings = ratePerHour * duration;
+                      const expectedEarnings = grossEarnings * 0.87; // Deduct 13% service fee
                       
                       return (
                         <tr
@@ -588,20 +608,6 @@ const SessionHistory: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-center">
-                            {session.rating ? (
-                              <div className="flex flex-col items-center gap-1.5">
-                                <div className="flex items-center gap-0.5">
-                                  {renderStars(session.rating)}
-                                </div>
-                                <span className="text-xs font-bold text-slate-700 bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-200">
-                                  {session.rating.toFixed(1)}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-slate-400 italic">No rating</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center">
                             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg">
                               <Clock className="h-3.5 w-3.5 text-primary-600" />
                               <span className="text-sm font-semibold text-slate-700">
@@ -612,22 +618,27 @@ const SessionHistory: React.FC = () => {
                           <td className="px-4 py-4 whitespace-nowrap text-right">
                             <div className="flex flex-col items-end">
                               <div className="flex items-center gap-1.5">
-                                <span className="text-sm font-bold text-green-700">
-                                  ₱{paymentReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <span className="text-sm font-bold text-blue-700">
+                                  ₱{expectedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                               </div>
-                              {payment && payment.amount && (
-                                <span className="text-[10px] text-slate-500 mt-0.5">
-                                  (₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} - 13%)
-                                </span>
+                              {ratePerHour > 0 && (
+                                <div className="flex flex-col items-end mt-0.5">
+                                  <span className="text-[10px] text-slate-500">
+                                    (₱{ratePerHour.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/hr)
+                                  </span>
+                                  <span className="text-[9px] text-amber-600 font-medium mt-0.5">
+                                    After 13% service fee
+                                  </span>
+                                </div>
                               )}
                             </div>
                           </td>
                           <td className="px-4 py-4">
-                            {session.rating_comment ? (
+                            {session.student_notes ? (
                               <div className="max-w-xs">
                                 <p className="text-xs text-slate-700 line-clamp-2 break-words bg-slate-50 px-2 py-1 rounded border border-slate-200">
-                                  {session.rating_comment}
+                                  {session.student_notes}
                                 </p>
                               </div>
                             ) : (
@@ -652,22 +663,27 @@ const SessionHistory: React.FC = () => {
                   </tbody>
                   <tfoot className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700">
                     <tr>
-                      <td colSpan={3} className="px-4 py-4 text-sm font-bold text-white">
+                      <td colSpan={2} className="px-4 py-4 text-sm font-bold text-white">
                         Total
                       </td>
                       <td className="px-4 py-4 text-center">
                         <span className="text-sm font-bold text-white bg-white/20 px-3 py-1 rounded-lg">
-                          {totalCompletedHours.toFixed(1)} hrs
+                          {totalUpcomingHours.toFixed(1)} hrs
                         </span>
                       </td>
                       <td className="px-4 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <span className="text-base font-bold text-white">
-                            ₱{totalCompletedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span className="text-base font-bold text-white">
+                              ₱{totalUpcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-white/80 font-medium">
+                            After 13% service fee
                           </span>
                         </div>
                       </td>
-                      <td colSpan={2} className="px-4 py-4"></td>
+                      <td colSpan={1} className="px-4 py-4"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -677,20 +693,12 @@ const SessionHistory: React.FC = () => {
 
           {/* Mobile/Tablet Card View */}
           <div className="lg:hidden space-y-3 sm:space-y-4">
-            {completedSessionsWithData.map((session, index) => {
-              const paymentReceived = calculatePaymentReceived(session);
-              // Find payment using same logic as calculatePaymentReceived
-              const sessionStudentUserId = session.student?.user_id;
-              const payment = payments.find(p => {
-                if (p.sender !== 'admin' || p.booking_request_id !== session.id) {
-                  return false;
-                }
-                const paymentStudentUserId = (p as any).student?.user?.user_id;
-                if (paymentStudentUserId && sessionStudentUserId && paymentStudentUserId === sessionStudentUserId) {
-                  return true;
-                }
-                return true; // Fallback: match by booking_request_id and sender only
-              });
+            {upcomingSessionsWithData.map((session, index) => {
+              // Calculate expected earnings for upcoming session (after 13% service fee deduction)
+              const ratePerHour = session.session_rate_per_hour || sessionRate || 0;
+              const duration = Number(session.duration ?? 0);
+              const grossEarnings = ratePerHour * duration;
+              const expectedEarnings = grossEarnings * 0.87; // Deduct 13% service fee
               
               return (
                 <div
@@ -706,12 +714,9 @@ const SessionHistory: React.FC = () => {
                         </div>
                         <h3 className="text-sm font-bold text-white truncate">{session.subject}</h3>
                       </div>
-                      {session.rating && (
-                        <div className="flex items-center gap-1 bg-white/20 px-2 py-1 rounded-lg">
-                          {renderStars(session.rating)}
-                          <span className="text-xs font-bold text-white ml-1">{session.rating.toFixed(1)}</span>
-                        </div>
-                      )}
+                      <div className="px-2 py-1 bg-white/20 rounded-lg">
+                        <span className="text-xs font-bold text-white">Upcoming</span>
+                      </div>
                     </div>
                   </div>
 
@@ -741,7 +746,7 @@ const SessionHistory: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Duration & Payment Row */}
+                    {/* Duration & Expected Earnings Row */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
                         <Clock className="h-4 w-4 text-primary-600 flex-shrink-0" />
@@ -752,29 +757,34 @@ const SessionHistory: React.FC = () => {
                           </p>
                         </div>
                       </div>
-                      <div className="p-2 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg border-2 border-green-200">
-                        <p className="text-[10px] text-green-600 font-medium mb-0.5">Payment Received</p>
+                      <div className="p-2 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200">
+                        <p className="text-[10px] text-blue-600 font-medium mb-0.5">Expected Earnings</p>
                         <div className="flex items-center gap-1">
-                          <p className="text-sm font-bold text-green-700">
-                            ₱{paymentReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <p className="text-sm font-bold text-blue-700">
+                            ₱{expectedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
-                        {payment && payment.amount && (
-                          <p className="text-[9px] text-green-600 mt-0.5">
-                            (₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} - 13%)
-                          </p>
+                        {ratePerHour > 0 && (
+                          <div className="mt-0.5">
+                            <p className="text-[9px] text-blue-600">
+                              (₱{ratePerHour.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/hr)
+                            </p>
+                            <p className="text-[9px] text-amber-600 font-medium mt-0.5">
+                              After 13% service fee
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Tutee Notes */}
-                    {session.rating_comment && (
+                    {/* Student Notes */}
+                    {session.student_notes && (
                       <div className="p-3 bg-gradient-to-br from-primary-50/50 to-slate-50 rounded-lg border border-primary-200/50">
                         <div className="flex items-start gap-2">
                           <FileText className="h-4 w-4 text-primary-600 flex-shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-[10px] text-primary-700 font-semibold mb-1 uppercase tracking-wide">Tutee Notes</p>
-                            <p className="text-xs text-slate-700 leading-relaxed break-words">{session.rating_comment}</p>
+                            <p className="text-[10px] text-primary-700 font-semibold mb-1 uppercase tracking-wide">Student Notes</p>
+                            <p className="text-xs text-slate-700 leading-relaxed break-words">{session.student_notes}</p>
                           </div>
                         </div>
                       </div>
@@ -792,13 +802,16 @@ const SessionHistory: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white/20 rounded-lg p-2.5">
                   <p className="text-[10px] text-white/80 font-medium mb-1">Total Hours</p>
-                  <p className="text-base font-bold text-white">{totalCompletedHours.toFixed(1)} hrs</p>
+                  <p className="text-base font-bold text-white">{totalUpcomingHours.toFixed(1)} hrs</p>
                 </div>
                 <div className="bg-white/20 rounded-lg p-2.5">
-                  <p className="text-[10px] text-white/80 font-medium mb-1">Total Earnings</p>
-                  <div className="flex items-center gap-1">
+                  <p className="text-[10px] text-white/80 font-medium mb-1">Expected Earnings</p>
+                  <div className="flex flex-col">
                     <p className="text-base font-bold text-white">
-                      ₱{totalCompletedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₱{totalUpcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[9px] text-white/90 font-medium mt-0.5">
+                      After 13% service fee
                     </p>
                   </div>
                 </div>
@@ -814,7 +827,7 @@ const SessionHistory: React.FC = () => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm text-primary-800 leading-relaxed">
-                  <span className="font-bold">Note:</span> Payment received is based on actual payments from the database (sender='admin') minus 13% platform fee. Ratings and notes are provided by students after session completion.
+                  <span className="font-bold">Note:</span> Expected earnings are calculated based on your session rate per hour multiplied by the session duration, with a 13% service fee deduction. Actual payment will be processed after session completion.
                 </p>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { 
   GraduationCap, 
   Search, 
@@ -62,8 +62,14 @@ const tuteeNavLinks = [
 const TuteeSidebar: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useToast();
+  const { notifications } = useNotifications();
+  const location = useLocation();
   const [hasPendingPayments, setHasPendingPayments] = useState(false);
   const [upcomingCount, setUpcomingCount] = useState<number>(0);
+  const [pendingBookingsCount, setPendingBookingsCount] = useState<number>(0);
+  const [hasCompletedSessionsForFeedback, setHasCompletedSessionsForFeedback] = useState<boolean>(false);
+  const [hasBecomeTutorUpdate, setHasBecomeTutorUpdate] = useState<boolean>(false);
+  const [viewedPages, setViewedPages] = useState<Set<string>>(new Set());
 
   //OLD CODE HERE, BUG IS THE RED DOT IS STILL VISIBLE EVEN
   //AFTER THE PAYMENT IS CONFIRMED, THE RED DOT SHOULD BE HIDDEN
@@ -265,31 +271,151 @@ const TuteeSidebar: React.FC = () => {
   
   
 
-  // Fetch numeric upcoming sessions count for tutee and refresh on focus
+  // Fetch booking data and check for new items
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       if (!user?.user_id) {
-        if (mounted) setUpcomingCount(0);
+        if (mounted) {
+          setUpcomingCount(0);
+          setPendingBookingsCount(0);
+          setHasCompletedSessionsForFeedback(false);
+        }
         return;
       }
       try {
-        const res = await apiClient.get('/users/upcoming-sessions/list');
-        const items = res.data?.data || [];
-        if (mounted) setUpcomingCount(Array.isArray(items) ? items.length : 0);
+        // Fetch bookings
+        const bookingsRes = await apiClient.get('/users/me/bookings');
+        const allBookings = Array.isArray(bookingsRes.data) ? bookingsRes.data : [];
+        
+        // Parse session start time helper
+        const parseSessionStart = (dateStr: string, timeStr: string): Date | null => {
+          if (!dateStr || !timeStr) return null;
+          let sessionDate = new Date(`${dateStr.split('T')[0]}T${timeStr}`);
+          if (!isNaN(sessionDate.getTime())) return sessionDate;
+          sessionDate = new Date(dateStr);
+          if (isNaN(sessionDate.getTime())) return null;
+          const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+          if (timeMatch) {
+            let hours = parseInt(timeMatch[1], 10);
+            const minutes = parseInt(timeMatch[2], 10);
+            const ampm = timeMatch[3];
+            if (ampm && ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
+            if (ampm && ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
+            sessionDate.setHours(hours, minutes, 0, 0);
+          }
+          return sessionDate;
+        };
+        
+        const now = new Date();
+        
+        // Count upcoming sessions - only future sessions (matching UpcomingSessionsPage logic)
+        const upcoming = allBookings.filter((b: any) => {
+          if (!['upcoming', 'confirmed'].includes(b.status)) return false;
+          const start = parseSessionStart(b.date, b.time);
+          return start && start > now;
+        });
+        if (mounted) setUpcomingCount(upcoming.length);
+        
+        // Count pending bookings (awaiting tutor response) - matching TuteeMyBookings filter logic
+        // TuteeMyBookings filters out 'upcoming' and 'completed', so we count the rest
+        const pending = allBookings.filter((b: any) => {
+          const status = (b.status || '').toLowerCase();
+          return status !== 'upcoming' && status !== 'completed';
+        });
+        if (mounted) setPendingBookingsCount(pending.length);
+        
+        // Check for completed sessions that might need feedback
+        const completedForFeedback = allBookings.filter((b: any) => 
+          b.status === 'completed' && !b.tutee_rating
+        );
+        if (mounted) setHasCompletedSessionsForFeedback(completedForFeedback.length > 0);
       } catch (err) {
-        console.error('Failed to load upcoming sessions count (tutee):', err);
-        if (mounted) setUpcomingCount(0);
+        console.error('Failed to load booking data (tutee):', err);
+        if (mounted) {
+          setUpcomingCount(0);
+          setPendingBookingsCount(0);
+          setHasCompletedSessionsForFeedback(false);
+        }
       }
     };
     load();
+    // Update count every 30 seconds to reflect changes quickly
+    const interval = setInterval(load, 30000);
     const onFocus = () => load();
     window.addEventListener('focus', onFocus);
     return () => {
       mounted = false;
+      clearInterval(interval);
       window.removeEventListener('focus', onFocus);
     };
   }, [user?.user_id]);
+
+  // Check for become tutor application updates
+  useEffect(() => {
+    let mounted = true;
+    const checkTutorApplication = async () => {
+      if (!user?.user_id) {
+        if (mounted) setHasBecomeTutorUpdate(false);
+        return;
+      }
+      
+      try {
+        // First check if user has a tutor profile/application
+        let hasTutorProfile = false;
+        try {
+          const tutorRes = await apiClient.get(`/tutors/by-user/${user.user_id}/tutor-id`);
+          if (tutorRes.data?.tutor_id) {
+            hasTutorProfile = true;
+          }
+        } catch (err: any) {
+          // 404 means no tutor profile exists yet - this is fine
+          if (err.response?.status !== 404) {
+            console.error('Error checking tutor profile:', err);
+          }
+        }
+        
+        // Only show dot if user has a tutor profile AND there are relevant unread notifications
+        if (hasTutorProfile) {
+          const tutorNotifications = notifications.filter(
+            (n: any) => 
+              !n.is_read && 
+              (n.message?.toLowerCase().includes('tutor') || 
+               n.message?.toLowerCase().includes('application') ||
+               n.message?.toLowerCase().includes('approved') ||
+               n.message?.toLowerCase().includes('rejected'))
+          );
+          if (mounted) setHasBecomeTutorUpdate(tutorNotifications.length > 0);
+        } else {
+          // No tutor profile yet, don't show dot
+          if (mounted) setHasBecomeTutorUpdate(false);
+        }
+      } catch (err) {
+        console.error('Failed to check tutor application status:', err);
+        if (mounted) setHasBecomeTutorUpdate(false);
+      }
+    };
+    
+    checkTutorApplication();
+    // Re-check when notifications change
+    const interval = setInterval(checkTutorApplication, 10000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [notifications, user?.user_id]);
+
+  // Mark page as viewed when user navigates to it
+  useEffect(() => {
+    const currentPath = location.pathname;
+    // Check if current path matches any sidebar route
+    tuteeNavLinks.forEach(({ to }) => {
+      if (currentPath === to || currentPath.startsWith(to + '/')) {
+        setViewedPages(prev => new Set(prev).add(to));
+      }
+    });
+  }, [location.pathname]);
+
   const { unreadCount, hasUpcomingSessions } = useNotifications();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
@@ -390,20 +516,64 @@ const TuteeSidebar: React.FC = () => {
                 }
                 onMouseEnter={() => handleMouseEnter(to)}
                 onMouseLeave={handleMouseLeave}
+                onClick={() => {
+                  setViewedPages(prev => new Set(prev).add(to));
+                }}
               >
-                <div className="flex items-center">
+                <div className="flex items-center justify-between w-full">
                   <div className="flex items-center space-x-3">
                     <Icon className={`h-5 w-5 ${hoveredItem === to ? 'text-blue-600' : 'text-slate-500'}`} />
                     <span className="font-medium text-sm">{label}</span>
                   </div>
-                  {showNotification && hasPendingPayments && (
-                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse ml-2" />
-                  )}
-                  {showUpcoming && upcomingCount > 0 && (
-                    <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-600 text-white">
-                      {upcomingCount > 99 ? '99+' : upcomingCount}
-                    </span>
-                  )}
+                  
+                  <div className="ml-auto flex items-center gap-2">
+                    {/* My Bookings - Show dot if there are pending bookings or booking updates AND page not viewed */}
+                    {to === '/tutee-dashboard/my-bookings' && !viewedPages.has(to) && (
+                      <>
+                        {pendingBookingsCount > 0 && (
+                          <div className="h-2.5 w-2.5 rounded-full bg-orange-500 animate-pulse"></div>
+                        )}
+                        {notifications.some(
+                          (n: any) => !n.is_read && (
+                            n.type === 'booking_update' ||
+                            n.message?.toLowerCase().includes('booking') ||
+                            n.message?.toLowerCase().includes('accepted') ||
+                            n.message?.toLowerCase().includes('declined')
+                          )
+                        ) && (
+                          <div className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse"></div>
+                        )}
+                      </>
+                    )}
+                    
+                    {/* Payment - Show dot if there are pending payments AND page not viewed */}
+                    {to === '/tutee-dashboard/payment' && 
+                     !viewedPages.has(to) &&
+                     hasPendingPayments && (
+                      <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"></div>
+                    )}
+                    
+                    {/* After Session - Show dot if there are completed sessions needing feedback AND page not viewed */}
+                    {to === '/tutee-dashboard/after-session' && 
+                     !viewedPages.has(to) &&
+                     hasCompletedSessionsForFeedback && (
+                      <div className="h-2.5 w-2.5 rounded-full bg-purple-500 animate-pulse"></div>
+                    )}
+                    
+                    {/* Become a Tutor - Show dot if there are application updates AND page not viewed */}
+                    {to === '/tutee-dashboard/become-tutor' && 
+                     !viewedPages.has(to) &&
+                     hasBecomeTutorUpdate && (
+                      <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse"></div>
+                    )}
+                    
+                    {/* Upcoming Sessions - Show numeric badge */}
+                    {showUpcoming && upcomingCount > 0 && (
+                      <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-600 text-white">
+                        {upcomingCount > 99 ? '99+' : upcomingCount}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </NavLink>
             

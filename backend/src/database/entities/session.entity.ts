@@ -12,7 +12,7 @@ import { Tutor } from './tutor.entity';
 import { Subject } from './subject.entity';
 import { Rating } from './rating.entity';
 
-@Entity('sessions')
+@Entity('session_history')
 export class Session {
   @PrimaryGeneratedColumn()
   session_id: number;

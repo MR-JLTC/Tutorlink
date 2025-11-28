@@ -1,8 +1,8 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Payment } from '../database/entities';
-import { BookingRequest, Tutor, User, Student, Notification } from '../database/entities';
+import { Payment, Payout } from '../database/entities';
+import { BookingRequest, Tutor, User, Student, Notification, Subject } from '../database/entities';
 import { UpdatePaymentDisputeDto } from './payment.dto';
 
 @Injectable()
@@ -10,6 +10,8 @@ export class PaymentsService {
   constructor(
     @InjectRepository(Payment)
     private paymentsRepository: Repository<Payment>,
+    @InjectRepository(Payout)
+    private payoutsRepository: Repository<Payout>,
     @InjectRepository(BookingRequest)
     private bookingRepository: Repository<BookingRequest>,
     @InjectRepository(Tutor)
@@ -20,6 +22,8 @@ export class PaymentsService {
     private studentsRepository: Repository<Student>,
     @InjectRepository(Notification)
     private notificationRepository: Repository<Notification>,
+    @InjectRepository(Subject)
+    private subjectRepository: Repository<Subject>,
   ) {}
 
   findAll(): Promise<Payment[]> {
@@ -31,23 +35,33 @@ export class PaymentsService {
     });
   }
 
+  findAllPayouts(): Promise<Payout[]> {
+    return this.payoutsRepository.find({
+      relations: ['payment', 'tutor', 'tutor.user'],
+      order: {
+        created_at: 'DESC',
+      },
+    });
+  }
+
   // Get completed bookings waiting for admin payment
   async getCompletedBookingsWaitingForPayment() {
     try {
-      // Find bookings that are completed and both tutor and tutee have confirmed
+      // Find bookings that are completed or admin_payment_pending and both tutor and tutee have confirmed
       const completedBookings = await this.bookingRepository.find({
-        where: {
-          status: 'completed' as any,
-        },
+        where: [
+          { status: 'completed' as any },
+          { status: 'admin_payment_pending' as any },
+        ],
         relations: ['tutor', 'tutor.user', 'student'], // student is already a User entity
       });
 
-      // Filter to only those where both tutor and tutee have marked done
+      // Filter to only those where tutor has provided session proof and tutee has provided rating and feedback
       const bothConfirmed = completedBookings.filter((booking: any) => {
-        return booking.tutor_marked_done_at && booking.tutee_marked_done_at;
+        return booking.session_proof_url && booking.tutee_rating && booking.tutee_feedback_at;
       });
 
-      // Check which ones don't have an admin_confirmed payment yet
+      // Include all completed bookings, regardless of payment status
       const waitingForPayment = [];
       for (const booking of bothConfirmed) {
         try {
@@ -57,64 +71,64 @@ export class PaymentsService {
             continue;
           }
 
+          // Check for existing admin payment
           const existingPayment = await this.paymentsRepository.findOne({
             where: {
               booking_request_id: booking.id,
-              status: 'admin_confirmed' as any,
             } as any,
           });
 
-          if (!existingPayment) {
-            // Get tutor_id safely
-            const tutorId = (booking.tutor as any)?.tutor_id;
-            if (!tutorId) {
-              console.warn(`Skipping booking ${booking.id}: missing tutor_id`);
-              continue;
-            }
-
-            // Calculate amount: session_rate * duration
-            const tutor = await this.tutorsRepository.findOne({
-              where: { tutor_id: tutorId },
-              relations: ['user'],
-            });
-
-            if (!tutor) {
-              console.warn(`Skipping booking ${booking.id}: tutor not found`);
-              continue;
-            }
-
-            const sessionRate = Number((tutor as any)?.session_rate_per_hour || 0);
-            const duration = Number(booking.duration || 0);
-            const amount = sessionRate * duration;
-
-            const tutorUser = (tutor as any)?.user;
-            // booking.student is a User entity, not a Student entity
-            const studentUser = booking.student as any;
-
-            waitingForPayment.push({
-              booking_id: booking.id,
-              tutor: {
-                tutor_id: tutorId,
-                name: tutorUser?.name || 'Unknown',
-                gcash_number: (tutor as any)?.gcash_number || null,
-                gcash_qr_url: (tutor as any)?.gcash_qr_url || null,
-                session_rate_per_hour: sessionRate,
-              },
-              student: {
-                user_id: studentUser?.user_id || null,
-                name: studentUser?.name || 'Unknown',
-              },
-              subject: booking.subject || null,
-              date: booking.date || null,
-              time: booking.time || null,
-              duration: duration,
-              session_proof_url: booking.session_proof_url || null,
-              tutee_rating: booking.tutee_rating || null,
-              tutee_comment: booking.tutee_comment || null,
-              amount: amount,
-              calculated_amount: amount * 0.87, // After 13% deduction
-            });
+          // Get tutor_id safely
+          const tutorId = (booking.tutor as any)?.tutor_id;
+          if (!tutorId) {
+            console.warn(`Skipping booking ${booking.id}: missing tutor_id`);
+            continue;
           }
+
+          // Calculate amount: session_rate * duration
+          const tutor = await this.tutorsRepository.findOne({
+            where: { tutor_id: tutorId },
+            relations: ['user'],
+          });
+
+          if (!tutor) {
+            console.warn(`Skipping booking ${booking.id}: tutor not found`);
+            continue;
+          }
+
+          const sessionRate = Number((tutor as any)?.session_rate_per_hour || 0);
+          const duration = Number(booking.duration || 0);
+          const amount = sessionRate * duration;
+
+          const tutorUser = (tutor as any)?.user;
+          // booking.student is a User entity, not a Student entity
+          const studentUser = booking.student as any;
+
+          waitingForPayment.push({
+            booking_id: booking.id,
+            tutor: {
+              tutor_id: tutorId,
+              name: tutorUser?.name || 'Unknown',
+              gcash_number: (tutor as any)?.gcash_number || null,
+              gcash_qr_url: (tutor as any)?.gcash_qr_url || null,
+              session_rate_per_hour: sessionRate,
+            },
+            student: {
+              user_id: studentUser?.user_id || null,
+              name: studentUser?.name || 'Unknown',
+            },
+            subject: booking.subject || null,
+            date: booking.date || null,
+            time: booking.time || null,
+            duration: duration,
+            session_proof_url: booking.session_proof_url || null,
+            tutee_rating: booking.tutee_rating || null,
+            tutee_comment: booking.tutee_comment || null,
+            amount: amount,
+            calculated_amount: amount * 0.87, // After 13% deduction
+            payment_status: existingPayment ? existingPayment.status : null, // Include payment status
+            payment_id: existingPayment ? existingPayment.payment_id : null, // Include payment ID
+          });
         } catch (error) {
           console.error(`Error processing booking ${booking.id}:`, error);
           // Continue with next booking instead of failing entire request
@@ -140,20 +154,23 @@ export class PaymentsService {
       throw new NotFoundException('Booking not found');
     }
 
-    if (booking.status !== 'completed') {
-      throw new BadRequestException('Booking is not completed');
+    // Accept both 'completed' and 'admin_payment_pending' statuses
+    if (booking.status !== 'completed' && booking.status !== 'admin_payment_pending') {
+      throw new BadRequestException('Booking is not completed or ready for payment');
     }
 
-    if (!(booking as any).tutor_marked_done_at || !(booking as any).tutee_marked_done_at) {
-      throw new BadRequestException('Both tutor and tutee must have confirmed the session');
+    // Check for session proof, tutee rating, and tutee feedback to ensure both parties have completed their parts
+    if (!(booking as any).session_proof_url) {
+      throw new BadRequestException('Tutor must provide session proof before payment can be processed');
     }
 
-    // Check if payment already exists
-    let payment = await this.paymentsRepository.findOne({
-      where: {
-        booking_request_id: bookingId,
-      } as any,
-    });
+    if (!(booking as any).tutee_rating) {
+      throw new BadRequestException('Tutee must provide a rating before payment can be processed');
+    }
+
+    if (!(booking as any).tutee_feedback_at) {
+      throw new BadRequestException('Tutee must provide feedback before payment can be processed');
+    }
 
     // Calculate amount
     const tutor = await this.tutorsRepository.findOne({
@@ -179,10 +196,27 @@ export class PaymentsService {
       student = Array.isArray(savedStudent) ? savedStudent[0] : savedStudent;
     }
 
+    // Check if payment already exists for this booking
+    let payment = await this.paymentsRepository.findOne({
+      where: {
+        booking_request_id: bookingId,
+      } as any,
+    });
+
+    // Get subject_id from subject name if needed
+    let subjectId: number | null = null;
+    if (booking.subject) {
+      const subject = await this.subjectRepository.findOne({
+        where: { subject_name: booking.subject }
+      });
+      subjectId = subject?.subject_id || null;
+    }
+
     if (payment) {
       // Update existing payment
-      (payment as any).status = 'admin_confirmed';
+      (payment as any).status = 'paid';
       (payment as any).amount = amount;
+      if (subjectId) (payment as any).subject_id = subjectId;
       await this.paymentsRepository.save(payment as any);
     } else {
       // Create new payment
@@ -191,11 +225,9 @@ export class PaymentsService {
         tutor_id: (booking.tutor as any).tutor_id,
         booking_request_id: bookingId,
         amount: amount,
-        status: 'admin_confirmed',
+        status: 'paid',
         dispute_status: 'none',
-        subject: booking.subject,
-        sender: 'admin',
-        admin_note: 'Payment processed by admin for completed session',
+        subject_id: subjectId,
       } as any);
       payment = await this.paymentsRepository.save(newPayment as any);
     }
@@ -209,7 +241,6 @@ export class PaymentsService {
       throw new Error('Payment not found');
     }
     (payment as any).dispute_status = dto.dispute_status;
-    (payment as any).admin_note = dto.admin_note ?? null;
     return this.paymentsRepository.save(payment);
   }
 
@@ -244,11 +275,19 @@ export class PaymentsService {
 
     const fileUrl = `/tutor_documents/${file.filename}`;
     
-    // Check if a payment already exists for this booking with sender='tutee'
+    // Get subject_id from subject name if needed
+    let subjectId: number | null = null;
+    if ((booking as any).subject) {
+      const subject = await this.subjectRepository.findOne({
+        where: { subject_name: (booking as any).subject }
+      });
+      subjectId = subject?.subject_id || null;
+    }
+
+    // Check if a payment already exists for this booking
     const existingPayment = await this.paymentsRepository.findOne({
       where: {
         booking_request_id: bookingId,
-        sender: 'tutee',
       } as any,
     });
 
@@ -258,10 +297,9 @@ export class PaymentsService {
     if (existingPayment) {
       // Update existing payment if it exists
       existingPayment.amount = Number(amount);
-      existingPayment.dispute_proof_url = fileUrl;
-      existingPayment.subject = (booking as any).subject || null;
-      existingPayment.admin_note = `admin_id:${adminId}`;
+      if (subjectId) existingPayment.subject_id = subjectId;
       existingPayment.status = 'pending';
+      existingPayment.payment_proof_url = fileUrl;
       saved = await this.paymentsRepository.save(existingPayment as any);
       savedId = (saved as any).payment_id;
       console.log(`submitProof: Updated existing payment with payment_id=${savedId}`);
@@ -274,10 +312,8 @@ export class PaymentsService {
         amount: Number(amount),
         status: 'pending',
         dispute_status: 'none',
-        dispute_proof_url: fileUrl,
-        subject: (booking as any).subject || null,
-        admin_note: `admin_id:${adminId}`,
-        sender: 'tutee',
+        subject_id: subjectId,
+        payment_proof_url: fileUrl,
       } as any);
       saved = await this.paymentsRepository.save(payment as any);
       savedId = (saved as any).payment_id;
@@ -349,26 +385,11 @@ export class PaymentsService {
       relations: ['tutor', 'tutor.user', 'student', 'student.user', 'bookingRequest']
     });
     if (!payment) throw new NotFoundException('Payment not found');
-    // Admin verification now becomes a two-step flow:
-    // - Admin approval sets payment.status = 'admin_confirmed' and may attach an admin proof URL.
-    // - The tutor must then view that admin proof and call the tutor-confirm endpoint to finalize (status -> 'confirmed' and booking -> 'upcoming').
+    // Admin verification flow
     if (status === 'confirmed') {
       (payment as any).status = 'confirmed';
     } else {
-      (payment as any).status = 'rejected';
-    }
-
-    // If admin proof is provided, save it
-    if (adminProofFile && status === 'confirmed') {
-      const fileUrl = `/tutor_documents/${adminProofFile.filename}`;
-      (payment as any).admin_payment_proof_url = fileUrl;
-      console.log(`verifyPayment: Admin proof uploaded: ${fileUrl}`);
-    }
-
-    // If rejection reason is provided, save it
-    if (status === 'rejected' && rejectionReason) {
-      (payment as any).rejection_reason = rejectionReason;
-      console.log(`verifyPayment: Rejection reason saved: ${rejectionReason}`);
+      (payment as any).status = 'refunded'; // Use 'refunded' instead of 'rejected' for rejected payments
     }
 
     await this.paymentsRepository.save(payment);
@@ -575,23 +596,30 @@ export class PaymentsService {
         student = Array.isArray(savedStudent) ? savedStudent[0] : savedStudent;
       }
 
-      // Check if a payment already exists for this booking with the same sender
+      // Check if a payment already exists for this booking
       const bookingSubject = subject || (booking as any).subject || null;
       const existingPayment = await this.paymentsRepository.findOne({
         where: {
           booking_request_id: bookingId,
-          sender: 'admin',
         } as any,
       });
 
       let saved;
       let savedId;
 
+      // Get subject_id from subject name
+      let subjectId: number | null = null;
+      if (bookingSubject) {
+        const subject = await this.subjectRepository.findOne({
+          where: { subject_name: bookingSubject }
+        });
+        subjectId = subject?.subject_id || null;
+      }
+
       if (existingPayment) {
         // Update existing payment if it exists
         existingPayment.amount = Number(amount);
-        existingPayment.subject = bookingSubject;
-        existingPayment.admin_note = `Requested by tutor_id:${tutorId}`;
+        if (subjectId) existingPayment.subject_id = subjectId;
         saved = await this.paymentsRepository.save(existingPayment as any);
         savedId = (saved as any).payment_id;
       } else {
@@ -603,16 +631,14 @@ export class PaymentsService {
           amount: Number(amount),
           status: 'pending',
           dispute_status: 'none',
-          subject: bookingSubject,
-          admin_note: `Requested by tutor_id:${tutorId}`,
-          sender: 'admin',
+          subject_id: subjectId,
         } as any);
         saved = await this.paymentsRepository.save(payment as any);
         savedId = (saved as any).payment_id;
       }
 
-      // Update booking status to payment_pending
-      (booking as any).status = 'payment_pending';
+      // Update booking status to admin_payment_pending (admin needs to pay tutor)
+      (booking as any).status = 'admin_payment_pending';
       await this.bookingRepository.save(booking as any);
 
       // Notify admins

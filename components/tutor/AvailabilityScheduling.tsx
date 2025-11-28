@@ -671,8 +671,8 @@ const AvailabilityScheduling: React.FC = () => {
         </div>
         <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-1 drop-shadow-lg flex items-center gap-2 sm:gap-3">
-              <Calendar className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 lg:h-10 lg:w-10 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 drop-shadow-lg flex items-center gap-2 sm:gap-3">
+              <Calendar className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 flex-shrink-0" />
               <span className="truncate">Availability Scheduling</span>
             </h1>
             <p className="text-xs sm:text-sm md:text-base text-white/90 leading-tight">Manage your weekly availability and update your schedule anytime</p>

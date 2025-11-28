@@ -773,27 +773,15 @@ const TuteeFindAndBookTutors: React.FC = () => {
     <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-800 overflow-hidden">
       <div className="absolute -top-24 -left-10 h-72 w-72 bg-sky-100 blur-3xl opacity-70 pointer-events-none" />
       <div className="absolute top-32 -right-16 h-80 w-80 bg-indigo-100 blur-[120px] opacity-70 pointer-events-none" />
-      <div className="relative max-w-6xl mx-auto px-2 sm:px-4 lg:px-0 py-4 sm:py-6 md:py-10 space-y-4 sm:space-y-6 md:space-y-8 lg:space-y-10">
-      <div className="relative overflow-hidden bg-gradient-to-r from-sky-600 via-indigo-600 to-indigo-700 rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-xl">
-        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.4),_transparent)]" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-white/15 flex items-center justify-center shadow-lg">
-              <Search className="h-6 w-6 md:h-8 md:w-8" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Find & Book Tutors</h1>
-              <p className="text-xs sm:text-sm md:text-base text-white/80">Discover verified tutors, explore profiles, and secure your ideal session.</p>
-            </div>
-          </div>
-          <div className="flex items-center text-[11px] sm:text-xs md:text-sm text-white/80 gap-3">
-            <span className="inline-flex items-center gap-1 font-semibold">
-              <span className="h-2 w-2 rounded-full bg-emerald-300" />
-              Live availability
-            </span>
-            <span className="hidden sm:inline text-white/70">100% verified tutors</span>
-          </div>
+      <div className="relative max-w-6xl mx-auto px-2 sm:px-4 lg:px-0 pt-1 sm:pt-1.5 md:pt-2 pb-4 sm:pb-6 md:pb-10 space-y-3 sm:space-y-4 md:space-y-6">
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+          <Search className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
+          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white">Find & Book Tutors</h1>
         </div>
+        <p className="text-xs sm:text-sm md:text-base lg:text-lg text-blue-100/90 leading-relaxed">
+          Discover verified tutors, explore profiles, and secure your ideal session.
+        </p>
       </div>
 
       {/* Search and Filters */}
@@ -1457,10 +1445,10 @@ const TuteeFindAndBookTutors: React.FC = () => {
                   </div>
 
                   <div className="px-3 sm:px-6 lg:px-8 py-4 sm:py-8 lg:py-10 flex-1 overflow-y-auto">
-                    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)] lg:gap-6">
+                    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)] lg:gap-6 lg:items-stretch">
                       {/* Unified Booking Form Container */}
                       <div className="flex-1 order-2 lg:order-1">
-                        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 sm:border-2 sm:border-slate-200/60 shadow-lg sm:shadow-xl overflow-hidden">
+                        <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/80 sm:border-2 sm:border-slate-200/60 shadow-lg sm:shadow-xl overflow-hidden flex flex-col h-full">
                           {/* Form Header */}
                           <div className="bg-gradient-to-r from-sky-50 via-indigo-50 to-sky-50 border-b border-slate-200/80 sm:border-b-2 sm:border-slate-200/60 px-4 sm:px-6 py-3 sm:py-4">
                             <div className="flex items-center gap-2 sm:gap-3">
@@ -1477,7 +1465,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                           </div>
 
                           {/* Form Content */}
-                          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                          <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 flex-1">
                             {/* Subject Selection */}
                             <div className="space-y-2 sm:space-y-3">
                               <div className="flex items-center justify-between gap-2">
@@ -1784,7 +1772,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                       </div>
 
                       {/* Booking Summary Sidebar */}
-                      <aside className="w-full order-1 lg:order-2 lg:sticky lg:top-6 bg-white border border-slate-200/80 sm:border-2 sm:border-slate-200/60 rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 space-y-4 sm:space-y-5 h-fit shadow-lg sm:shadow-xl">
+                      <aside className="w-full order-1 lg:order-2 lg:sticky lg:top-6 bg-white border border-slate-200/80 sm:border-2 sm:border-slate-200/60 rounded-xl sm:rounded-2xl p-4 sm:p-5 lg:p-6 space-y-4 sm:space-y-5 shadow-lg sm:shadow-xl flex flex-col">
                         {/* Tutor Info Card */}
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-sky-50 via-indigo-50 to-sky-50 p-4 border border-sky-200/50">
                           <div className="absolute top-0 right-0 w-32 h-32 bg-sky-200/20 rounded-full -mr-16 -mt-16"></div>
@@ -1829,12 +1817,12 @@ const TuteeFindAndBookTutors: React.FC = () => {
                             </div>
                           ))}
                           {bookingForm.student_notes && (
-                            <div className="rounded-xl bg-gradient-to-br from-indigo-50/50 to-sky-50/50 px-4 py-3 border border-indigo-200/60">
+                            <div className="rounded-xl bg-gradient-to-br from-indigo-50/50 to-sky-50/50 px-4 py-4 border border-indigo-200/60">
                               <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-2">
                                 <span>💬</span>
                                 Notes
                               </div>
-                              <div className="text-sm text-slate-800 break-words whitespace-pre-wrap leading-relaxed">{bookingForm.student_notes}</div>
+                              <div className="text-base font-bold text-slate-900 break-words whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{bookingForm.student_notes}</div>
                             </div>
                           )}
                           {selectedTutorProfile?.profile?.session_rate_per_hour && bookingForm.duration > 0 && (() => {
@@ -1855,33 +1843,6 @@ const TuteeFindAndBookTutors: React.FC = () => {
                               </div>
                             );
                           })()}
-                        </div>
-
-                        {/* Important Notes */}
-                        <div className="relative overflow-hidden rounded-xl border-2 border-sky-200 bg-gradient-to-br from-white via-sky-50/40 to-indigo-50/30 p-4 text-sm">
-                          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-sky-400 to-indigo-400"></div>
-                          <div className="relative">
-                            <p className="font-bold text-slate-800 mb-3 flex items-center gap-2">
-                              <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              Important Notes
-                            </p>
-                            <ul className="text-slate-700 space-y-2.5">
-                              <li className="flex items-start gap-2.5">
-                                <span className="text-sky-600 font-bold mt-0.5">•</span>
-                                <span>GCash confirmation is required after tutor approval.</span>
-                              </li>
-                              <li className="flex items-start gap-2.5">
-                                <span className="text-indigo-600 font-bold mt-0.5">•</span>
-                                <span>You'll get email + in-app updates.</span>
-                              </li>
-                              <li className="flex items-start gap-2.5">
-                                <span className="text-sky-600 font-bold mt-0.5">•</span>
-                                <span>Booking can be cancelled before tutor approval.</span>
-                              </li>
-                            </ul>
-                          </div>
                         </div>
                       </aside>
                     </div>

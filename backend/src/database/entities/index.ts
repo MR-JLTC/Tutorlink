@@ -12,6 +12,7 @@ export * from './tutor-availability.entity';
 export * from './rating.entity';
 export * from './session.entity';
 export * from './payment.entity';
+export * from './payout.entity';
 export * from './subject-application.entity';
 export * from './subject-application-document.entity';
 export * from './booking-request.entity';

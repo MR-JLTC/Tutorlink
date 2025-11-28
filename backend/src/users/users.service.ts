@@ -38,7 +38,8 @@ export class UsersService {
     return this.usersRepository.find({ relations: ['admin_profile', 'tutor_profile', 'student_profile', 'student_profile.university', 'student_profile.course', 'tutor_profile.university', 'tutor_profile.course'] });
   }
   /**
-   * Move overdue 'upcoming' bookings to sessions table and mark as finished
+   * Move overdue 'upcoming' bookings to sessions table for historical tracking
+   * NOTE: Does NOT change booking request status - status remains 'upcoming' until tutor marks as done
    */
   async moveOverdueBookingsToSessions(): Promise<{ moved: number }> {
     const now = new Date();
@@ -56,27 +57,40 @@ export class UsersService {
       startDate.setHours(hour, minute, 0, 0);
       const endDate = new Date(startDate.getTime() + booking.duration * 60 * 60 * 1000);
       if (endDate < now) {
-        // Find Student and Tutor entities by user reference
-        const studentEntity = await this.studentRepository.findOne({ where: { user: { user_id: booking.student.user_id } } });
-        const tutorEntity = await this.tutorRepository.findOne({ where: { tutor_id: booking.tutor.tutor_id } });
-        // Find subject entity if booking.subject is a string
-        let subjectEntity = null;
-        if (typeof booking.subject === 'string') {
-          subjectEntity = await this.subjectRepository.findOne({ where: { subject_name: booking.subject } });
-        } else {
-          subjectEntity = booking.subject;
-        }
-        await this.sessionRepository.save({
-          student: studentEntity,
-          tutor: tutorEntity,
-          subject: subjectEntity,
-          start_time: startDate,
-          end_time: endDate,
-          status: 'completed',
+        // Check if session already exists to avoid duplicates
+        const existingSession = await this.sessionRepository.findOne({
+          where: {
+            student: { user: { user_id: booking.student.user_id } } as any,
+            tutor: { tutor_id: booking.tutor.tutor_id } as any,
+            start_time: startDate,
+          } as any,
         });
-        // Mark booking as finished
-        booking.status = 'completed';
-        await this.bookingRequestRepository.save(booking);
+        
+        // Only create session if it doesn't already exist
+        if (!existingSession) {
+          // Find Student and Tutor entities by user reference
+          const studentEntity = await this.studentRepository.findOne({ where: { user: { user_id: booking.student.user_id } } });
+          const tutorEntity = await this.tutorRepository.findOne({ where: { tutor_id: booking.tutor.tutor_id } });
+          // Find subject entity if booking.subject is a string
+          let subjectEntity = null;
+          if (typeof booking.subject === 'string') {
+            subjectEntity = await this.subjectRepository.findOne({ where: { subject_name: booking.subject } });
+          } else {
+            subjectEntity = booking.subject;
+          }
+          await this.sessionRepository.save({
+            student: studentEntity,
+            tutor: tutorEntity,
+            subject: subjectEntity,
+            start_time: startDate,
+            end_time: endDate,
+            status: 'scheduled', // Keep as 'scheduled' until tutor marks as done
+          });
+        }
+        
+        // DO NOT change booking request status - it should remain 'upcoming' 
+        // until the tutor explicitly marks it as done via the "Mark as Done" button
+        // This allows the tutor to still upload proof and mark the session as completed
         moved++;
       }
     }
@@ -195,6 +209,8 @@ export class UsersService {
 
     booking.status = 'completed';
     booking.tutee_feedback_at = booking.tutee_feedback_at || null;
+    // Set tutee_marked_done_at when tutee confirms the session
+    (booking as any).tutee_marked_done_at = new Date();
     const saved = await this.bookingRequestRepository.save(booking as any);
 
     // Notify tutor that the student has confirmed completion

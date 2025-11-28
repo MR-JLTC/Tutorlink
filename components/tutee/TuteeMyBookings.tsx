@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, Calendar, Clock, User, BookOpen, RefreshCw, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { Bell, Calendar, Clock, User, BookOpen, RefreshCw, AlertCircle, CheckCircle2, XCircle, Star } from 'lucide-react';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import apiClient from '../../services/api';
@@ -33,6 +33,7 @@ const TuteeMyBookings: React.FC = () => {
   const [feedbackTarget, setFeedbackTarget] = useState<Booking | null>(null);
   const [rating, setRating] = useState<number>(5);
   const [comment, setComment] = useState<string>('');
+  const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     const init = async () => {
@@ -47,7 +48,45 @@ const TuteeMyBookings: React.FC = () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
     };
+  }, [now]); // Re-fetch when current time updates
+
+  // Update current time every minute to check if sessions have started
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(timer);
   }, []);
+
+  const parseSessionStart = (dateStr: string, timeStr: string): Date | null => {
+    if (!dateStr || !timeStr) return null;
+    let sessionDate = new Date(`${dateStr.split('T')[0]}T${timeStr}`);
+    if (!isNaN(sessionDate.getTime())) return sessionDate;
+    sessionDate = new Date(dateStr);
+    if (isNaN(sessionDate.getTime())) return null;
+    const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      const ampm = timeMatch[3];
+      if (ampm && ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
+      if (ampm && ampm.toLowerCase() === 'am' && hours === 12) hours = 0;
+      sessionDate.setHours(hours, minutes, 0, 0);
+    }
+    return sessionDate;
+  };
+
+  const hasSessionStarted = (booking: Booking): boolean => {
+    const start = parseSessionStart(booking.date, booking.time);
+    if (!start) return false;
+    return now >= start;
+  };
+
+  const hasSessionDurationCompleted = (booking: Booking): boolean => {
+    const start = parseSessionStart(booking.date, booking.time);
+    if (!start) return false;
+    const durationHours = booking.duration || 1.0;
+    const end = new Date(start.getTime() + durationHours * 60 * 60 * 1000);
+    return now >= end;
+  };
 
   const fetchBookingRequests = async () => {
     try {
@@ -83,7 +122,26 @@ const TuteeMyBookings: React.FC = () => {
           }
         };
       });
-      const validBookings = bookingsWithStatus.filter((booking: any) => booking.status.toLowerCase() !== 'upcoming' && booking.status.toLowerCase() !== 'completed');
+      
+      // Filter bookings: include completed and admin_payment_pending (only if they have tutee_rating), upcoming that have started, and other statuses
+      const validBookings = bookingsWithStatus.filter((booking: any) => {
+        const status = booking.status.toLowerCase();
+        // Include completed bookings ONLY if they have a tutee_rating (feedback has been submitted)
+        if (status === 'completed') {
+          return booking.tutee_rating !== null && booking.tutee_rating !== undefined;
+        }
+        // Include admin_payment_pending bookings ONLY if they have a tutee_rating (same as completed)
+        if (status === 'admin_payment_pending') {
+          return booking.tutee_rating !== null && booking.tutee_rating !== undefined;
+        }
+        // Include upcoming bookings that have started (session start time has been reached)
+        if (status === 'upcoming') {
+          return hasSessionStarted(booking);
+        }
+        // Include all other statuses
+        return true;
+      });
+      
       setBookings(validBookings);
       setError(null); // Clear any previous errors
     } catch (err: any) {
@@ -103,6 +161,21 @@ const TuteeMyBookings: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderStars = (rating: number) => {
+    return (
+      <div className="flex items-center gap-1">
+        {Array.from({ length: 5 }, (_, i) => (
+          <Star
+            key={i}
+            className={`h-4 w-4 sm:h-5 sm:w-5 ${
+              i < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-slate-300'
+            }`}
+          />
+        ))}
+      </div>
+    );
   };
 
   const getStatusDisplay = (status: string) => {
@@ -183,14 +256,14 @@ const TuteeMyBookings: React.FC = () => {
   return (
     <div className="space-y-3 sm:space-y-4 md:space-y-6">
       <ToastContainer aria-label="Notification messages" />
-      {/* Modern Header */}
+      {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
           <div className="flex items-center gap-2 sm:gap-3">
             <Bell className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
             <div>
               <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white">My Bookings</h1>
-              <p className="text-[10px] sm:text-xs md:text-sm text-blue-100 mt-0.5 sm:mt-1">
+              <p className="text-xs sm:text-sm md:text-base text-blue-100/90 mt-0.5 sm:mt-1">
                 View and manage your tutoring session bookings
               </p>
             </div>
@@ -234,12 +307,16 @@ const TuteeMyBookings: React.FC = () => {
                 >
                   {/* Decorative gradient bar */}
                   <div className={`absolute top-0 left-0 right-0 h-1 ${
-                    booking.status.toLowerCase() === 'confirmed' || booking.status.toLowerCase() === 'completed'
+                    booking.status.toLowerCase() === 'completed'
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
+                    booking.status.toLowerCase() === 'confirmed'
                       ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
                     booking.status.toLowerCase() === 'cancelled'
                       ? 'bg-gradient-to-r from-red-500 to-rose-500' :
                     booking.status.toLowerCase() === 'pending'
                       ? 'bg-gradient-to-r from-yellow-500 to-amber-500' :
+                    booking.status.toLowerCase() === 'upcoming'
+                      ? 'bg-gradient-to-r from-blue-500 to-indigo-500' :
                     'bg-gradient-to-r from-blue-500 to-indigo-500'
                   }`} />
                   
@@ -264,15 +341,36 @@ const TuteeMyBookings: React.FC = () => {
                         
                         {/* Status Badge */}
                         <div className="flex items-center gap-2 sm:gap-3 mb-4">
-                          <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 border-2 shadow-md ${statusDisplay.color}`}>
-                            {statusDisplay.icon}
-                            <span className="whitespace-nowrap">{statusDisplay.text}</span>
-                          </div>
-                          {/* {isUpcoming && (
-                            <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs sm:text-sm font-semibold border border-blue-200">
-                              Upcoming
+                          {/* Show "Completed" badge for completed and admin_payment_pending bookings */}
+                          {(booking.status.toLowerCase() === 'completed' || booking.status.toLowerCase() === 'admin_payment_pending') && (
+                            <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 border-2 shadow-md bg-green-50 text-green-700 border-green-300">
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span className="whitespace-nowrap">Completed</span>
                             </div>
-                          )} */}
+                          )}
+                          {/* Show "Pending Completion" badge for upcoming bookings that have completed their duration */}
+                          {booking.status.toLowerCase() === 'upcoming' && hasSessionDurationCompleted(booking) && (
+                            <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 border-2 shadow-md bg-yellow-50 text-yellow-700 border-yellow-300">
+                              <Clock className="h-4 w-4" />
+                              <span className="whitespace-nowrap">Pending Completion</span>
+                            </div>
+                          )}
+                          {/* Show "Session Started" badge for upcoming bookings that have started but duration not completed yet */}
+                          {booking.status.toLowerCase() === 'upcoming' && hasSessionStarted(booking) && !hasSessionDurationCompleted(booking) && (
+                            <div className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 border-2 shadow-md bg-green-50 text-green-700 border-green-300">
+                              <Clock className="h-4 w-4" />
+                              <span className="whitespace-nowrap">Session Started</span>
+                            </div>
+                          )}
+                          {/* Show regular status badge for other statuses */}
+                          {booking.status.toLowerCase() !== 'completed' && 
+                           booking.status.toLowerCase() !== 'admin_payment_pending' && 
+                           booking.status.toLowerCase() !== 'upcoming' && (
+                            <div className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 border-2 shadow-md ${statusDisplay.color}`}>
+                              {statusDisplay.icon}
+                              <span className="whitespace-nowrap">{statusDisplay.text}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -314,24 +412,31 @@ const TuteeMyBookings: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Notes Section */}
-                    {booking.student_notes && (
-                      <div className="mt-4 p-3 sm:p-4 bg-gradient-to-br from-slate-50 to-blue-50/50 border-2 border-slate-200 rounded-xl">
+                    {/* Rating Section - Display tutee's rating if available */}
+                    {booking.tutee_rating && (
+                      <div className="mt-4 p-3 sm:p-4 bg-gradient-to-br from-yellow-50 via-amber-50/50 to-yellow-50 border-2 border-yellow-200 rounded-xl">
                         <div className="flex items-start gap-2 sm:gap-3">
-                          <div className="p-1.5 bg-indigo-100 rounded-lg flex-shrink-0">
-                            <BookOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-600" />
+                          <div className="p-1.5 bg-yellow-100 rounded-lg flex-shrink-0">
+                            <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-yellow-600 fill-current" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs sm:text-sm font-semibold text-slate-700 mb-1.5">Notes</p>
-                            <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
-                              {booking.student_notes}
-                            </p>
+                            <p className="text-xs sm:text-sm font-semibold text-slate-700 mb-1.5">Your Rating</p>
+                            {renderStars(booking.tutee_rating)}
+                            {booking.tutee_comment && (
+                              <div className="mt-2 pt-2 border-t border-yellow-200">
+                                <p className="text-xs sm:text-sm font-medium text-slate-600 mb-1">Your Comment:</p>
+                                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words italic">
+                                  "{booking.tutee_comment}"
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
                     )}
-                    {/* After-session feedback action: if booking is completed and no tutee_rating, allow tutee to submit feedback */}
-                    {booking.status.toLowerCase() === 'completed' && !booking.tutee_rating && (
+                    
+                    {/* After-session feedback action: if booking is completed/admin_payment_pending and no tutee_rating, allow tutee to submit feedback */}
+                    {(booking.status.toLowerCase() === 'completed' || booking.status.toLowerCase() === 'admin_payment_pending') && !booking.tutee_rating && (
                       <div className="p-4 border-t border-slate-100 mt-4 flex items-center justify-end">
                         <Button onClick={() => { setFeedbackTarget(booking); setFeedbackOpen(true); }} className="px-4 py-2 bg-purple-600 text-white rounded-md">Mark as done</Button>
                       </div>

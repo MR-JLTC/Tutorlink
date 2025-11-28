@@ -22,6 +22,11 @@ export class PaymentsController {
     return this.paymentsService.findAll();
   }
 
+  @Get('payouts')
+  findAllPayouts() {
+    return this.paymentsService.findAllPayouts();
+  }
+
   @Patch(':id/dispute')
   updateDispute(
     @Param('id') id: string,

@@ -30,6 +30,8 @@ interface CompletedBooking {
     tutee_comment: string | null;
     amount: number;
     calculated_amount: number;
+    payment_status?: string | null;
+    payment_id?: number | null;
 }
 
 const PaymentManagement: React.FC = () => {
@@ -86,6 +88,97 @@ const PaymentManagement: React.FC = () => {
             const tuteePayment = allPayments.data.find((p: Payment) => 
                 (p as any).sender === 'tutee' && 
                 (p as any).booking_request_id === booking.booking_id
+            );
+            
+            setPayBookingPayment(tuteePayment || null);
+        } catch (e: any) {
+            console.error('Failed to fetch payment:', e);
+            toast.error('Failed to load payment information');
+        } finally {
+            setLoadingPayment(false);
+        }
+    };
+
+    const handlePayButtonClickFromPayment = async (payment: Payment) => {
+        try {
+            setLoadingPayment(true);
+            const bookingRequestId = (payment as any).booking_request_id;
+            
+            if (!bookingRequestId) {
+                toast.error('Booking ID not found in payment');
+                return;
+            }
+            
+            // First, try to find the booking in completedBookings
+            let booking = completedBookings.find(b => b.booking_id === bookingRequestId);
+            
+            // If not found, fetch from waiting-for-payment endpoint (which might have more bookings)
+            if (!booking) {
+                try {
+                    const bookingsRes = await apiClient.get('/payments/waiting-for-payment');
+                    const allBookings = bookingsRes.data || [];
+                    booking = allBookings.find((b: CompletedBooking) => b.booking_id === bookingRequestId);
+                } catch (e) {
+                    console.error('Failed to fetch bookings:', e);
+                }
+            }
+            
+            // If still not found, try to construct from payment data or fetch booking directly
+            if (!booking) {
+                // Try to fetch booking from booking requests endpoint
+                try {
+                    // Fetch all bookings for the tutor
+                    const tutorId = (payment as any).tutor?.tutor_id || (payment as any).tutor_id;
+                    if (tutorId) {
+                        const bookingsRes = await apiClient.get(`/tutors/${tutorId}/booking-requests`);
+                        const allBookings = Array.isArray(bookingsRes.data) ? bookingsRes.data : 
+                                           Array.isArray(bookingsRes.data?.data) ? bookingsRes.data.data : [];
+                        const foundBooking = allBookings.find((b: any) => b.id === bookingRequestId || b.booking_id === bookingRequestId);
+                        
+                        if (foundBooking) {
+                            // Construct CompletedBooking from found booking
+                            booking = {
+                                booking_id: foundBooking.id || foundBooking.booking_id,
+                                tutor: {
+                                    tutor_id: foundBooking.tutor?.tutor_id || tutorId,
+                                    name: foundBooking.tutor?.user?.name || payment.tutor?.user?.name || 'N/A',
+                                    gcash_number: foundBooking.tutor?.gcash_number || (payment.tutor as any)?.gcash_number || null,
+                                    gcash_qr_url: foundBooking.tutor?.gcash_qr_url || (payment.tutor as any)?.gcash_qr_url || null,
+                                    session_rate_per_hour: foundBooking.tutor?.session_rate_per_hour || (payment.tutor as any)?.session_rate_per_hour || 0,
+                                },
+                                student: {
+                                    user_id: foundBooking.student?.user_id || foundBooking.student?.user?.user_id || payment.student?.user?.user_id || 0,
+                                    name: foundBooking.student?.user?.name || foundBooking.student?.name || payment.student?.user?.name || 'N/A',
+                                },
+                                subject: foundBooking.subject || (payment as any).subject || 'N/A',
+                                date: foundBooking.date || '',
+                                time: foundBooking.time || '',
+                                duration: foundBooking.duration || 0,
+                                session_proof_url: foundBooking.session_proof_url || null,
+                                tutee_rating: foundBooking.tutee_rating || null,
+                                tutee_comment: foundBooking.tutee_comment || null,
+                                amount: payment.amount,
+                                calculated_amount: payment.amount * 0.87, // After 13% fee
+                            };
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch booking from tutor endpoint:', e);
+                }
+            }
+            
+            if (!booking) {
+                toast.error('Booking not found for this payment');
+                return;
+            }
+            
+            setPayBooking(booking);
+            
+            // Fetch payment from payments table where sender='tutee' and booking_request_id matches
+            const allPayments = await apiClient.get('/payments');
+            const tuteePayment = allPayments.data.find((p: Payment) => 
+                (p as any).sender === 'tutee' && 
+                (p as any).booking_request_id === bookingRequestId
             );
             
             setPayBookingPayment(tuteePayment || null);
@@ -182,9 +275,8 @@ const PaymentManagement: React.FC = () => {
 
     const pendingCount = payments.filter(p => p.status === 'pending').length;
     
-    // Separate payments: tutee payments (sender='tutee') and tutor payments (sender='admin', status='pending')
+    // Separate payments: tutee payments (sender='tutee')
     const tuteePayments = payments.filter(p => (p as any).sender === 'tutee');
-    const tutorPayments = payments.filter(p => (p as any).sender === 'admin' && p.status === 'pending');
 
     return (
         <div>
@@ -234,19 +326,25 @@ const PaymentManagement: React.FC = () => {
                                                 <Button 
                                                     onClick={() => setViewProofBooking(booking)}
                                                     variant="secondary"
-                                                    className="text-xs"
+                                                    className="text-xs whitespace-nowrap"
                                                 >
-                                                    <Eye className="h-4 w-4 mr-1" />
+                                                    <Eye className="h-4 w-4 mr-1 inline" />
                                                     View Proof
                                                 </Button>
-                                                <Button 
-                                                    onClick={() => handlePayButtonClick(booking)}
-                                                    className="text-xs"
-                                                    disabled={loadingPayment}
-                                                >
-                                                    <DollarSign className="h-4 w-4 mr-1" />
-                                                    {loadingPayment ? 'Loading...' : 'Pay'}
-                                                </Button>
+                                                {booking.payment_status === 'admin_confirmed' || booking.payment_status === 'admin_paid' ? (
+                                                    <span className="px-3 py-1.5 text-xs font-semibold rounded-full bg-green-100 text-green-800 whitespace-nowrap">
+                                                        Paid
+                                                    </span>
+                                                ) : (
+                                                    <Button 
+                                                        onClick={() => handlePayButtonClick(booking)}
+                                                        className="text-xs whitespace-nowrap"
+                                                        disabled={loadingPayment}
+                                                    >
+                                                        <DollarSign className="h-4 w-4 mr-1 inline" />
+                                                        {loadingPayment ? 'Loading...' : 'Pay'}
+                                                    </Button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -284,19 +382,25 @@ const PaymentManagement: React.FC = () => {
                                         <Button 
                                             onClick={() => setViewProofBooking(booking)}
                                             variant="secondary"
-                                            className="text-xs flex-1 sm:flex-none"
+                                            className="text-xs whitespace-nowrap w-full sm:w-auto"
                                         >
-                                            <Eye className="h-4 w-4 mr-1" />
+                                            <Eye className="h-4 w-4 mr-1 inline" />
                                             View Proof
                                         </Button>
-                                        <Button 
-                                            onClick={() => handlePayButtonClick(booking)}
-                                            className="text-xs flex-1 sm:flex-none"
-                                            disabled={loadingPayment}
-                                        >
-                                            <DollarSign className="h-4 w-4 mr-1" />
-                                            {loadingPayment ? 'Loading...' : 'Pay'}
-                                        </Button>
+                                        {booking.payment_status === 'admin_confirmed' || booking.payment_status === 'admin_paid' ? (
+                                            <span className="px-3 py-1.5 text-xs font-semibold rounded-full bg-green-100 text-green-800 whitespace-nowrap w-full sm:w-auto text-center">
+                                                Paid
+                                            </span>
+                                        ) : (
+                                            <Button 
+                                                onClick={() => handlePayButtonClick(booking)}
+                                                className="text-xs whitespace-nowrap w-full sm:w-auto"
+                                                disabled={loadingPayment}
+                                            >
+                                                <DollarSign className="h-4 w-4 mr-1 inline" />
+                                                {loadingPayment ? 'Loading...' : 'Pay'}
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             </Card>
@@ -348,12 +452,17 @@ const PaymentManagement: React.FC = () => {
                                                 <Button 
                                                     onClick={() => setSelectedProofModalPayment(payment)} 
                                                     disabled={verifyingId === payment.payment_id}
+                                                    className="whitespace-nowrap"
                                                 >
+                                                    <Eye className="h-4 w-4 mr-1 inline" />
                                                     View Proof
                                                 </Button>
                                             )}
                                             {(payment.status === 'confirmed' || payment.status === 'rejected') && (
-                                                <Button variant="secondary" onClick={() => { setSelectedProofModalPayment(payment); }}>View Proof</Button>
+                                                <Button variant="secondary" onClick={() => { setSelectedProofModalPayment(payment); }} className="whitespace-nowrap">
+                                                    <Eye className="h-4 w-4 mr-1 inline" />
+                                                    View Proof
+                                                </Button>
                                             )}
                                         </div>
                                     </td>
@@ -408,8 +517,9 @@ const PaymentManagement: React.FC = () => {
                                         <Button 
                                             onClick={() => setSelectedProofModalPayment(payment)} 
                                             disabled={verifyingId === payment.payment_id}
-                                            className="text-xs flex-1 sm:flex-none"
+                                            className="text-xs whitespace-nowrap w-full sm:w-auto"
                                         >
+                                            <Eye className="h-4 w-4 mr-1 inline" />
                                             View Proof
                                         </Button>
                                     )}
@@ -417,8 +527,9 @@ const PaymentManagement: React.FC = () => {
                                         <Button 
                                             variant="secondary" 
                                             onClick={() => { setSelectedProofModalPayment(payment); }} 
-                                            className="text-xs flex-1 sm:flex-none"
+                                            className="text-xs whitespace-nowrap w-full sm:w-auto"
                                         >
+                                            <Eye className="h-4 w-4 mr-1 inline" />
                                             View Proof
                                         </Button>
                                     )}
@@ -430,122 +541,6 @@ const PaymentManagement: React.FC = () => {
                 </div>
             </Card>
 
-            {/* Pending Payments to Tutors Table */}
-            <Card>
-                <h2 className="text-xl font-bold text-slate-800 mb-4">Pending Payments to Tutors</h2>
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutor</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {tutorPayments.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-500">
-                                        No pending payments to tutors found
-                                    </td>
-                                </tr>
-                            ) : (
-                                tutorPayments.map((payment) => (
-                                    <tr key={payment.payment_id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.student?.user?.name || 'N/A'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{payment.tutor?.user?.name || 'N/A'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{(payment as any).subject || 'N/A'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">{new Date(payment.created_at).toLocaleDateString()}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-center">
-                                            <div className="inline-flex items-center justify-center gap-2">
-                                                <Button 
-                                                    onClick={() => {
-                                                        // Find the booking for this payment
-                                                        const booking = completedBookings.find(b => b.booking_id === (payment as any).booking_request_id);
-                                                        if (booking) {
-                                                            handlePayButtonClick(booking);
-                                                        } else {
-                                                            toast.error('Booking not found for this payment');
-                                                        }
-                                                    }}
-                                                    disabled={loadingPayment}
-                                                    className="text-xs"
-                                                >
-                                                    <DollarSign className="h-4 w-4 mr-1" />
-                                                    {loadingPayment ? 'Loading...' : 'Pay Tutor'}
-                                                </Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Mobile Card View */}
-                <div className="md:hidden space-y-3">
-                    {tutorPayments.length === 0 ? (
-                        <div className="text-center py-8 text-sm text-slate-500">
-                            No pending payments to tutors found
-                        </div>
-                    ) : (
-                        tutorPayments.map((payment) => (
-                            <Card key={payment.payment_id} className="p-4">
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                            Pending
-                                        </span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3 text-sm">
-                                        <div>
-                                            <p className="text-slate-500 text-xs mb-1">Student</p>
-                                            <p className="font-medium text-slate-900 truncate">{payment.student?.user?.name || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-slate-500 text-xs mb-1">Tutor</p>
-                                            <p className="font-medium text-slate-900 truncate">{payment.tutor?.user?.name || 'N/A'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3 text-sm">
-                                        <div>
-                                            <p className="text-slate-500 text-xs mb-1">Subject</p>
-                                            <p className="font-medium text-slate-900">{(payment as any).subject || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-slate-500 text-xs mb-1">Amount</p>
-                                            <p className="font-medium text-slate-900">₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-200">
-                                        <Button 
-                                            onClick={() => {
-                                                const booking = completedBookings.find(b => b.booking_id === (payment as any).booking_request_id);
-                                                if (booking) {
-                                                    handlePayButtonClick(booking);
-                                                } else {
-                                                    toast.error('Booking not found for this payment');
-                                                }
-                                            }}
-                                            disabled={loadingPayment}
-                                            className="text-xs flex-1 sm:flex-none"
-                                        >
-                                            <DollarSign className="h-4 w-4 mr-1" />
-                                            {loadingPayment ? 'Loading...' : 'Pay Tutor'}
-                                        </Button>
-                                    </div>
-                                </div>
-                            </Card>
-                        ))
-                    )}
-                </div>
-            </Card>
 
             {selectedPayment && (
                 <Modal isOpen={true} onClose={() => setSelectedPayment(null)} title={`Payment #${selectedPayment.payment_id} Dispute`}
@@ -947,7 +942,6 @@ const PaymentManagement: React.FC = () => {
                                                     }`}
                                                 />
                                             ))}
-                                            <span className="ml-2 font-semibold text-slate-900">{viewProofBooking.tutee_rating}/5</span>
                                         </div>
                                     </div>
                                 )}

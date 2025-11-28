@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Tutor, User, TutorDocument, TutorAvailability, TutorSubject, TutorSubjectDocument, Subject, Course, University, SubjectApplication, SubjectApplicationDocument, BookingRequest, Notification, Payment, Student } from '../database/entities';
+import { Tutor, User, TutorDocument, TutorAvailability, TutorSubject, TutorSubjectDocument, Subject, Course, University, SubjectApplication, SubjectApplicationDocument, BookingRequest, Notification, Payment, Student, Payout } from '../database/entities';
 import { EmailService } from '../email/email.service';
 import type { Express } from 'express';
 import * as bcrypt from 'bcrypt';
@@ -39,6 +39,8 @@ export class TutorsService {
     private notificationRepository: Repository<Notification>,
     @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
+    @InjectRepository(Payout)
+    private payoutRepository: Repository<Payout>,
     @InjectRepository(Student)
     private studentRepository: Repository<Student>,
     private emailService: EmailService,
@@ -1583,6 +1585,8 @@ export class TutorsService {
 
     // Use the status from the request, which should be 'awaiting_confirmation'
     request.status = status;
+    // Set tutor_marked_done_at when tutor marks the booking as done
+    (request as any).tutor_marked_done_at = new Date();
     const saved = await this.bookingRequestRepository.save(request);
 
     // Create notification for student confirming session completion
@@ -1630,6 +1634,15 @@ export class TutorsService {
     request.status = 'awaiting_payment';
     const saved = await this.bookingRequestRepository.save(request);
 
+    // Also update the payment record if it exists
+    const existingPayment = await this.paymentRepository.findOne({
+      where: { booking_request_id: bookingId } as any
+    });
+    if (existingPayment) {
+      existingPayment.payment_proof_url = fileUrl;
+      await this.paymentRepository.save(existingPayment as any);
+    }
+
     // Notify tutor that student uploaded a payment proof
     const notification = this.notificationRepository.create({
       userId: (request.tutor as any)?.user?.user_id?.toString(),
@@ -1669,7 +1682,7 @@ export class TutorsService {
 
     // Fetch all payments for this tutor with student and user relations
     const payments = await this.paymentRepository.find({
-      where: { tutor_id: tutor.tutor_id, sender: 'tutee' } as any,
+      where: { tutor_id: tutor.tutor_id } as any,
       relations: ['student', 'student.user', 'tutor', 'tutor.user'],
       order: { created_at: 'DESC' }
     });
@@ -1678,17 +1691,49 @@ export class TutorsService {
     return payments.map((p: any) => ({
       id: p.payment_id,
       payment_id: p.payment_id,
-      subject: p.subject || null,
+      subject_id: p.subject_id || null,
+      subject_name: p.subject?.subject_name || null,
       amount: Number(p.amount),
-      status: p.status, // 'pending', 'confirmed', 'rejected', 'refunded'
+      status: p.status, // 'pending', 'paid', 'disputed', 'refunded', 'confirmed'
       created_at: p.created_at,
       student_name: p.student?.user?.name || 'Unknown Student',
       student_id: p.student_id,
       tutor_id: p.tutor_id,
-      admin_payment_proof_url: p.admin_payment_proof_url,
       dispute_status: p.dispute_status,
-      dispute_proof_url: p.dispute_proof_url,
-      admin_note: p.admin_note
+    }));
+  }
+
+  async getTutorPayouts(userId: number) {
+    // Accept either tutor_id or user.user_id
+    let tutor = await this.tutorsRepository.findOne({ where: { tutor_id: userId as any } });
+    if (!tutor) {
+      tutor = await this.tutorsRepository.findOne({ 
+        where: { user: { user_id: userId } },
+        relations: ['user']
+      });
+    }
+    if (!tutor) {
+      console.warn(`getTutorPayouts: Tutor not found for id/user_id=${userId}`);
+      throw new NotFoundException('Tutor not found');
+    }
+
+    // Fetch all payouts for this tutor
+    const payouts = await this.payoutRepository.find({
+      where: { tutor_id: tutor.tutor_id } as any,
+      relations: ['payment', 'tutor'],
+      order: { created_at: 'DESC' }
+    });
+
+    return payouts.map((p: any) => ({
+      payout_id: p.payout_id,
+      payment_id: p.payment_id,
+      tutor_id: p.tutor_id,
+      amount_released: Number(p.amount_released),
+      status: p.status, // 'pending', 'released', 'failed'
+      release_proof_url: p.release_proof_url,
+      rejection_reason: p.rejection_reason,
+      admin_notes: p.admin_notes,
+      created_at: p.created_at,
     }));
   }
 
@@ -1708,11 +1753,11 @@ export class TutorsService {
 
     // Fetch all payments for this tutor
     const payments = await this.paymentRepository.find({
-      where: { tutor_id: tutor.tutor_id, sender: 'tutee' } as any
+      where: { tutor_id: tutor.tutor_id } as any
     });
 
     // Calculate stats from payments
-    const confirmedPayments = payments.filter((p: any) => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid');
+    const confirmedPayments = payments.filter((p: any) => p.status === 'confirmed' || p.status === 'paid');
     const pendingPayments = payments.filter((p: any) => p.status === 'pending');
 
     const total_earnings = confirmedPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);

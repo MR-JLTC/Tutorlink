@@ -73,7 +73,7 @@ const TutorLayout: React.FC<TutorLayoutProps> = ({ children }) => {
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <TutorHeader onMenuClick={() => setIsMobileMenuOpen(true)} />
             <main className="flex-1 overflow-y-auto bg-slate-50 overscroll-contain">
-              <div className="max-w-7xl mx-auto px-2 sm:px-3 md:px-4 lg:px-6 py-3 sm:py-4 md:py-6 lg:py-8 w-full">
+              <div className="max-w-7xl mx-auto px-2 sm:px-3 md:px-4 lg:px-6 pt-2 sm:pt-3 md:pt-4 lg:pt-4 pb-3 sm:pb-4 md:pb-6 lg:pb-8 w-full">
                 {children}
               </div>
             </main>

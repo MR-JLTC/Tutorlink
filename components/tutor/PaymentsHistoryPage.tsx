@@ -82,7 +82,7 @@ const PaymentsHistoryPage: React.FC = () => {
             <Button variant="secondary" onClick={() => navigate('/tutor-dashboard/earnings')} className="text-xs sm:text-sm !px-2 sm:!px-3 !py-1 sm:!py-1.5 bg-white/20 hover:bg-white/30 text-white border-white/30">
               <div className="flex items-center gap-1 sm:gap-1.5"><ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4"/> <span className="hidden sm:inline">Back</span></div>
             </Button>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white">Payments history</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white">Payments history</h1>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">

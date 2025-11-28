@@ -39,7 +39,7 @@ const SessionHandlingContent: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [resolvingTutor, setResolvingTutor] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'awaiting_payment' | 'confirmed' | 'upcoming'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'awaiting_payment' | 'confirmed' | 'upcoming' | 'declined'>('all');
   const [isMounted, setIsMounted] = useState(true);
   const [tuteeProfile, setTuteeProfile] = useState<any | null>(null);
   const [tuteeProfileLoading, setTuteeProfileLoading] = useState(false);
@@ -329,7 +329,16 @@ const SessionHandlingContent: React.FC = () => {
   const handleMarkDone = async (bookingId: number) => {
     setLoading(true);
     try {
-      const res = await apiClient.post(`/tutors/booking-requests/${bookingId}/upcoming`);
+      // Use the /complete endpoint without a file - it accepts optional file
+      const formData = new FormData();
+      formData.append('status', 'completed'); // Set status to completed
+      
+      const res = await apiClient.post(
+        `/tutors/booking-requests/${bookingId}/complete`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      
       if (res.data?.success) {
         toast.success('Session marked as completed');
         await fetchBookingRequests();
@@ -479,9 +488,9 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
   };
 
   return (
-    <div className="space-y-3 sm:space-y-4 md:space-y-6 pb-8 sm:pb-10 md:pb-12 px-2 sm:px-3 md:px-0">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6 pb-6 sm:pb-8 md:pb-10">
       <ToastContainer aria-label="Notification messages" />
-      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 text-white shadow-2xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-5 md:p-6 text-white shadow-2xl relative overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
@@ -546,7 +555,8 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
             { key: 'pending', label: 'Pending' },
             { key: 'awaiting_payment', label: 'Awaiting Payment' },
             { key: 'confirmed', label: 'Confirmed' },
-            { key: 'upcoming', label: 'Upcoming' }
+            { key: 'upcoming', label: 'Upcoming' },
+            { key: 'declined', label: 'Declined' }
           ].map(tab => (
             <button
               key={tab.key}
@@ -792,7 +802,7 @@ const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
                       <Button
                         onClick={() => handleMarkDone(request.id)}
                         disabled={loading}
-                        className="bg-gradient-to-r from-purple-600 to-primary-700 hover:from-purple-700 hover:to-primary-800 active:from-purple-800 active:to-primary-900 text-white rounded-xl px-5 py-3 shadow-md hover:shadow-lg transition-all text-sm sm:text-base font-semibold flex items-center justify-center gap-2 w-full sm:w-auto touch-manipulation min-h-[44px]"
+                        className="bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 active:from-primary-800 active:to-primary-900 text-white rounded-xl px-5 py-3 shadow-md hover:shadow-lg transition-all text-sm sm:text-base font-semibold flex items-center justify-center gap-2 w-full sm:w-auto touch-manipulation min-h-[44px]"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
                         <CheckCircle className="h-5 w-5 flex-shrink-0" />

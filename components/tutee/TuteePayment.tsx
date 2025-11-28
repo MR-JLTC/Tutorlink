@@ -109,12 +109,30 @@ const TuteePayment: React.FC = () => {
       const allPayments = response.data || [];
       
       // Filter payments for current user (student)
+      // ONLY include payments where:
+      // 1. The payment is associated with the current user (student) by student_id or user_id, AND
+      // 2. The payment has sender='tutee' (exclude all other sender values)
       const userPayments = allPayments.filter((p: PaymentHistory) => {
-        if (user?.user_id) {
-          return (p as any).student?.user?.user_id === user.user_id ||
-                 (p as any).student_id === (user as any).student_id;
-        }
-        return false;
+        if (!user?.user_id) return false;
+        
+        // Get payment's student_id
+        const paymentStudentId = (p as any).student_id;
+        
+        // Get user's student_id (if available)
+        const userStudentId = (user as any).student_id;
+        
+        // Check if payment is associated with current user by:
+        // 1. student_id match (if both exist)
+        // 2. student.user.user_id match
+        const isUserPayment = 
+          (paymentStudentId && userStudentId && paymentStudentId === userStudentId) ||
+          (p as any).student?.user?.user_id === user.user_id ||
+          (paymentStudentId && !userStudentId && paymentStudentId === (user as any).id);
+        
+        // ONLY include payments with sender='tutee' (exclude all others)
+        const isTuteeSender = (p as any).sender === 'tutee';
+        
+        return isUserPayment && isTuteeSender;
       });
       
       // Sort by created_at descending (newest first)
@@ -141,6 +159,10 @@ const TuteePayment: React.FC = () => {
     const bookingStatus = (booking.status || '').toLowerCase();
     if (bookingStatus === 'payment_pending') {
       return 'payment_pending';
+    }
+    // Exclude admin_payment_pending status (admin needs to pay, not tutee)
+    if (bookingStatus === 'admin_payment_pending') {
+      return ''; // Return empty to exclude from display
     }
     // If there's a payment entity, use its status
     if (booking.payment?.status) {
@@ -213,12 +235,30 @@ const TuteePayment: React.FC = () => {
       const allPayments = paymentsResponse.data || [];
       
       // Filter payments for current user (student) for payment history
+      // ONLY include payments where:
+      // 1. The payment is associated with the current user (student) by student_id or user_id, AND
+      // 2. The payment has sender='tutee' (exclude all other sender values)
       const userPayments = allPayments.filter((p: Payment) => {
-        if (user?.user_id) {
-          return (p as any).student?.user?.user_id === user.user_id ||
-                 (p as any).student_id === (user as any).student_id;
-        }
-        return false;
+        if (!user?.user_id) return false;
+        
+        // Get payment's student_id
+        const paymentStudentId = (p as any).student_id;
+        
+        // Get user's student_id (if available)
+        const userStudentId = (user as any).student_id;
+        
+        // Check if payment is associated with current user by:
+        // 1. student_id match (if both exist)
+        // 2. student.user.user_id match
+        const isUserPayment = 
+          (paymentStudentId && userStudentId && paymentStudentId === userStudentId) ||
+          (p as any).student?.user?.user_id === user.user_id ||
+          (paymentStudentId && !userStudentId && paymentStudentId === (user as any).id);
+        
+        // ONLY include payments with sender='tutee' (exclude all others)
+        const isTuteeSender = (p as any).sender === 'tutee';
+        
+        return isUserPayment && isTuteeSender;
       });
       setPayments(userPayments);
       
@@ -228,27 +268,73 @@ const TuteePayment: React.FC = () => {
         .map((booking: BookingRequest) => {
           // Get the most recent payment for this booking from the payments array
           // Payments are already linked via booking_request_id in the database
-          const bookingPayments = booking.payments || [];
+          // Filter out payments with sender='admin' - only include 'tutee' payments
+          // Also filter by student_id to ensure payments belong to current user
+          const bookingPayments = (booking.payments || []).filter((p: Payment) => {
+            if (!user?.user_id) return false;
+            
+            const sender = (p as any).sender;
+            // ONLY include payments with sender='tutee'
+            if (sender !== 'tutee') return false;
+            
+            // Get payment's student_id
+            const paymentStudentId = (p as any).student_id;
+            
+            // Get user's student_id (if available)
+            const userStudentId = (user as any).student_id;
+            
+            // Check if payment is associated with current user by:
+            // 1. student_id match (if both exist)
+            // 2. student.user.user_id match
+            const isUserPayment = 
+              (paymentStudentId && userStudentId && paymentStudentId === userStudentId) ||
+              (p as any).student?.user?.user_id === user.user_id ||
+              (paymentStudentId && !userStudentId && paymentStudentId === (user as any).id);
+            
+            return isUserPayment;
+          });
+          
           const latestPayment = bookingPayments.length > 0 
             ? bookingPayments.sort((a: Payment, b: Payment) => 
                 new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
               )[0]
             : null;
           
+          // Also check if the legacy payment field has sender='tutee' (only use if it's tutee)
+          const legacyPayment = booking.payment;
+          const shouldUseLegacyPayment = legacyPayment && 
+            (legacyPayment as any).sender === 'tutee';
+          
           return {
             ...booking,
-            payment: latestPayment || booking.payment // Use latest from payments array, fallback to legacy payment field
+            payment: latestPayment || (shouldUseLegacyPayment ? legacyPayment : null) // Use latest from payments array, fallback to legacy payment field (only if sender='tutee')
           };
         })
         .filter((booking: BookingRequest) => {
           // Include bookings that have:
           // 1. Payment-related booking status, OR
           // 2. An associated payment with status: 'pending', 'admin_confirmed', 'confirmed', 'rejected', 'refunded'
+          // BUT exclude payments with sender='admin'
           const bookingStatus = (booking.status || '').toLowerCase();
+          
+          // Check if payment exists and ONLY include if sender is 'tutee'
+          if (booking.payment) {
+            const paymentSender = (booking.payment as any).sender;
+            // ONLY include payments with sender='tutee' (exclude all others)
+            if (paymentSender !== 'tutee') {
+              return false;
+            }
+          }
+          
           const hasPaymentStatus = booking.payment && 
             ['pending', 'admin_confirmed', 'confirmed', 'rejected', 'refunded'].includes(
               (booking.payment.status || '').toLowerCase()
             );
+          
+          // Exclude admin_payment_pending status (admin needs to pay, not tutee)
+          if (bookingStatus === 'admin_payment_pending') {
+            return false;
+          }
           
           const hasBookingPaymentStatus = 
             bookingStatus === 'awaiting_payment' || 
@@ -408,6 +494,13 @@ const TuteePayment: React.FC = () => {
           color: 'text-blue-700 bg-blue-50 border-blue-200',
           dotColor: 'bg-blue-500'
         };
+      case 'admin_payment_pending':
+        return {
+          icon: <CheckCircle2 className="h-5 w-5 text-indigo-500" />,
+          text: 'Admin Payment Pending',
+          color: 'text-indigo-700 bg-indigo-50 border-indigo-200',
+          dotColor: 'bg-indigo-500'
+        };
       case 'payment_rejected':
         return {
           icon: <Ban className="h-5 w-5 text-red-500" />,
@@ -460,23 +553,18 @@ const TuteePayment: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-5 md:space-y-8 pb-6 sm:pb-8 md:pb-10">
+    <div className="space-y-3 sm:space-y-4 md:space-y-6 pb-6 sm:pb-8 md:pb-10">
       <ToastContainer aria-label="Notifications" />
-      {/* Enhanced Header for Desktop */}
-      <div className="relative bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl md:rounded-3xl p-4 sm:p-5 md:p-8 lg:p-10 text-white shadow-xl md:shadow-2xl overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
-        {/* Decorative background elements */}
-        <div className="absolute inset-0 opacity-10 hidden md:block">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full -mr-32 -mt-32 blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full -ml-24 -mb-24 blur-3xl"></div>
-        </div>
-        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 md:gap-6">
-          <div className="flex items-center gap-3 sm:gap-4 md:gap-5">
-            <div className="p-2 sm:p-2.5 md:p-3.5 bg-white/20 backdrop-blur-sm rounded-xl md:rounded-2xl shadow-lg border border-white/20">
-              <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 lg:h-10 lg:w-10 flex-shrink-0" />
-            </div>
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl sm:rounded-2xl p-3 sm:p-4 md:p-6 text-white shadow-lg -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-0">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 flex-shrink-0" />
             <div>
-              <h1 className="text-lg sm:text-xl md:text-3xl lg:text-4xl font-extrabold text-white mb-0.5 md:mb-1 tracking-tight">Payment Management</h1>
-              <p className="text-xs sm:text-sm md:text-base text-white/90 font-medium hidden md:block">Manage your session payments and track payment history</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-white">Payment Management</h1>
+              <p className="text-xs sm:text-sm md:text-base text-blue-100/90 mt-0.5 sm:mt-1">
+                Manage your session payments and track payment history
+              </p>
             </div>
           </div>
           <button
@@ -484,15 +572,13 @@ const TuteePayment: React.FC = () => {
               await fetchBookings(true);
               await fetchPaymentHistory();
             }}
-            className="px-3 sm:px-4 md:px-6 py-1.5 sm:py-2 md:py-3 text-xs sm:text-sm md:text-base font-semibold md:font-bold text-primary-700 hover:text-primary-800 active:text-primary-900 bg-white hover:bg-primary-50 active:bg-primary-100 rounded-lg md:rounded-xl transition-all shadow-md md:shadow-lg hover:shadow-xl transform hover:scale-105 w-full sm:w-auto touch-manipulation"
+            className="mt-2 sm:mt-0 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-blue-600 hover:text-blue-700 active:text-blue-800 bg-white hover:bg-blue-50 active:bg-blue-100 rounded-lg sm:rounded-xl transition-all shadow-md hover:shadow-lg w-full sm:w-auto touch-manipulation flex items-center justify-center gap-2"
             style={{ WebkitTapHighlightColor: 'transparent' }}
           >
-            <span className="flex items-center justify-center gap-2">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Refresh
-            </span>
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Refresh</span>
           </button>
         </div>
       </div>
@@ -942,8 +1028,11 @@ const TuteePayment: React.FC = () => {
                 // Check if payment is linked to a booking with payment_pending status
                 const bookingRequest = (payment as any).bookingRequest || (payment as any).booking_request;
                 const bookingStatus = bookingRequest?.status || '';
+                // Handle payment_pending and admin_payment_pending statuses
                 const effectivePaymentStatus = bookingStatus.toLowerCase() === 'payment_pending' 
                   ? 'payment_pending' 
+                  : bookingStatus.toLowerCase() === 'admin_payment_pending'
+                  ? 'admin_payment_pending'
                   : payment.status;
                 const status = getStatusDisplay(effectivePaymentStatus);
                 const tutorName = payment.tutor?.user?.name || 'Unknown Tutor';

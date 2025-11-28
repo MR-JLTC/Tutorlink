@@ -55,6 +55,7 @@ const EarningsHistory: React.FC = () => {
   const [tutorId, setTutorId] = useState<number | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
   const [stats, setStats] = useState<EarningsStats>({
     total_earnings: 0,
     pending_earnings: 0,
@@ -121,14 +122,16 @@ const EarningsHistory: React.FC = () => {
     if (!tutorId) return;
     try {
       if (isInitial) setLoading(true);
-      const [sessionsRes, paymentsRes, statsRes] = await Promise.all([
+      const [sessionsRes, paymentsRes, payoutsRes, statsRes] = await Promise.all([
         apiClient.get(`/tutors/${tutorId}/sessions`),
         apiClient.get(`/tutors/${tutorId}/payments`),
+        apiClient.get(`/tutors/${tutorId}/payouts`),
         apiClient.get(`/tutors/${tutorId}/earnings-stats`)
       ]);
       
       setSessions(sessionsRes.data);
       setPayments(paymentsRes.data);
+      setPayouts(payoutsRes.data || []);
       setStats(statsRes.data);
     } catch (error) {
       console.error('Failed to fetch earnings data:', error);
@@ -182,7 +185,7 @@ const EarningsHistory: React.FC = () => {
     return p.status === paymentsFilter;
   });
 
-  // Prepare chart data for payments over time (only payments with sender = "admin")
+  // Prepare chart data for payouts over time (only payouts with status = "released")
   const chartData = useMemo(() => {
     const lastNMonths = Array.from({ length: monthsFilter }, (_, i) => {
       const date = new Date();
@@ -195,16 +198,16 @@ const EarningsHistory: React.FC = () => {
     });
 
     return lastNMonths.map(({ month, monthIndex, year }) => {
-      // Filter payments by sender = "admin" and date
-      const monthPayments = payments.filter(p => {
-        const paymentDate = new Date(p.created_at);
-        const sender = (p as any)?.sender;
-        return paymentDate.getMonth() === monthIndex && 
-               paymentDate.getFullYear() === year &&
-               sender === 'admin';
+      // Filter payouts by status = "released" and date
+      const monthPayouts = payouts.filter(p => {
+        if (!p.created_at) return false;
+        const payoutDate = new Date(p.created_at);
+        return payoutDate.getMonth() === monthIndex && 
+               payoutDate.getFullYear() === year &&
+               p.status === 'released';
       });
 
-      const totalAmount = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const totalAmount = monthPayouts.reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
       const netAmount = totalAmount * 0.87; // After 13% service fee
       const serviceFee = totalAmount * 0.13;
 
@@ -215,84 +218,48 @@ const EarningsHistory: React.FC = () => {
         'Service Fee': serviceFee
       };
     });
-  }, [payments, monthsFilter]);
+  }, [payouts, monthsFilter]);
 
-  // Calculate total earnings from admin status payments only
+  // Calculate total earnings from payouts with status 'released'
   const totalAdminEarnings = useMemo(() => {
-    return payments
-      .filter(p => p.status === 'admin_confirmed' || p.status === 'admin_paid')
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-  }, [payments]);
+    return payouts
+      .filter(p => p.status === 'released')
+      .reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
+  }, [payouts]);
 
-  // Calculate service fee information
+  // Calculate service fee information from payouts with status 'released'
   const totalReceived = useMemo(() => {
-    return payments
-      .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
-      .reduce((sum, p) => sum + Number(p.amount), 0);
-  }, [payments]);
+    return payouts
+      .filter(p => p.status === 'released')
+      .reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
+  }, [payouts]);
 
   const totalServiceFee = totalReceived * 0.13;
   const netEarnings = totalReceived * 0.87;
 
-  // Calculate upcoming earnings: Sum payments with sender='tutee', subtract payments with sender='admin', then apply 13% deduction
+  // Calculate upcoming earnings: Sum all payments, subtract released payouts, then apply 13% deduction
   const upcomingEarnings = useMemo(() => {
     if (!payments || payments.length === 0) {
-      console.log('Upcoming Earnings: No payments found');
       return 0;
     }
     
-    // Log all payments to see their structure
-    console.log('All payments for upcoming earnings calculation:', payments.map(p => ({
-      payment_id: p.payment_id || p.id,
-      amount: p.amount,
-      status: p.status,
-      sender: (p as any).sender,
-      tutor_id: (p as any).tutor_id || p.tutor_id
-    })));
-    
-    // Sum all payments with sender='tutee' for this tutor
-    const tuteePayments = payments.filter(p => {
-      const sender = (p as any)?.sender;
-      return sender === 'tutee';
-    });
-    
-    const tuteePaymentsTotal = tuteePayments.reduce((sum, p) => {
+    // Sum all payments for this tutor
+    const totalPayments = payments.reduce((sum, p) => {
       const amount = Number(p.amount) || 0;
       return sum + amount;
     }, 0);
     
-    // Subtract all payments with sender='admin' for this tutor
-    const adminPayments = payments.filter(p => {
-      const sender = (p as any)?.sender;
-      return sender === 'admin';
-    });
+    // Sum all released payouts for this tutor
+    const releasedPayouts = payouts
+      .filter(p => p.status === 'released')
+      .reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
     
-    const adminPaymentsTotal = adminPayments.reduce((sum, p) => {
-      const amount = Number(p.amount) || 0;
-      return sum + amount;
-    }, 0);
-    
-    // Calculate net amount: (tutee payments - admin payments) * 0.87 (after 13% service fee)
-    const difference = tuteePaymentsTotal - adminPaymentsTotal;
+    // Calculate net amount: (total payments - released payouts) * 0.87 (after 13% service fee)
+    const difference = totalPayments - releasedPayouts;
     const netAmount = difference * 0.87;
     
-    // Debug logging
-    console.log('Upcoming Earnings Calculation:', {
-      totalPayments: payments.length,
-      tuteePaymentsCount: tuteePayments.length,
-      adminPaymentsCount: adminPayments.length,
-      tuteePaymentsTotal: tuteePaymentsTotal,
-      adminPaymentsTotal: adminPaymentsTotal,
-      difference: difference,
-      netAmount: netAmount,
-      tuteePayments: tuteePayments.map(p => ({ id: p.payment_id || p.id, amount: p.amount, sender: (p as any).sender })),
-      adminPayments: adminPayments.map(p => ({ id: p.payment_id || p.id, amount: p.amount, sender: (p as any).sender }))
-    });
-    
-    const result = Math.max(0, netAmount || 0);
-    console.log('Upcoming Earnings Final Result:', result);
-    return result;
-  }, [payments]);
+    return Math.max(0, netAmount || 0);
+  }, [payments, payouts]);
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
