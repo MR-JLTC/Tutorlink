@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import apiClient, { getFileUrl } from '../../services/api';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
@@ -16,6 +16,19 @@ interface TutorProfile {
   subjects: string[];
   rating: number;
   total_reviews: number;
+}
+
+interface BookingRequest {
+  id: number;
+  subject: string;
+  tutee_rating?: number;
+  status: string;
+}
+
+interface SubjectRating {
+  subject: string;
+  averageRating: number;
+  totalRatings: number;
 }
 
 const ProfileSetup: React.FC = () => {
@@ -36,6 +49,7 @@ const ProfileSetup: React.FC = () => {
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [gcashQR, setGcashQR] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -76,8 +90,19 @@ const ProfileSetup: React.FC = () => {
   useEffect(() => {
     if (tutorId) {
       fetchProfile();
+      fetchBookingRequests();
     }
   }, [tutorId]);
+
+  const fetchBookingRequests = async () => {
+    if (!tutorId) return;
+    try {
+      const response = await apiClient.get(`/tutors/${tutorId}/booking-requests`);
+      setBookingRequests(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch booking requests:', error);
+    }
+  };
 
   const fetchProfile = async () => {
     if (!tutorId) return;
@@ -328,6 +353,32 @@ const ProfileSetup: React.FC = () => {
     ));
   };
 
+  // Calculate average rating per subject
+  const subjectRatings = useMemo(() => {
+    const ratingsBySubject: Record<string, number[]> = {};
+    
+    bookingRequests.forEach(booking => {
+      if (booking.tutee_rating && booking.tutee_rating > 0 && booking.subject) {
+        if (!ratingsBySubject[booking.subject]) {
+          ratingsBySubject[booking.subject] = [];
+        }
+        ratingsBySubject[booking.subject].push(Number(booking.tutee_rating));
+      }
+    });
+
+    const subjectRatingList: SubjectRating[] = Object.entries(ratingsBySubject).map(([subject, ratings]) => {
+      const sum = ratings.reduce((acc, rating) => acc + rating, 0);
+      const average = sum / ratings.length;
+      return {
+        subject,
+        averageRating: average,
+        totalRatings: ratings.length
+      };
+    });
+
+    return subjectRatingList.sort((a, b) => b.averageRating - a.averageRating);
+  }, [bookingRequests]);
+
   return (
     <div className="space-y-4 sm:space-y-5 md:space-y-6 pb-6 sm:pb-8 md:pb-10">
       {/* Enhanced Header */}
@@ -510,25 +561,14 @@ const ProfileSetup: React.FC = () => {
             <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Your Profile</h2>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
               <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Approved Subjects</p>
               <p className="text-2xl sm:text-3xl font-bold text-primary-700">{profile.subjects.length}</p>
             </div>
             <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
-              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Rating</p>
-              <div className="flex items-center space-x-2">
-                <div className="flex items-center space-x-1">
-                  {renderStars(profile.rating)}
-                </div>
-                <span className="text-base sm:text-lg font-bold text-primary-700">
-                  {profile.total_reviews > 0 ? profile.rating.toFixed(1) : 'No ratings yet'}
-                </span>
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 p-4 rounded-xl border-2 border-primary-200/50 shadow-lg hover:shadow-xl transition-all">
-              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Reviews</p>
-              <p className="text-2xl sm:text-3xl font-bold text-primary-700">{profile.total_reviews}</p>
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide mb-2">Total Reviews</p>
+              <p className="text-2xl sm:text-3xl font-bold text-primary-700">{subjectRatings.reduce((sum, sr) => sum + sr.totalRatings, 0)}</p>
             </div>
           </div>
         </div>
@@ -748,27 +788,34 @@ const ProfileSetup: React.FC = () => {
         </div>
       </Card>
 
-      {/* Recent Reviews */}
-      {profile.total_reviews > 0 && (
+      {/* Average Rating per Subject */}
+      {subjectRatings.length > 0 && (
         <Card className="p-5 sm:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
               <Star className="h-5 w-5 text-white" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Student Feedback</h2>
+            <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Average Rating per Subject</h2>
           </div>
-          <div className="bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 border-2 border-primary-200/50 rounded-xl p-5 shadow-lg">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
-              <div className="flex items-center space-x-1.5">
-                {renderStars(profile.rating)}
+          <div className="space-y-3 sm:space-y-4">
+            {subjectRatings.map((subjectRating) => (
+              <div key={subjectRating.subject} className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-br from-primary-50 via-primary-100/50 to-primary-50 rounded-lg border-2 border-primary-200/50 shadow-sm hover:shadow-md transition-all">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm sm:text-base font-semibold text-slate-900 mb-1 truncate">{subjectRating.subject}</p>
+                  <p className="text-xs sm:text-sm text-slate-600">
+                    {subjectRating.totalRatings} {subjectRating.totalRatings === 1 ? 'rating' : 'ratings'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 sm:gap-3 ml-4">
+                  <div className="flex items-center gap-1">
+                    {renderStars(subjectRating.averageRating)}
+                  </div>
+                  <span className="text-base sm:text-lg md:text-xl font-bold text-primary-700 min-w-[3rem] text-right">
+                    {subjectRating.averageRating.toFixed(1)}
+                  </span>
+                </div>
               </div>
-              <span className="text-base sm:text-lg font-bold text-primary-700">
-                {profile.rating.toFixed(1)} out of 5.0
-              </span>
-            </div>
-            <p className="text-sm text-primary-800">
-              Based on {profile.total_reviews} student review{profile.total_reviews !== 1 ? 's' : ''}
-            </p>
+            ))}
           </div>
         </Card>
       )}

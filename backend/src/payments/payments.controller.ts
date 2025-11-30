@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, UseGuards, Post, UploadedFile, UseInterceptors, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body, UseGuards, Post, UploadedFile, UseInterceptors, Request, BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UpdatePaymentDisputeDto } from './payment.dto';
@@ -110,7 +110,27 @@ export class PaymentsController {
   }
 
   @Post('process-admin-payment/:bookingId')
-  async processAdminPayment(@Param('bookingId') bookingId: string) {
-    return this.paymentsService.processAdminPayment(+bookingId);
+  @UseInterceptors(FileInterceptor('receipt', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const dest = path.join(process.cwd(), 'tutor_documents');
+        if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+        cb(null, dest);
+      },
+      filename: (req: any, file, cb) => {
+        const ext = path.extname(file.originalname) || '.jpg';
+        const filename = `adminPaymentReceipt_${Date.now()}${ext}`;
+        cb(null, filename);
+      }
+    })
+  }))
+  async processAdminPayment(
+    @Param('bookingId') bookingId: string,
+    @UploadedFile() receipt?: any
+  ) {
+    if (!receipt) {
+      throw new BadRequestException('Payment receipt is required');
+    }
+    return this.paymentsService.processAdminPayment(+bookingId, receipt);
   }
 }

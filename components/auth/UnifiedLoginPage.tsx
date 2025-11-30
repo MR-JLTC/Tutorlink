@@ -358,7 +358,7 @@ const UnifiedLoginPage: React.FC = () => {
                             onChange={handleInputChange}
                             minLength={7}
                             maxLength={13}
-                            className={`${inputStyles} pr-10 [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-strong-password-auto-fill-button]:hidden`}
+                            className="w-full py-3 px-3 pr-10 bg-white/95 backdrop-blur-sm text-slate-900 border-2 border-slate-200 rounded-lg shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-sky-500/20 focus:border-sky-500 transition-all duration-300 placeholder-slate-400 text-sm font-medium [&::-ms-reveal]:hidden [&::-webkit-credentials-auto-fill-button]:hidden [&::-webkit-strong-password-auto-fill-button]:hidden"
                             placeholder="Enter your password"
                           />
                           <button

@@ -2245,7 +2245,11 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
                     type="text"
                     id="other-subject"
                     value={otherSubject}
-                    onChange={(e) => setOtherSubject(e.target.value)}
+                    onChange={(e) => {
+                      // Only allow letters and spaces
+                      const filteredValue = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                      setOtherSubject(filteredValue);
+                    }}
                     placeholder="e.g., Astrophysics"
                     className={`flex-grow w-full px-4 py-2 border rounded-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 placeholder-slate-400 ${
                       !universityId || !courseId

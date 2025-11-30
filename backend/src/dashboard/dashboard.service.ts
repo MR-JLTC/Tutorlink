@@ -7,6 +7,7 @@ import { Subject } from '../database/entities/subject.entity';
 import { Student } from '../database/entities/student.entity';
 import { University } from '../database/entities/university.entity';
 import { Course } from '../database/entities/course.entity';
+import { BookingRequest } from '../database/entities/booking-request.entity';
 
 @Injectable()
 export class DashboardService {
@@ -29,6 +30,8 @@ export class DashboardService {
     private coursesRepository: Repository<Course>,
     @InjectRepository(Payout)
     private payoutsRepository: Repository<Payout>,
+    @InjectRepository(BookingRequest)
+    private bookingRequestRepository: Repository<BookingRequest>,
   ) {}
 
   async getStats() {
@@ -65,8 +68,8 @@ export class DashboardService {
       filters: 'payouts.status = "released"'
     });
 
-    // Confirmed sessions (completed sessions)
-    const confirmedSessions = await this.sessionsRepository.count({
+    // Confirmed sessions (completed booking requests)
+    const confirmedSessions = await this.bookingRequestRepository.count({
       where: { status: 'completed' },
     });
 
@@ -243,39 +246,25 @@ export class DashboardService {
     });
     const courseDistribution = Object.values(courseAgg).sort((a, b) => (b.tutors + b.tutees) - (a.tutors + a.tutees));
 
-    // Sessions per subject (completed)
-    const subjectSessionsRaw = await this.sessionsRepository
-      .createQueryBuilder('session')
-      .select('session.subject_id', 'subject_id')
-      .addSelect('COUNT(session.session_id)', 'sessions')
-      .where('session.status = :status', { status: 'completed' })
-      .groupBy('session.subject_id')
+    // Sessions per subject (from completed booking requests)
+    // Use booking requests with status 'completed' or 'admin_payment_pending' to count sessions per subject
+    const subjectSessionsRaw = await this.bookingRequestRepository
+      .createQueryBuilder('booking')
+      .select('booking.subject', 'subject')
+      .addSelect('COUNT(booking.id)', 'sessions')
+      .where('booking.status IN (:...statuses)', { statuses: ['completed', 'admin_payment_pending'] })
+      .groupBy('booking.subject')
       .orderBy('sessions', 'DESC')
       .getRawMany();
-    const subjIdsAll = subjectSessionsRaw.map((r) => Number(r.subject_id)).filter(Boolean);
-    const subjMapAll: Record<number, string> = {};
-    if (subjIdsAll.length) {
-      // Use In() instead of deprecated findByIds
-      const subjectsAll = await this.subjectsRepository.find({
-        where: subjIdsAll.map(id => ({ subject_id: id }))
-      });
-      subjectsAll.forEach(s => { 
-        const subjectId = (s as any).subject_id;
-        const subjectName = (s as any).subject_name || (s as any).name;
-        if (subjectId && subjectName) {
-          subjMapAll[subjectId] = subjectName;
-        }
-      });
-    }
+    
     const subjectSessions = subjectSessionsRaw.map((r: any) => {
-      const subjectId = Number(r.subject_id);
-      const subjectName = subjMapAll[subjectId] || 'Unknown';
+      const subjectName = r.subject || 'Unknown';
       return {
-        subjectId: subjectId,
+        subjectId: null, // Booking requests store subject as string, not ID
         subjectName: subjectName,
         sessions: Number(r.sessions) || 0,
       };
-    }).filter(s => s.subjectName !== 'Unknown'); // Filter out Unknown subjects
+    }).filter(s => s.subjectName && s.subjectName !== 'Unknown'); // Filter out Unknown subjects
 
     return {
       totalUsers,

@@ -40,7 +40,7 @@ export class EmailService {
       const verifyPromise = Promise.race([
         this.transporter.verify(),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Verification timeout')), 5000)
+          setTimeout(() => reject(new Error('Verification timeout')), 15000) // 15 seconds to allow for connection setup
         )
       ]);
       

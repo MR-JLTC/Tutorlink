@@ -11,7 +11,7 @@ interface Payment {
   student_id: number;
   tutor_id: number;
   amount: number;
-  status: 'pending' | 'admin_confirmed' | 'confirmed' | 'rejected' | 'refunded';
+  status: 'pending' | 'paid' | 'admin_confirmed' | 'confirmed' | 'rejected' | 'refunded';
   subject?: string;
   created_at: string;
   rejection_reason?: string;
@@ -111,7 +111,7 @@ const TuteePayment: React.FC = () => {
       // Filter payments for current user (student)
       // ONLY include payments where:
       // 1. The payment is associated with the current user (student) by student_id or user_id, AND
-      // 2. The payment has sender='tutee' (exclude all other sender values)
+      // 2. The payment has status 'confirmed', 'disputed', or 'refunded'
       const userPayments = allPayments.filter((p: PaymentHistory) => {
         if (!user?.user_id) return false;
         
@@ -129,10 +129,13 @@ const TuteePayment: React.FC = () => {
           (p as any).student?.user?.user_id === user.user_id ||
           (paymentStudentId && !userStudentId && paymentStudentId === (user as any).id);
         
-        // ONLY include payments with sender='tutee' (exclude all others)
-        const isTuteeSender = (p as any).sender === 'tutee';
+        // ONLY include payments with status 'confirmed', 'disputed', or 'refunded'
+        const paymentStatus = (p.status || '').toLowerCase();
+        const hasValidStatus = paymentStatus === 'confirmed' || 
+                               paymentStatus === 'disputed' || 
+                               paymentStatus === 'refunded';
         
-        return isUserPayment && isTuteeSender;
+        return isUserPayment && hasValidStatus;
       });
       
       // Sort by created_at descending (newest first)
@@ -327,7 +330,7 @@ const TuteePayment: React.FC = () => {
           }
           
           const hasPaymentStatus = booking.payment && 
-            ['pending', 'admin_confirmed', 'confirmed', 'rejected', 'refunded'].includes(
+            ['pending', 'paid', 'admin_confirmed', 'confirmed', 'rejected', 'refunded'].includes(
               (booking.payment.status || '').toLowerCase()
             );
           
@@ -341,6 +344,7 @@ const TuteePayment: React.FC = () => {
             bookingStatus === 'payment_pending' ||
             bookingStatus === 'payment_rejected' ||
             bookingStatus === 'pending' ||
+            bookingStatus === 'paid' ||
             bookingStatus === 'admin_confirmed' ||
             bookingStatus === 'confirmed' ||
             bookingStatus === 'refunded' ||
@@ -451,6 +455,13 @@ const TuteePayment: React.FC = () => {
           color: 'text-yellow-700 bg-yellow-50 border-yellow-200',
           dotColor: 'bg-yellow-500'
         };
+      case 'paid':
+        return {
+          icon: <CheckCircle2 className="h-5 w-5 text-blue-500" />,
+          text: 'Paid',
+          color: 'text-blue-700 bg-blue-50 border-blue-200',
+          dotColor: 'bg-blue-500'
+        };
       case 'admin_confirmed':
         return {
           icon: <CheckCircle2 className="h-5 w-5 text-indigo-500" />,
@@ -461,9 +472,16 @@ const TuteePayment: React.FC = () => {
       case 'confirmed':
         return {
           icon: <CheckCircle2 className="h-5 w-5 text-green-500" />,
-          text: 'Payment Confirmed',
+          text: 'Paid',
           color: 'text-green-700 bg-green-50 border-green-200',
           dotColor: 'bg-green-500'
+        };
+      case 'disputed':
+        return {
+          icon: <AlertCircle className="h-5 w-5 text-purple-500" />,
+          text: 'Disputed',
+          color: 'text-purple-700 bg-purple-50 border-purple-200',
+          dotColor: 'bg-purple-500'
         };
       case 'rejected':
         return {
@@ -947,6 +965,15 @@ const TuteePayment: React.FC = () => {
                   </div>
                 )}
 
+                {effectiveStatus.toLowerCase() === 'paid' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4">
+                    <div className="flex items-center text-blue-700">
+                      <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 mr-2 flex-shrink-0" />
+                      <p className="text-xs sm:text-sm">Your payment has been recorded. Waiting for admin confirmation.</p>
+                    </div>
+                  </div>
+                )}
+
                 {effectiveStatus.toLowerCase() === 'admin_confirmed' && (
                   <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 sm:p-4 mb-4">
                     <div className="flex items-center text-indigo-700">
@@ -1028,17 +1055,17 @@ const TuteePayment: React.FC = () => {
                 // Check if payment is linked to a booking with payment_pending status
                 const bookingRequest = (payment as any).bookingRequest || (payment as any).booking_request;
                 const bookingStatus = bookingRequest?.status || '';
-                // Handle payment_pending and admin_payment_pending statuses
-                const effectivePaymentStatus = bookingStatus.toLowerCase() === 'payment_pending' 
-                  ? 'payment_pending' 
-                  : bookingStatus.toLowerCase() === 'admin_payment_pending'
-                  ? 'admin_payment_pending'
-                  : payment.status;
-                const status = getStatusDisplay(effectivePaymentStatus);
+                // For payment history, use the payment status directly (already filtered to confirmed/disputed/refunded)
+                // If status is 'confirmed', display it as 'paid' in the UI
+                const paymentStatus = (payment.status || '').toLowerCase();
+                const displayStatus = paymentStatus === 'confirmed' ? 'paid' : paymentStatus;
+                const status = getStatusDisplay(displayStatus);
                 const tutorName = payment.tutor?.user?.name || 'Unknown Tutor';
                 const paymentDate = new Date(payment.created_at);
-                const isConfirmed = payment.status === 'confirmed' || payment.status === 'admin_confirmed';
-                const isRejected = payment.status === 'rejected';
+                const isConfirmed = paymentStatus === 'confirmed';
+                const isRejected = paymentStatus === 'rejected';
+                const isDisputed = paymentStatus === 'disputed';
+                const isRefunded = paymentStatus === 'refunded';
                 
                 // Get session rate and duration for calculation
                 const sessionRate = payment.tutor?.session_rate_per_hour || 
@@ -1056,8 +1083,9 @@ const TuteePayment: React.FC = () => {
                   {/* Enhanced Decorative gradient bar */}
                   <div className={`absolute top-0 left-0 right-0 h-1.5 md:h-2 ${
                     isConfirmed ? 'bg-gradient-to-r from-green-400 via-emerald-500 to-green-600 shadow-md shadow-green-500/50' :
+                    isDisputed ? 'bg-gradient-to-r from-purple-400 via-purple-500 to-purple-600 shadow-md shadow-purple-500/50' :
+                    isRefunded ? 'bg-gradient-to-r from-orange-400 via-orange-500 to-orange-600 shadow-md shadow-orange-500/50' :
                     isRejected ? 'bg-gradient-to-r from-red-400 via-rose-500 to-red-600 shadow-md shadow-red-500/50' :
-                    payment.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600 shadow-md shadow-yellow-500/50' :
                     'bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700 shadow-md shadow-primary-500/50'
                   }`} />
                   
@@ -1143,19 +1171,33 @@ const TuteePayment: React.FC = () => {
                             </div>
                           </div>
                           
-                          {payment.subject && (
-                            <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200">
-                              <div className="p-1.5 sm:p-2 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-lg shadow-sm flex-shrink-0">
-                                <svg className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                </svg>
+                          {(() => {
+                            // Get subject name - handle both string and object formats
+                            const subject = (payment as any).subject;
+                            let subjectName: string | null = null;
+                            
+                            if (typeof subject === 'string') {
+                              subjectName = subject;
+                            } else if (subject?.subject_name) {
+                              subjectName = subject.subject_name;
+                            } else if (bookingRequest?.subject) {
+                              subjectName = bookingRequest.subject;
+                            }
+                            
+                            return subjectName ? (
+                              <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200">
+                                <div className="p-1.5 sm:p-2 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-lg shadow-sm flex-shrink-0">
+                                  <svg className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                  </svg>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] sm:text-xs text-slate-500 font-bold mb-0.5 uppercase tracking-wide">Subject</p>
+                                  <p className="text-sm sm:text-base md:text-base font-bold text-slate-900 break-words">{subjectName}</p>
+                                </div>
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-[10px] sm:text-xs text-slate-500 font-bold mb-0.5 uppercase tracking-wide">Subject</p>
-                                <p className="text-sm sm:text-base md:text-base font-bold text-slate-900 break-words">{payment.subject}</p>
-                              </div>
-                            </div>
-                          )}
+                            ) : null;
+                          })()}
                           
                           <div className="group/item flex items-start gap-2.5 sm:gap-3 p-2.5 sm:p-3 bg-white/80 backdrop-blur-sm rounded-lg md:rounded-xl border-2 border-slate-200 shadow-sm hover:shadow-md hover:border-primary-300 transition-all duration-200 sm:col-span-2">
                             <div className="p-1.5 sm:p-2 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg shadow-sm flex-shrink-0">

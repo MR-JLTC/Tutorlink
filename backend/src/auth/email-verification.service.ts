@@ -277,6 +277,13 @@ export class EmailVerificationService {
           user: gmailUser,
           pass: gmailAppPassword,
         },
+        tls: {
+          // Do not fail on invalid certificates
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 10000, // 10 seconds timeout
+        greetingTimeout: 10000,
+        socketTimeout: 10000,
       });
 
       const mailOptions = {
@@ -347,7 +354,7 @@ export class EmailVerificationService {
       
     } catch (error) {
       console.log('❌ Failed to send verification email:', error);
-      throw new Error('Failed to send verification email');
+      throw new Error(`Failed to send verification email: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

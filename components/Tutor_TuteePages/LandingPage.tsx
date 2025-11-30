@@ -27,7 +27,7 @@ const LightbulbIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 
 
 const LiveStats: React.FC = () => {
-  const [stats, setStats] = useState<{ users: number; tutors: number; universities: number; courses: number; sessions: number } | null>(null);
+  const [stats, setStats] = useState<{ students: number; tutors: number; universities: number; courses: number; sessions: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,8 +60,8 @@ const LiveStats: React.FC = () => {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-16">
-      {['Users', 'Tutors', 'Universities', 'Courses', 'Sessions'].map((label, idx) => {
-        const key = label.toLowerCase() as 'users' | 'tutors' | 'universities' | 'courses' | 'sessions';
+      {['Students', 'Tutors', 'Universities', 'Courses', 'Sessions'].map((label, idx) => {
+        const key = label.toLowerCase() as 'students' | 'tutors' | 'universities' | 'courses' | 'sessions';
         const value = stats ? stats[key] : undefined;
         return (
           <div key={label} className="bg-white rounded-xl border border-slate-100 p-5 text-center shadow-sm">
@@ -752,8 +752,7 @@ const LandingPage: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-white mb-2">Business Hours</h3>
-                    <p className="text-slate-300">Monday - Friday: 9:00 AM - 6:00 PM</p>
-                    <p className="text-slate-300">Saturday: 10:00 AM - 4:00 PM</p>
+                    <p className="text-slate-300">Monday - Sunday: 24hrs</p>
                   </div>
                 </div>
 
@@ -842,14 +841,15 @@ const LandingPage: React.FC = () => {
           <Modal isOpen={aboutOpen} onClose={() => setAboutOpen(false)} title="About TutorLink">
             <div className="space-y-4 text-slate-700">
               <p>
-                TutorLink connects university students with verified local tutors for one‑on‑one learning.
-                We focus on transparent profiles, simple booking, and secure confirmations so students
-                can learn confidently and tutors can grow sustainable careers.
+                TutorLink is a student-to-student learning platform where university students can become tutors 
+                and help other students excel in their studies. Our platform empowers students to share their 
+                knowledge while earning money, creating a collaborative learning community within Philippine universities.
               </p>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Student‑first experience: relevant subjects, clear rates, and reviews</li>
-                <li>Verified tutors from Philippine universities and communities</li>
-                <li>Fast communication and reliable scheduling tools</li>
+                <li>Student-to-student learning: Students teach students, creating a peer-to-peer educational ecosystem</li>
+                <li>Empowerment through knowledge sharing: Any student can become a tutor and help fellow students succeed</li>
+                <li>University-focused community: Connecting students within the same academic environment for better understanding and support</li>
+                <li>Flexible earning opportunities: Students can monetize their expertise while helping others learn</li>
               </ul>
             </div>
           </Modal>

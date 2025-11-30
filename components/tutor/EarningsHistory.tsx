@@ -28,7 +28,7 @@ interface Payment {
   session_id?: number;
   amount: number;
   subject?: string | null;
-  status: 'pending' | 'admin_confirmed' | 'confirmed' | 'rejected' | 'refunded';
+  status: 'pending' | 'paid' | 'admin_confirmed' | 'confirmed' | 'rejected' | 'refunded';
   payment_date?: string;
   created_at: string;
   student_name?: string;
@@ -48,6 +48,19 @@ interface EarningsStats {
   total_hours: number;
 }
 
+interface BookingRequest {
+  id: number;
+  subject: string;
+  tutee_rating?: number;
+  status: string;
+}
+
+interface SubjectRating {
+  subject: string;
+  averageRating: number;
+  totalRatings: number;
+}
+
 const EarningsHistory: React.FC = () => {
   const { user } = useAuth();
   const { notify } = useToast();
@@ -56,6 +69,7 @@ const EarningsHistory: React.FC = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
+  const [bookingRequests, setBookingRequests] = useState<BookingRequest[]>([]);
   const [stats, setStats] = useState<EarningsStats>({
     total_earnings: 0,
     pending_earnings: 0,
@@ -122,17 +136,19 @@ const EarningsHistory: React.FC = () => {
     if (!tutorId) return;
     try {
       if (isInitial) setLoading(true);
-      const [sessionsRes, paymentsRes, payoutsRes, statsRes] = await Promise.all([
+      const [sessionsRes, paymentsRes, payoutsRes, statsRes, bookingsRes] = await Promise.all([
         apiClient.get(`/tutors/${tutorId}/sessions`),
         apiClient.get(`/tutors/${tutorId}/payments`),
         apiClient.get(`/tutors/${tutorId}/payouts`),
-        apiClient.get(`/tutors/${tutorId}/earnings-stats`)
+        apiClient.get(`/tutors/${tutorId}/earnings-stats`),
+        apiClient.get(`/tutors/${tutorId}/booking-requests`)
       ]);
       
       setSessions(sessionsRes.data);
       setPayments(paymentsRes.data);
       setPayouts(payoutsRes.data || []);
       setStats(statsRes.data);
+      setBookingRequests(bookingsRes.data || []);
     } catch (error) {
       console.error('Failed to fetch earnings data:', error);
     } finally {
@@ -177,15 +193,87 @@ const EarningsHistory: React.FC = () => {
     return session.status === filter;
   });
 
-  const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
-  const approvedPaymentsCount = payments.filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid').length;
-  const filteredPayments = payments.filter(p => {
-    if (paymentsFilter === 'all') return true;
-    if (paymentsFilter === 'approved') return p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid';
-    return p.status === paymentsFilter;
-  });
+  // Get payment IDs that have payouts (convert to numbers for consistent comparison)
+  // Include all payouts regardless of status - if a payout exists, the payment has been processed
+  const paymentIdsWithPayouts = useMemo(() => {
+    const payoutPaymentIds = payouts
+      .map(p => {
+        // Try multiple possible field names for payment_id
+        const pid = p.payment_id || (p.payment as any)?.payment_id || (p.payment as any)?.id;
+        const numPid = pid ? Number(pid) : null;
+        if (numPid && !isNaN(numPid)) {
+          return numPid;
+        }
+        return null;
+      })
+      .filter((pid: any) => pid !== null && !isNaN(pid));
+    
+    // Debug logging
+    if (payouts.length > 0) {
+      console.log('[EarningsHistory] Payouts:', payouts);
+      console.log('[EarningsHistory] Payment IDs from payouts:', payoutPaymentIds);
+    }
+    
+    return new Set(payoutPaymentIds);
+  }, [payouts]);
 
-  // Prepare chart data for payouts over time (only payouts with status = "released")
+  // Filter payments: only show "confirmed" payments that don't have payouts
+  const confirmedPaymentsWithoutPayouts = useMemo(() => {
+    const confirmedPayments = payments.filter(p => p.status === 'confirmed');
+    
+    const filtered = confirmedPayments.filter(p => {
+      const paymentId = p.payment_id || p.id;
+      const paymentIdNum = paymentId ? Number(paymentId) : null;
+      
+      // Exclude if payment ID is invalid
+      if (paymentIdNum === null || isNaN(paymentIdNum)) {
+        console.warn('[EarningsHistory] Payment with invalid ID:', p);
+        return false;
+      }
+      
+      const hasPayout = paymentIdsWithPayouts.has(paymentIdNum);
+      
+      // Debug logging for payments with payouts
+      if (hasPayout) {
+        console.log(`[EarningsHistory] Excluding payment ${paymentIdNum} - has payout`);
+      }
+      
+      return !hasPayout;
+    });
+    
+    // Debug logging
+    console.log(`[EarningsHistory] Total payments: ${payments.length}`);
+    console.log(`[EarningsHistory] Confirmed payments: ${confirmedPayments.length}`);
+    console.log(`[EarningsHistory] Confirmed without payouts: ${filtered.length}`);
+    console.log(`[EarningsHistory] Payment IDs with payouts:`, Array.from(paymentIdsWithPayouts));
+    
+    return filtered;
+  }, [payments, paymentIdsWithPayouts]);
+
+  const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
+  const approvedPaymentsCount = confirmedPaymentsWithoutPayouts.length;
+  const filteredPayments = useMemo(() => {
+    if (paymentsFilter === 'all') {
+      return confirmedPaymentsWithoutPayouts;
+    }
+    if (paymentsFilter === 'approved') {
+      return confirmedPaymentsWithoutPayouts;
+    }
+    return payments.filter(p => p.status === paymentsFilter);
+  }, [paymentsFilter, confirmedPaymentsWithoutPayouts, payments]);
+
+  // Filter payments with status "confirmed" that don't have payouts (for calculations)
+  const confirmedPaymentsWithoutPayoutsForCalc = useMemo(() => {
+    return payments.filter(p => {
+      const paymentId = p.payment_id || p.id;
+      const paymentIdNum = paymentId ? Number(paymentId) : null;
+      return p.status === 'confirmed' && 
+             paymentIdNum !== null &&
+             !paymentIdsWithPayouts.has(paymentIdNum);
+    });
+  }, [payments, paymentIdsWithPayouts]);
+
+  // Prepare chart data for payouts over time
   const chartData = useMemo(() => {
     const lastNMonths = Array.from({ length: monthsFilter }, (_, i) => {
       const date = new Date();
@@ -198,24 +286,28 @@ const EarningsHistory: React.FC = () => {
     });
 
     return lastNMonths.map(({ month, monthIndex, year }) => {
-      // Filter payouts by status = "released" and date
+      // Filter payouts by date
       const monthPayouts = payouts.filter(p => {
         if (!p.created_at) return false;
         const payoutDate = new Date(p.created_at);
         return payoutDate.getMonth() === monthIndex && 
-               payoutDate.getFullYear() === year &&
-               p.status === 'released';
+               payoutDate.getFullYear() === year;
       });
 
-      const totalAmount = monthPayouts.reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
-      const netAmount = totalAmount * 0.87; // After 13% service fee
-      const serviceFee = totalAmount * 0.13;
+      // Calculate totals from payouts
+      // amount_released is already 87% of the original payment
+      // So gross = amount_released / 0.87
+      // Service fee = gross * 0.13 = (amount_released / 0.87) * 0.13
+      const totalAmountReleased = monthPayouts.reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
+      const grossAmount = totalAmountReleased / 0.87; // Convert back to gross (original payment amount)
+      const netEarnings = totalAmountReleased; // Already net (87% of original)
+      const serviceFee = grossAmount * 0.13; // 13% of gross
 
       return {
         month,
-        'Total Amount to Receive': totalAmount,
-        'Net Earnings': netAmount,
-        'Service Fee': serviceFee
+        'Gross Amount': Number(grossAmount.toFixed(2)),
+        'Net Earnings': Number(netEarnings.toFixed(2)),
+        'Service Fee': Number(serviceFee.toFixed(2))
       };
     });
   }, [payouts, monthsFilter]);
@@ -227,39 +319,43 @@ const EarningsHistory: React.FC = () => {
       .reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
   }, [payouts]);
 
-  // Calculate service fee information from payouts with status 'released'
-  const totalReceived = useMemo(() => {
-    return payouts
-      .filter(p => p.status === 'released')
-      .reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
-  }, [payouts]);
-
-  const totalServiceFee = totalReceived * 0.13;
-  const netEarnings = totalReceived * 0.87;
-
-  // Calculate upcoming earnings: Sum all payments, subtract released payouts, then apply 13% deduction
+  // Calculate upcoming earnings: Sum of 87% (after 13% deduction) of each confirmed payment without payout
   const upcomingEarnings = useMemo(() => {
-    if (!payments || payments.length === 0) {
+    if (!confirmedPaymentsWithoutPayoutsForCalc || confirmedPaymentsWithoutPayoutsForCalc.length === 0) {
       return 0;
     }
     
-    // Sum all payments for this tutor
-    const totalPayments = payments.reduce((sum, p) => {
+    return confirmedPaymentsWithoutPayoutsForCalc.reduce((sum, p) => {
+      const amount = Number(p.amount) || 0;
+      const netAmount = amount * 0.87; // After 13% service fee
+      return sum + netAmount;
+    }, 0);
+  }, [confirmedPaymentsWithoutPayoutsForCalc]);
+
+  // Calculate service fee: Sum of 13% of each confirmed payment without payout
+  const totalServiceFee = useMemo(() => {
+    if (!confirmedPaymentsWithoutPayoutsForCalc || confirmedPaymentsWithoutPayoutsForCalc.length === 0) {
+      return 0;
+    }
+    
+    return confirmedPaymentsWithoutPayoutsForCalc.reduce((sum, p) => {
+      const amount = Number(p.amount) || 0;
+      const serviceFee = amount * 0.13; // 13% service fee
+      return sum + serviceFee;
+    }, 0);
+  }, [confirmedPaymentsWithoutPayoutsForCalc]);
+
+  // Calculate gross income: Sum of all confirmed payments without payout (gross amount)
+  const grossIncome = useMemo(() => {
+    if (!confirmedPaymentsWithoutPayoutsForCalc || confirmedPaymentsWithoutPayoutsForCalc.length === 0) {
+      return 0;
+    }
+    
+    return confirmedPaymentsWithoutPayoutsForCalc.reduce((sum, p) => {
       const amount = Number(p.amount) || 0;
       return sum + amount;
     }, 0);
-    
-    // Sum all released payouts for this tutor
-    const releasedPayouts = payouts
-      .filter(p => p.status === 'released')
-      .reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
-    
-    // Calculate net amount: (total payments - released payouts) * 0.87 (after 13% service fee)
-    const difference = totalPayments - releasedPayouts;
-    const netAmount = difference * 0.87;
-    
-    return Math.max(0, netAmount || 0);
-  }, [payments, payouts]);
+  }, [confirmedPaymentsWithoutPayoutsForCalc]);
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }, (_, i) => (
@@ -271,6 +367,39 @@ const EarningsHistory: React.FC = () => {
       />
     ));
   };
+
+  // Calculate exact count of completed sessions from booking requests
+  const exactCompletedSessions = useMemo(() => {
+    return bookingRequests.filter(booking => 
+      booking.status && booking.status.toLowerCase() === 'completed'
+    ).length;
+  }, [bookingRequests]);
+
+  // Calculate average rating per subject
+  const subjectRatings = useMemo(() => {
+    const ratingsBySubject: Record<string, number[]> = {};
+    
+    bookingRequests.forEach(booking => {
+      if (booking.tutee_rating && booking.tutee_rating > 0 && booking.subject) {
+        if (!ratingsBySubject[booking.subject]) {
+          ratingsBySubject[booking.subject] = [];
+        }
+        ratingsBySubject[booking.subject].push(Number(booking.tutee_rating));
+      }
+    });
+
+    const subjectRatingList: SubjectRating[] = Object.entries(ratingsBySubject).map(([subject, ratings]) => {
+      const sum = ratings.reduce((acc, rating) => acc + rating, 0);
+      const average = sum / ratings.length;
+      return {
+        subject,
+        averageRating: average,
+        totalRatings: ratings.length
+      };
+    });
+
+    return subjectRatingList.sort((a, b) => b.averageRating - a.averageRating);
+  }, [bookingRequests]);
 
   if (loading) {
     return (
@@ -302,7 +431,7 @@ const EarningsHistory: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
             <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
@@ -320,58 +449,48 @@ const EarningsHistory: React.FC = () => {
         <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
           <div className="flex items-center">
             <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
-              <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Pending Earnings</p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700 truncate">
-                ₱{stats.pending_earnings.toLocaleString()}
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-emerald-50 rounded-xl sm:rounded-2xl shadow-xl border-2 border-emerald-200 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
-          <div className="flex items-center">
-            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
-              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Upcoming Earnings</p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-emerald-700 truncate">
-                ₱{(upcomingEarnings || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <p className="text-[10px] sm:text-xs text-slate-500 mt-1">After 13% service fee</p>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
-          <div className="flex items-center">
-            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
               <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Completed Sessions</p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700">{stats.completed_sessions}</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700">{exactCompletedSessions}</p>
             </div>
           </div>
         </Card>
 
+      </div>
+
+      {/* Average Rating per Subject */}
+      {subjectRatings.length > 0 && (
         <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
-          <div className="flex items-center">
-            <div className="p-2.5 sm:p-3 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl mr-3 flex-shrink-0 shadow-lg">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
               <Star className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs sm:text-sm font-semibold text-slate-600 uppercase tracking-wide">Average Rating</p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary-700">
-                {stats.average_rating > 0 ? stats.average_rating.toFixed(1) : 'N/A'}
-              </p>
-            </div>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Average Rating per Subject</h2>
+          </div>
+          <div className="space-y-3 sm:space-y-4">
+            {subjectRatings.map((subjectRating) => (
+              <div key={subjectRating.subject} className="flex items-center justify-between p-3 sm:p-4 bg-slate-50 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm sm:text-base font-semibold text-slate-900 mb-1 truncate">{subjectRating.subject}</p>
+                  <p className="text-xs sm:text-sm text-slate-600">
+                    {subjectRating.totalRatings} {subjectRating.totalRatings === 1 ? 'rating' : 'ratings'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 sm:gap-3 ml-4">
+                  <div className="flex items-center gap-1">
+                    {renderStars(subjectRating.averageRating)}
+                  </div>
+                  <span className="text-base sm:text-lg md:text-xl font-bold text-primary-700 min-w-[3rem] text-right">
+                    {subjectRating.averageRating.toFixed(1)}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
-      </div>
+      )}
 
       {/* Additional Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
@@ -390,8 +509,8 @@ const EarningsHistory: React.FC = () => {
             <div className="flex justify-between items-center">
               <span className="text-[10px] sm:text-xs md:text-sm text-slate-600">Average Session Duration</span>
               <span className="text-xs sm:text-sm md:text-base font-semibold text-slate-800">
-                {stats.completed_sessions > 0 
-                  ? (stats.total_hours / stats.completed_sessions).toFixed(1) 
+                {exactCompletedSessions > 0 
+                  ? (stats.total_hours / exactCompletedSessions).toFixed(1) 
                   : '0'
                 } hours
               </span>
@@ -413,7 +532,7 @@ const EarningsHistory: React.FC = () => {
             <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
               <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Payments</h2>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Upcoming Payouts</h2>
           </div>
           
           {/* Service Fee Information */}
@@ -425,32 +544,36 @@ const EarningsHistory: React.FC = () => {
               <div className="flex-1 min-w-0">
                 <h3 className="text-xs sm:text-sm font-bold text-amber-900 mb-1.5">Service Fee Information</h3>
                 <p className="text-[10px] sm:text-xs text-amber-800 mb-2">
-                  All payments received are subject to a <span className="font-bold">13% service fee</span> for using the TutorLink platform.
+                A <span className="font-bold">13% service fee</span> will be deducted from each payment you receive through TutorLink platform.
                 </p>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3 text-[10px] sm:text-xs">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 text-[10px] sm:text-xs">
                   <div className="bg-white/60 rounded-lg p-2">
-                    <p className="text-amber-700 font-medium">Total Amount to Receive</p>
-                    <p className="text-amber-900 font-bold text-sm sm:text-base">₱{totalReceived.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    <p className="text-amber-700 font-medium">Gross Income</p>
+                    <p className="text-amber-900 font-bold text-sm sm:text-base">₱{grossIncome.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div className="bg-white/60 rounded-lg p-2">
                     <p className="text-amber-700 font-medium">Service Fee (13%)</p>
                     <p className="text-amber-900 font-bold text-sm sm:text-base">₱{totalServiceFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
+                  <div className="bg-white/60 rounded-lg p-2">
+                    <p className="text-amber-700 font-medium">Upcoming Earnings</p>
+                    <p className="text-amber-900 font-bold text-sm sm:text-base">₱{upcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  </div>
                 </div>
                 <div className="mt-2 pt-2 border-t border-amber-200 bg-white/60 rounded-lg p-2">
-                  <p className="text-amber-700 font-medium">Upcoming Earnings</p>
-                  <p className="text-amber-900 font-bold text-base sm:text-lg">₱{(totalReceived - totalServiceFee).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <p className="text-[10px] sm:text-xs text-amber-700 mt-1">Amount to be received after successfully completing tutoring sessions</p>
+                  <p className="text-[10px] sm:text-xs text-amber-700">
+                  Upcoming Earnings are calculated as <span className="font-bold">87%</span> of each confirmed payment. The system admin receives the tutee’s payment first and will transfer your earnings after you complete the tutoring session.
+                  </p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Payment Statistics */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-4">
+          {/* <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-4">
             <span className="text-[10px] sm:text-xs md:text-sm px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">Pending: {pendingPaymentsCount}</span>
             <span className="text-[10px] sm:text-xs md:text-sm px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-primary-50 text-primary-700 border border-primary-200">Approved: {approvedPaymentsCount}</span>
-          </div>
+          </div> */}
         </Card>
       </div>
 
@@ -500,7 +623,7 @@ const EarningsHistory: React.FC = () => {
                 wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
                 iconType="rect"
               />
-              <Bar dataKey="Total Amount to Receive" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Gross Amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Net Earnings" fill="#10b981" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Service Fee" fill="#f59e0b" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -624,13 +747,17 @@ const EarningsHistory: React.FC = () => {
                 </div>
               </div>
               <div className="ml-4 text-right">
+                <span className="text-xs text-slate-600 block mb-0.5">Gross Amount</span>
                 <span className="font-semibold text-slate-800 block">
                   ₱{Number(payment.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 {(payment.status === 'confirmed' || payment.status === 'admin_confirmed' || payment.status === 'admin_paid') && (
-                  <span className="text-[10px] text-slate-500 block mt-0.5">
-                    Net: ₱{(Number(payment.amount) * 0.87).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
+                  <>
+                    <span className="text-xs text-slate-600 block mt-1.5 mb-0.5">Net Amount</span>
+                    <span className="text-[10px] text-slate-500 block">
+                      ₱{(Number(payment.amount) * 0.87).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </>
                 )}
               </div>
             </div>

@@ -28,7 +28,7 @@ export class PaymentsService {
 
   findAll(): Promise<Payment[]> {
     return this.paymentsRepository.find({
-      relations: ['student', 'student.user', 'tutor', 'tutor.user', 'bookingRequest'],
+      relations: ['student', 'student.user', 'tutor', 'tutor.user', 'bookingRequest', 'subject'],
       order: {
         created_at: 'DESC',
       },
@@ -37,6 +37,9 @@ export class PaymentsService {
 
   findAllPayouts(): Promise<Payout[]> {
     return this.payoutsRepository.find({
+      where: {
+        status: 'released' as any,
+      } as any,
       relations: ['payment', 'tutor', 'tutor.user'],
       order: {
         created_at: 'DESC',
@@ -47,23 +50,28 @@ export class PaymentsService {
   // Get completed bookings waiting for admin payment
   async getCompletedBookingsWaitingForPayment() {
     try {
-      // Find bookings that are completed or admin_payment_pending and both tutor and tutee have confirmed
+      // Find bookings that are admin_payment_pending (waiting for payment)
+      // Also include completed bookings that have released payouts (to show release proof)
+      const adminPaymentPendingBookings = await this.bookingRepository.find({
+        where: [
+          { status: 'admin_payment_pending' as any },
+        ],
+        relations: ['tutor', 'tutor.user', 'student'],
+      });
+
       const completedBookings = await this.bookingRepository.find({
         where: [
           { status: 'completed' as any },
-          { status: 'admin_payment_pending' as any },
         ],
-        relations: ['tutor', 'tutor.user', 'student'], // student is already a User entity
+        relations: ['tutor', 'tutor.user', 'student'],
       });
 
-      // Filter to only those where tutor has provided session proof and tutee has provided rating and feedback
-      const bothConfirmed = completedBookings.filter((booking: any) => {
-        return booking.session_proof_url && booking.tutee_rating && booking.tutee_feedback_at;
-      });
+      // Combine both lists
+      const allBookings = [...adminPaymentPendingBookings, ...completedBookings];
 
-      // Include all completed bookings, regardless of payment status
+      // Process all bookings and include those that need payment or have released payouts
       const waitingForPayment = [];
-      for (const booking of bothConfirmed) {
+      for (const booking of allBookings) {
         try {
           // Skip if booking doesn't have required relations
           if (!booking.tutor || !booking.student) {
@@ -77,6 +85,29 @@ export class PaymentsService {
               booking_request_id: booking.id,
             } as any,
           });
+
+          // Check if payout exists with status "released" for this payment
+          let payoutStatus = null;
+          let releaseProofUrl = null;
+          if (existingPayment) {
+            const payout = await this.payoutsRepository.findOne({
+              where: {
+                payment_id: existingPayment.payment_id,
+                status: 'released' as any,
+              } as any,
+            });
+            if (payout) {
+              payoutStatus = 'released';
+              releaseProofUrl = (payout as any).release_proof_url || null;
+            }
+          }
+
+          // Only include bookings that are:
+          // 1. admin_payment_pending (need payment), OR
+          // 2. completed with released payout (to show release proof)
+          if (booking.status !== 'admin_payment_pending' && payoutStatus !== 'released') {
+            continue; // Skip bookings that are completed but don't have released payout
+          }
 
           // Get tutor_id safely
           const tutorId = (booking.tutor as any)?.tutor_id;
@@ -126,8 +157,10 @@ export class PaymentsService {
             tutee_comment: booking.tutee_comment || null,
             amount: amount,
             calculated_amount: amount * 0.87, // After 13% deduction
-            payment_status: existingPayment ? existingPayment.status : null, // Include payment status
+            payment_status: payoutStatus === 'released' ? 'paid' : (existingPayment ? existingPayment.status : null), // Include payment status, mark as 'paid' if payout is released
             payment_id: existingPayment ? existingPayment.payment_id : null, // Include payment ID
+            payout_status: payoutStatus, // Include payout status
+            release_proof_url: releaseProofUrl, // Include release proof URL for released payouts
           });
         } catch (error) {
           console.error(`Error processing booking ${booking.id}:`, error);
@@ -144,7 +177,11 @@ export class PaymentsService {
   }
 
   // Process admin payment for a completed booking
-  async processAdminPayment(bookingId: number) {
+  async processAdminPayment(bookingId: number, receipt?: any) {
+    if (!receipt) {
+      throw new BadRequestException('Payment receipt is required');
+    }
+
     const booking = await this.bookingRepository.findOne({
       where: { id: bookingId },
       relations: ['tutor', 'tutor.user', 'student'],
@@ -203,36 +240,46 @@ export class PaymentsService {
       } as any,
     });
 
-    // Get subject_id from subject name if needed
-    let subjectId: number | null = null;
-    if (booking.subject) {
-      const subject = await this.subjectRepository.findOne({
-        where: { subject_name: booking.subject }
-      });
-      subjectId = subject?.subject_id || null;
+    if (!payment) {
+      throw new NotFoundException('Payment not found for this booking. Please ensure the tutee has paid first.');
     }
 
-    if (payment) {
-      // Update existing payment
-      (payment as any).status = 'paid';
-      (payment as any).amount = amount;
-      if (subjectId) (payment as any).subject_id = subjectId;
-      await this.paymentsRepository.save(payment as any);
+    // Save receipt file and get URL
+    const receiptUrl = `/tutor_documents/${receipt.filename}`;
+
+    // Calculate amount to release (87% of payment amount after 13% platform fee)
+    const amountReleased = Number((Number(payment.amount) * 0.87).toFixed(2));
+
+    // Check if payout already exists for this payment
+    let existingPayout = await this.payoutsRepository.findOne({
+      where: {
+        payment_id: payment.payment_id,
+      } as any,
+    });
+
+    if (existingPayout) {
+      // Update existing payout
+      (existingPayout as any).status = 'released';
+      (existingPayout as any).amount_released = amountReleased;
+      (existingPayout as any).release_proof_url = receiptUrl;
+      await this.payoutsRepository.save(existingPayout as any);
     } else {
-      // Create new payment
-      const newPayment = this.paymentsRepository.create({
-        student_id: student.student_id,
+      // Create new payout record
+      const newPayout = this.payoutsRepository.create({
+        payment_id: payment.payment_id,
         tutor_id: (booking.tutor as any).tutor_id,
-        booking_request_id: bookingId,
-        amount: amount,
-        status: 'paid',
-        dispute_status: 'none',
-        subject_id: subjectId,
+        amount_released: amountReleased,
+        status: 'released',
+        release_proof_url: receiptUrl,
       } as any);
-      payment = await this.paymentsRepository.save(newPayment as any);
+      await this.payoutsRepository.save(newPayout as any);
     }
 
-    return { success: true, payment };
+    // Update booking status to completed
+    (booking as any).status = 'completed';
+    await this.bookingRepository.save(booking as any);
+
+    return { success: true, payment, payout: existingPayout || await this.payoutsRepository.findOne({ where: { payment_id: payment.payment_id } as any }) };
   }
 
   async updateDispute(id: number, dto: UpdatePaymentDisputeDto): Promise<Payment> {

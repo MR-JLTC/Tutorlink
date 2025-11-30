@@ -1683,7 +1683,7 @@ export class TutorsService {
     // Fetch all payments for this tutor with student and user relations
     const payments = await this.paymentRepository.find({
       where: { tutor_id: tutor.tutor_id } as any,
-      relations: ['student', 'student.user', 'tutor', 'tutor.user'],
+      relations: ['student', 'student.user', 'tutor', 'tutor.user', 'bookingRequest'],
       order: { created_at: 'DESC' }
     });
 
@@ -1691,6 +1691,7 @@ export class TutorsService {
     return payments.map((p: any) => ({
       id: p.payment_id,
       payment_id: p.payment_id,
+      booking_request_id: p.booking_request_id || null,
       subject_id: p.subject_id || null,
       subject_name: p.subject?.subject_name || null,
       amount: Number(p.amount),

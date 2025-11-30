@@ -199,6 +199,39 @@ const ApplicationVerification: React.FC = () => {
 
   const normalizedSelected = new Set(subjects.map(s => s.toLowerCase()));
 
+  const fetchTutorDocuments = async () => {
+    if (!tutorId) return;
+    try {
+      const documentsRes = await apiClient.get(`/tutors/${tutorId}/documents`).catch(() => ({ data: [] }));
+      let documents: any[] = [];
+      if (Array.isArray(documentsRes.data)) {
+        documents = documentsRes.data;
+      } else if (Array.isArray(documentsRes.data?.data)) {
+        documents = documentsRes.data.data;
+      } else if (documentsRes.data && typeof documentsRes.data === 'object') {
+        if (documentsRes.data.documents && Array.isArray(documentsRes.data.documents)) {
+          documents = documentsRes.data.documents;
+        } else if (documentsRes.data.docs && Array.isArray(documentsRes.data.docs)) {
+          documents = documentsRes.data.docs;
+        }
+      }
+      
+      if (documents.length > 0) {
+        setExistingProofDocuments(documents.map((doc: any) => ({
+          id: doc.document_id || doc.id,
+          file_url: doc.file_url,
+          file_name: doc.file_name,
+          file_type: doc.file_type
+        })));
+      } else {
+        setExistingProofDocuments([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch tutor documents:', error);
+      setExistingProofDocuments([]);
+    }
+  };
+
   const fetchTutorProfile = async () => {
     if (!tutorId) return;
     try {
@@ -211,6 +244,9 @@ const ApplicationVerification: React.FC = () => {
       if (response.data.course_id) {
         setTutorCourseId(response.data.course_id);
       }
+      
+      // Fetch documents for all statuses
+      await fetchTutorDocuments();
       
       // If rejected, fetch full data for reapplication
       if (applicationStatus === 'rejected') {
@@ -1066,6 +1102,69 @@ const ApplicationVerification: React.FC = () => {
           </div>
         </Card>
       )}
+
+      {/* Supporting Documents Section */}
+      <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-xl border border-slate-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+            <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+          </div>
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Supporting Documents</h2>
+        </div>
+        
+        {existingProofDocuments.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+            {existingProofDocuments.map((doc) => (
+              <div
+                key={doc.id}
+                className="flex items-center justify-between bg-gradient-to-r from-slate-50 via-primary-50/50 to-slate-50 rounded-lg p-3 sm:p-3.5 border-2 border-slate-200/50 hover:border-primary-300 hover:shadow-md transition-all duration-200"
+              >
+                <div className="flex items-center min-w-0 flex-1">
+                  <div className="p-1.5 sm:p-2 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg mr-2.5 flex-shrink-0">
+                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm font-semibold text-slate-800 truncate" title={doc.file_name || 'Document'}>
+                      {doc.file_name || 'Document'}
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 truncate">
+                      {doc.file_type || 'File'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenDocument(getFileUrl(doc.file_url), doc.file_type)}
+                    className="text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 sm:py-1.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white hover:from-primary-700 hover:to-primary-800 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all duration-200 whitespace-nowrap"
+                    title="View document"
+                  >
+                    View
+                  </button>
+                  <a
+                    href={getFileUrl(doc.file_url)}
+                    download
+                    className="text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 sm:py-1.5 bg-gradient-to-r from-slate-600 to-slate-700 text-white hover:from-slate-700 hover:to-slate-800 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all duration-200 whitespace-nowrap"
+                    title="Download document"
+                  >
+                    Download
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 sm:py-8 lg:py-10">
+            <div className="inline-flex items-center justify-center w-14 h-14 sm:w-18 sm:h-18 lg:w-20 lg:h-20 bg-slate-100 rounded-full mb-3">
+              <FileText className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 text-slate-400" />
+            </div>
+            <p className="text-sm sm:text-base text-slate-500 font-medium">No supporting documents uploaded yet.</p>
+            <p className="text-xs sm:text-sm text-slate-400 mt-2">
+              Upload documents such as National ID, academic transcripts, certifications, or student ID to verify your credibility as a tutor.
+            </p>
+          </div>
+        )}
+      </Card>
 
       {/* Subject Applications History */}
       {subjectApplications.length > 0 && (

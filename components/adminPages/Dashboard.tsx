@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Card from '../ui/Card';
 import apiClient from '../../services/api';
-import { Users, UserCheck, FileText, CheckCircle2, TrendingUp, CreditCard, University, BarChart3, Layers, BookOpen } from 'lucide-react';
+import { Users, UserCheck, FileText, CheckCircle2, TrendingUp, University, BarChart3, Layers, BookOpen } from 'lucide-react';
 import PesoSignIcon from '../icons/PesoSignIcon';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { Payment } from '../../types';
 
 interface PaymentTrendPoint {
@@ -21,16 +21,72 @@ interface Stats {
   paymentOverview: { byStatus: Record<string, number>; recentConfirmedRevenue: number; trends: PaymentTrendPoint[] };
 }
 
-const StatCard: React.FC<{ icon: React.ElementType, title: string, value: string | number, color: string }> = ({ icon: Icon, title, value, color }) => {
+// Helper function to format numbers with K/M suffixes for large values
+const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+        const millions = num / 1000000;
+        return millions % 1 === 0 
+            ? `${millions.toFixed(0)}M` 
+            : `${millions.toFixed(1)}M`;
+    } else if (num >= 1000) {
+        const thousands = num / 1000;
+        return thousands % 1 === 0 
+            ? `${thousands.toFixed(0)}K` 
+            : `${thousands.toFixed(1)}K`;
+    }
+    return num.toLocaleString('en-US');
+};
+
+const StatCard: React.FC<{ icon: React.ElementType, title: string, value: string | number, color: string, showActualValue?: boolean }> = ({ icon: Icon, title, value, color, showActualValue = false }) => {
+    const isRevenue = typeof value === 'string' && value.includes('₱');
+    
+    // Format numeric values for better readability (unless showActualValue is true)
+    let displayValue: string | number = value;
+    if (typeof value === 'number' && !showActualValue) {
+        displayValue = formatNumber(value);
+    } else if (typeof value === 'number' && showActualValue) {
+        displayValue = value.toLocaleString('en-US');
+    }
+    
     return (
-        <Card className="flex items-center p-3 sm:p-4">
-            <div className={`p-2 sm:p-3 rounded-full mr-3 sm:mr-4 flex-shrink-0 ${color}`}>
-                <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+        <Card className="relative overflow-visible bg-gradient-to-br from-white via-slate-50/30 to-white rounded-xl shadow-lg border border-slate-200/50 hover:shadow-2xl hover:border-primary-300/50 transition-all duration-300 group h-full flex flex-col">
+            {/* Decorative gradient overlay on hover */}
+            <div className="absolute inset-0 bg-gradient-to-br from-primary-50/0 to-primary-100/0 group-hover:from-primary-50/30 group-hover:to-primary-100/20 transition-all duration-300 pointer-events-none"></div>
+            
+            <div className="relative p-4 sm:p-5 flex-1 flex flex-col min-w-0">
+                <div className="flex items-start justify-between gap-3 mb-3 flex-shrink-0">
+                    <div className={`p-2.5 sm:p-3 rounded-xl flex-shrink-0 shadow-lg group-hover:shadow-xl transition-all duration-300 ${color}`}>
+                        <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                    </div>
+                    {/* Optional badge or indicator */}
+                    <div className="flex-shrink-0">
+                        <div className="w-2 h-2 rounded-full bg-primary-400/50 group-hover:bg-primary-500 transition-colors"></div>
+                    </div>
+                </div>
+                
+                <div className="space-y-1.5 min-w-0 w-full flex-1 flex flex-col justify-end">
+                    <p className="text-xs sm:text-sm font-semibold text-slate-500 uppercase tracking-wider leading-tight">
+                        {title}
+                    </p>
+                    {isRevenue ? (
+                        <div className="flex flex-col min-w-0 w-full">
+                            <p className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-slate-900 leading-tight break-words hyphens-auto">
+                                {value}
+                            </p>
+                            <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">
+                                Platform Fee
+                            </p>
+                        </div>
+                    ) : (
+                        <p className="text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-extrabold text-slate-900 leading-tight break-words hyphens-auto">
+                            {displayValue}
+                        </p>
+                    )}
+                </div>
             </div>
-            <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 truncate">{title}</p>
-                <p className="text-xl sm:text-2xl font-semibold text-gray-800 truncate">{value}</p>
-            </div>
+            
+            {/* Bottom accent bar */}
+            <div className={`absolute bottom-0 left-0 right-0 h-1 ${color} opacity-60 group-hover:opacity-100 transition-opacity`}></div>
         </Card>
     );
 }
@@ -46,6 +102,7 @@ const DashboardContent: React.FC = () => {
   const [courseDistribution, setCourseDistribution] = useState<{ courseName: string; tutors: number; tutees: number }[]>([]);
   const [subjectSessions, setSubjectSessions] = useState<{ subjectName: string; sessions: number }[]>([]);
   const [universityMap, setUniversityMap] = useState<Map<string, string>>(new Map());
+  const [courseMap, setCourseMap] = useState<Map<string, string>>(new Map());
   const [payments, setPayments] = useState<Payment[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [monthsFilter, setMonthsFilter] = useState(6); // Default to 6 months
@@ -69,8 +126,26 @@ const DashboardContent: React.FC = () => {
     fetchStats();
   }, []);
 
+
   useEffect(() => {
-    const fetchPayments = async () => {
+    const fetchPayouts = async () => {
+      try {
+        const response = await apiClient.get('/payments/payouts');
+        // Filter to only include payouts with status "released" that have a payment_id reference
+        const releasedPayouts = (response.data || []).filter((payout: any) => {
+          return payout.status === 'released' && payout.payment_id != null;
+        });
+        setPayouts(releasedPayouts);
+      } catch (e) {
+        console.error('Failed to fetch payouts:', e);
+      }
+    };
+    fetchPayouts();
+  }, []);
+
+  // Fetch payments to get payment amounts for released payouts
+  useEffect(() => {
+    const fetchPaymentsForPayouts = async () => {
       try {
         const response = await apiClient.get('/payments');
         setPayments(response.data || []);
@@ -78,20 +153,9 @@ const DashboardContent: React.FC = () => {
         console.error('Failed to fetch payments:', e);
       }
     };
-    fetchPayments();
+    fetchPaymentsForPayouts();
   }, []);
 
-  useEffect(() => {
-    const fetchPayouts = async () => {
-      try {
-        const response = await apiClient.get('/payments/payouts');
-        setPayouts(response.data || []);
-      } catch (e) {
-        console.error('Failed to fetch payouts:', e);
-      }
-    };
-    fetchPayouts();
-  }, []);
 
   useEffect(() => {
     // Fetch universities to get acronyms
@@ -111,6 +175,26 @@ const DashboardContent: React.FC = () => {
       }
     };
     fetchUniversities();
+  }, []);
+
+  useEffect(() => {
+    // Fetch courses to get acronyms
+    const fetchCourses = async () => {
+      try {
+        const response = await apiClient.get('/courses');
+        const courses = response.data || [];
+        const map = new Map<string, string>();
+        courses.forEach((course: any) => {
+          if (course.course_name && course.acronym) {
+            map.set(course.course_name, course.acronym);
+          }
+        });
+        setCourseMap(map);
+      } catch (e) {
+        console.error('Failed to fetch courses:', e);
+      }
+    };
+    fetchCourses();
   }, []);
 
   useEffect(() => {
@@ -199,64 +283,141 @@ const DashboardContent: React.FC = () => {
   const mostDemandedSubjects = useMemo(() => {
     const subjectCounts: Record<string, number> = {};
     payments.forEach(payment => {
-      const subject = (payment as any).subject || 'Unknown';
-      subjectCounts[subject] = (subjectCounts[subject] || 0) + 1;
+      // Try multiple sources for subject name:
+      // 1. payment.subject.subject_name (if subject relation is loaded)
+      // 2. payment.bookingRequest.subject (if bookingRequest relation is loaded)
+      // 3. payment.subject (if it's a string directly)
+      let subjectName: string | null = null;
+      
+      if ((payment as any).subject) {
+        if (typeof (payment as any).subject === 'string') {
+          subjectName = (payment as any).subject;
+        } else if ((payment as any).subject.subject_name) {
+          subjectName = (payment as any).subject.subject_name;
+        }
+      }
+      
+      if (!subjectName && (payment as any).bookingRequest) {
+        if (typeof (payment as any).bookingRequest === 'object' && (payment as any).bookingRequest.subject) {
+          subjectName = (payment as any).bookingRequest.subject;
+        }
+      }
+      
+      // Only count if we have a valid subject name
+      if (subjectName && subjectName.trim() !== '') {
+        subjectCounts[subjectName] = (subjectCounts[subjectName] || 0) + 1;
+      }
     });
     return Object.entries(subjectCounts)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5);
   }, [payments]);
 
-  // Calculate total revenue: 13% of payouts with status 'released'
+  // Calculate total revenue: payment amount - amount_released (for released payouts only)
+  // This represents the 13% platform fee
   const calculatedTotalRevenue = useMemo(() => {
-    // Filter only payouts with status='released'
-    const releasedPayouts = payouts.filter(p => 
-      p.status === 'released'
-    );
+    if (!payouts || payouts.length === 0 || !payments || payments.length === 0) {
+      return 0;
+    }
     
-    // Sum the amount_released and calculate 13%
-    const totalAmount = releasedPayouts.reduce((sum, p) => sum + Number(p.amount_released || 0), 0);
-    const totalRevenue = Number((totalAmount * 0.13).toFixed(2));
+    // Create a map of payment_id to payment amount for quick lookup
+    const paymentMap = new Map<number, number>();
+    payments.forEach((p: any) => {
+      const paymentId = p.payment_id || p.id;
+      if (paymentId) {
+        paymentMap.set(Number(paymentId), Number(p.amount || 0));
+      }
+    });
     
-    return totalRevenue;
-  }, [payouts]);
+    // Calculate total revenue: sum of (payment amount - amount_released) for all released payouts
+    const totalRevenue = payouts.reduce((sum, payout: any) => {
+      const paymentId = payout.payment_id || (payout.payment as any)?.payment_id;
+      if (!paymentId) return sum;
+      
+      const paymentAmount = paymentMap.get(Number(paymentId)) || 0;
+      const amountReleased = Number(payout.amount_released || 0);
+      
+      // Platform revenue = payment amount - amount released (13% of payment)
+      const platformRevenue = paymentAmount - amountReleased;
+      
+      return sum + platformRevenue;
+    }, 0);
+    
+    return Number(totalRevenue.toFixed(2));
+  }, [payouts, payments]);
 
-  // Calculate payment activity overview (13% of tutee payments)
+
+  // Calculate payment activity overview (from released payouts only)
   const paymentActivity = useMemo(() => {
-    // Filter only payments with sender='tutee' (exclude null, empty, or other values)
-    const tuteePayments = payments.filter(p => 
-      (p as any).sender === 'tutee' && (p as any).sender !== null && (p as any).sender !== undefined
-    );
+    if (!payouts || payouts.length === 0 || !payments || payments.length === 0) {
+      return {
+        totalPayments: 0,
+        pendingPayments: 0,
+        confirmedPayments: 0,
+        rejectedPayments: 0,
+        totalAmount: 0,
+        confirmedAmount: 0
+      };
+    }
     
-    const totalPayments = tuteePayments.length;
-    const pendingPayments = tuteePayments.filter(p => p.status === 'pending').length;
-    const confirmedPayments = tuteePayments.filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid').length;
-    const rejectedPayments = tuteePayments.filter(p => p.status === 'rejected').length;
+    // Create a map of payment_id to payment amount for quick lookup
+    const paymentMap = new Map<number, number>();
+    payments.forEach((p: any) => {
+      const paymentId = p.payment_id || p.id;
+      if (paymentId) {
+        paymentMap.set(Number(paymentId), Number(p.amount || 0));
+      }
+    });
     
-    // Calculate 13% of total amount from tutee payments
-    const totalAmount = Number((tuteePayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13).toFixed(2));
-    const confirmedAmount = Number((
-      tuteePayments
-        .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
-        .reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13
-    ).toFixed(2));
+    // Calculate platform revenue from released payouts: payment amount - amount_released
+    const platformRevenue = payouts.reduce((sum, payout: any) => {
+      const paymentId = payout.payment_id || (payout.payment as any)?.payment_id;
+      if (!paymentId) return sum;
+      
+      const paymentAmount = paymentMap.get(Number(paymentId)) || 0;
+      const amountReleased = Number(payout.amount_released || 0);
+      
+      // Platform revenue = payment amount - amount released (13% of payment)
+      return sum + (paymentAmount - amountReleased);
+    }, 0);
+    
+    const totalPayments = payments.length;
+    const pendingPayments = payments.filter(p => p.status === 'pending').length;
+    const confirmedPayments = payments.filter(p => p.status === 'confirmed').length;
+    const rejectedPayments = payments.filter(p => p.status === 'rejected').length;
     
     return {
       totalPayments,
       pendingPayments,
       confirmedPayments,
       rejectedPayments,
-      totalAmount,
-      confirmedAmount
+      totalAmount: Number(platformRevenue.toFixed(2)),
+      confirmedAmount: Number(platformRevenue.toFixed(2))
     };
-  }, [payments]);
+  }, [payouts, payments]);
 
-  // Calculate payment trends chart data (13% of tutee payments)
+  // Calculate payment trends chart data (from released payouts only)
   const paymentTrendsData = useMemo(() => {
-    // Filter only payments with sender='tutee' (exclude null, empty, or other values)
-    const tuteePayments = payments.filter(p => 
-      (p as any).sender === 'tutee' && (p as any).sender !== null && (p as any).sender !== undefined
-    );
+    if (!payouts || payouts.length === 0 || !payments || payments.length === 0) {
+      const lastNMonths = Array.from({ length: monthsFilter }, (_, i) => {
+        const date = new Date();
+        date.setMonth(date.getMonth() - (monthsFilter - 1 - i));
+        return {
+          month: date.toLocaleDateString('en-US', { month: 'short' }),
+          'Platform Revenue': 0
+        };
+      });
+      return lastNMonths;
+    }
+    
+    // Create a map of payment_id to payment amount for quick lookup
+    const paymentMap = new Map<number, number>();
+    payments.forEach((p: any) => {
+      const paymentId = p.payment_id || p.id;
+      if (paymentId) {
+        paymentMap.set(Number(paymentId), Number(p.amount || 0));
+      }
+    });
     
     const lastNMonths = Array.from({ length: monthsFilter }, (_, i) => {
       const date = new Date();
@@ -269,33 +430,31 @@ const DashboardContent: React.FC = () => {
     });
 
     return lastNMonths.map(({ month, monthIndex, year }) => {
-      const monthPayments = tuteePayments.filter(p => {
-        if (!p.created_at) return false;
-        const paymentDate = new Date(p.created_at);
-        return paymentDate.getMonth() === monthIndex && paymentDate.getFullYear() === year;
+      // Filter released payouts for this month
+      const monthPayouts = payouts.filter((payout: any) => {
+        if (!payout.created_at) return false;
+        const payoutDate = new Date(payout.created_at);
+        return payoutDate.getMonth() === monthIndex && payoutDate.getFullYear() === year;
       });
 
-      // Calculate 13% of amounts
-      const totalAmount = Number((monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13).toFixed(2));
-      const confirmedAmount = Number((
-        monthPayments
-          .filter(p => p.status === 'confirmed' || p.status === 'admin_confirmed' || p.status === 'admin_paid')
-          .reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13
-      ).toFixed(2));
-      const pendingAmount = Number((
-        monthPayments
-          .filter(p => p.status === 'pending')
-          .reduce((sum, p) => sum + Number(p.amount || 0), 0) * 0.13
-      ).toFixed(2));
+      // Calculate platform revenue: payment amount - amount_released for each payout
+      const platformRevenue = monthPayouts.reduce((sum, payout: any) => {
+        const paymentId = payout.payment_id || (payout.payment as any)?.payment_id;
+        if (!paymentId) return sum;
+        
+        const paymentAmount = paymentMap.get(Number(paymentId)) || 0;
+        const amountReleased = Number(payout.amount_released || 0);
+        
+        // Platform revenue = payment amount - amount released (13% of payment)
+        return sum + (paymentAmount - amountReleased);
+      }, 0);
 
       return {
         month,
-        'Total': totalAmount,
-        'Confirmed': confirmedAmount,
-        'Pending': pendingAmount
+        'Platform Revenue': Number(platformRevenue.toFixed(2))
       };
     });
-  }, [payments, monthsFilter]);
+  }, [payouts, payments, monthsFilter]);
 
   const tutorGradient = 'linear-gradient(90deg, #6366f1, #8b5cf6)';
   const tuteeGradient = 'linear-gradient(90deg, #06b6d4, #22d3ee)';
@@ -383,40 +542,52 @@ const DashboardContent: React.FC = () => {
   if (error) return <div className="text-red-500">{error}</div>;
 
   return (
-    <div>
-      <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-4 sm:mb-6">Admin Dashboard</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+        </div>
+        <div className="relative">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 drop-shadow-lg">Admin Dashboard</h1>
+          <p className="text-sm sm:text-base text-white/90">Overview of platform statistics and revenue</p>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 md:gap-6 auto-rows-fr">
         {stats && (
           <>
             <StatCard 
               icon={Users}
               title="Total Users"
               value={stats.totalUsers}
-              color="bg-blue-500"
+              color="bg-gradient-to-br from-blue-500 to-blue-600"
             />
             <StatCard 
               icon={UserCheck}
               title="Verified Tutors"
               value={stats.totalTutors}
-              color="bg-green-500"
+              color="bg-gradient-to-br from-green-500 to-green-600"
             />
             <StatCard 
               icon={FileText}
               title="Pending Applications"
               value={stats.pendingApplications}
-              color="bg-yellow-500"
+              color="bg-gradient-to-br from-yellow-500 to-yellow-600"
+              showActualValue={true}
             />
-             <StatCard 
+            <StatCard 
               icon={PesoSignIcon}
-              title="Total Revenue (13% of Admin Payments)"
+              title="Total Revenue"
               value={`₱${calculatedTotalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              color="bg-indigo-500"
+              color="bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600"
             />
             <StatCard 
               icon={CheckCircle2}
               title="Confirmed Sessions"
               value={stats.confirmedSessions ?? 0}
-              color="bg-emerald-600"
+              color="bg-gradient-to-br from-emerald-600 to-emerald-700"
+              showActualValue={true}
             />
           </>
         )}
@@ -459,35 +630,35 @@ const DashboardContent: React.FC = () => {
             <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
               <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-800">Platform Revenue Overview (13% of Tutee Payments)</h2>
+            <h2 className="text-base sm:text-lg font-bold text-slate-800">Platform Revenue Overview (From Released Payouts)</h2>
           </div>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-xs text-blue-600 font-semibold mb-1">Total Payments</p>
-                <p className="text-xl font-bold text-blue-900">{paymentActivity.totalPayments}</p>
+                <p className="text-lg sm:text-xl font-bold text-blue-900">{paymentActivity.totalPayments}</p>
               </div>
               <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <p className="text-xs text-yellow-600 font-semibold mb-1">Pending</p>
-                <p className="text-xl font-bold text-yellow-900">{paymentActivity.pendingPayments}</p>
+                <p className="text-lg sm:text-xl font-bold text-yellow-900">{paymentActivity.pendingPayments}</p>
               </div>
               <div className="p-3 bg-green-50 rounded-lg border border-green-200">
                 <p className="text-xs text-green-600 font-semibold mb-1">Confirmed</p>
-                <p className="text-xl font-bold text-green-900">{paymentActivity.confirmedPayments}</p>
+                <p className="text-lg sm:text-xl font-bold text-green-900">{paymentActivity.confirmedPayments}</p>
               </div>
               <div className="p-3 bg-red-50 rounded-lg border border-red-200">
                 <p className="text-xs text-red-600 font-semibold mb-1">Rejected</p>
-                <p className="text-xl font-bold text-red-900">{paymentActivity.rejectedPayments}</p>
+                <p className="text-lg sm:text-xl font-bold text-red-900">{paymentActivity.rejectedPayments}</p>
               </div>
             </div>
             <div className="pt-3 border-t border-slate-200">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-slate-600">Platform Revenue (13% of Tutee Payments)</span>
-                <span className="text-lg font-bold text-slate-900">₱{paymentActivity.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="text-sm text-slate-600">Platform Revenue (From Released Payouts)</span>
+                <span className="text-base sm:text-lg font-bold text-slate-900">₱{paymentActivity.confirmedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-slate-600">Confirmed Revenue (13%)</span>
-                <span className="text-lg font-bold text-green-700">₱{paymentActivity.confirmedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="text-sm text-slate-600">Released Payouts Revenue</span>
+                <span className="text-base sm:text-lg font-bold text-green-700">₱{paymentActivity.confirmedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
@@ -501,7 +672,7 @@ const DashboardContent: React.FC = () => {
             <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
               <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-800">Platform Revenue Trends (13% of Tutee Payments)</h2>
+            <h2 className="text-base sm:text-lg font-bold text-slate-800">Platform Revenue Trends (From Released Payouts)</h2>
           </div>
           <div className="flex items-center gap-2">
             <label htmlFor="months-filter" className="text-sm text-slate-600 font-medium">Display:</label>
@@ -545,9 +716,7 @@ const DashboardContent: React.FC = () => {
                 wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
                 iconType="rect"
               />
-              <Bar dataKey="Total" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Confirmed" fill="#10b981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Pending" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Platform Revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -656,67 +825,236 @@ const DashboardContent: React.FC = () => {
         </Card>
       </div>
 
-      {/* Course distribution chart + Sessions per subject side-by-side */}
+      {/* Courses and Sessions Charts - Separated */}
       <div className="mt-6 sm:mt-8 grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+        {/* Top Courses Chart */}
         <Card className="p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <h2 className="text-lg sm:text-xl font-semibold truncate">Top Courses (Total Users)</h2>
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+                <Layers className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-800">Top Courses (Total Users)</h2>
             </div>
-            <Layers className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#6366f1' }}></div>
+              <span className="text-xs sm:text-sm text-slate-600 font-medium">Total Users</span>
+            </div>
           </div>
-          {courseDistribution.length > 0 ? (
-            (() => {
-              const { items, total } = buildTopN(courseDistribution, r => r.courseName, r => (r.tutors + r.tutees), 10);
+          
+          {(() => {
+            // Aggregate courses with the same name
+            const aggregatedCourses = courseDistribution.reduce((acc, course) => {
+              const courseName = course.courseName || 'Unknown';
+              if (!acc[courseName]) {
+                acc[courseName] = {
+                  courseName: courseName,
+                  tutors: 0,
+                  tutees: 0
+                };
+              }
+              acc[courseName].tutors += course.tutors || 0;
+              acc[courseName].tutees += course.tutees || 0;
+              return acc;
+            }, {} as Record<string, { courseName: string; tutors: number; tutees: number }>);
+            
+            const aggregatedArray = Object.values(aggregatedCourses);
+            const topCourses = buildTopN(aggregatedArray, (r: any) => r.courseName, (r: any) => (r.tutors + r.tutees), 10);
+            
+            if (topCourses.items.length === 0 || topCourses.total === 0) {
               return (
-                <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
-                  <div className="flex-shrink-0 mx-auto sm:mx-0">
-                    <Donut items={items} size={180} thickness={20} centerLabel={String(total)} centerSub={'Users'} />
-                  </div>
-                  <div className="w-full sm:min-w-[280px] sm:max-w-[520px] space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                    {items.map((it, i) => (
-                      <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                        <span className="flex items-start gap-2 flex-1 min-w-0"><span className="mt-1 inline-block h-2.5 w-2.5 rounded-sm" style={{ background: it.color }} /> <span className="whitespace-normal break-words" title={it.label}>{it.label}</span></span>
-                        <span className="text-slate-700 font-semibold shrink-0">{it.value} <span className="text-slate-400 font-normal">({Math.round((it.value / (total || 1)) * 100)}%)</span></span>
-                      </div>
-                    ))}
-                    <p className="text-xs text-slate-500">Total: {total}</p>
-                  </div>
+                <div className="text-center py-12">
+                  <p className="text-slate-500">No course distribution data.</p>
                 </div>
               );
-            })()
-          ) : (
-            <p className="text-slate-500">No course distribution data.</p>
-          )}
+            }
+            
+            const chartData = topCourses.items.map(item => {
+              const courseName = item.label;
+              const acronym = courseMap.get(courseName) || courseName;
+              return {
+                name: acronym.length > 20 ? acronym.substring(0, 20) + '...' : acronym,
+                fullName: courseName,
+                value: item.value,
+              };
+            });
+            
+            return (
+              <div className="w-full">
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart
+                    data={chartData}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      stroke="#cbd5e1"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      stroke="#cbd5e1"
+                      tickFormatter={(value) => formatNumber(value)}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
+                              <p className="font-semibold text-slate-900 mb-2">{data.fullName}</p>
+                              <p className="text-sm" style={{ color: payload[0].color }}>
+                                <span className="font-medium">Total Users:</span>{' '}
+                                <span className="font-bold">{data.value?.toLocaleString()}</span>
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar
+                      dataKey="value"
+                      name="Total Users"
+                      fill="#6366f1"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={60}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill="#6366f1" />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                
+                {/* Summary Stat */}
+                <div className="mt-6 pt-4 border-t border-slate-200">
+                  <div className="bg-gradient-to-br from-primary-50 to-primary-100/50 rounded-lg p-4 border border-primary-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs sm:text-sm font-semibold text-primary-700 uppercase tracking-wider mb-1">
+                          Total Course Users
+                        </p>
+                        <p className="text-2xl sm:text-3xl font-extrabold text-primary-900">
+                          {formatNumber(topCourses.total)}
+                        </p>
+                      </div>
+                      <Layers className="h-8 w-8 sm:h-10 sm:w-10 text-primary-400 opacity-60" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </Card>
+
+        {/* Sessions per Subject Chart */}
         <Card className="p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h2 className="text-lg sm:text-xl font-semibold">Sessions per Subject</h2>
-            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400 flex-shrink-0" />
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl shadow-lg">
+                <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-800">Sessions per Subject</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-sm bg-primary-600"></div>
+              <span className="text-xs sm:text-sm text-slate-600 font-medium">Sessions</span>
+            </div>
           </div>
-          {subjectSessions.length > 0 ? (
-            (() => {
-              const { items, total } = buildTopN(subjectSessions, r => r.subjectName, r => r.sessions, 8);
+          
+          {(() => {
+            const topSubjects = buildTopN(subjectSessions, (r: any) => r.subjectName, (r: any) => r.sessions, 10);
+            
+            if (topSubjects.items.length === 0 || topSubjects.total === 0) {
               return (
-                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-                  <div className="flex-shrink-0 mx-auto sm:mx-0">
-                    <Donut items={items} size={180} thickness={20} centerLabel={String(total)} centerSub={'Sessions'} />
-                  </div>
-                  <div className="w-full sm:min-w-[300px] space-y-2">
-                    {items.map((it, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
-                        <span className="flex items-center gap-2 min-w-0 flex-1"><span className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: it.color }} /> <span className="break-words whitespace-normal font-medium text-slate-800" title={it.label}>{it.label}</span></span>
-                        <span className="text-slate-700 font-semibold flex-shrink-0 ml-2 whitespace-nowrap">{it.value} <span className="text-slate-400 font-normal">({Math.round((it.value / (total || 1)) * 100)}%)</span></span>
-                      </div>
-                    ))}
-                    <p className="text-xs text-slate-500 pt-1">Total: {total}</p>
-                  </div>
+                <div className="text-center py-12">
+                  <p className="text-slate-500">No subject sessions data.</p>
                 </div>
               );
-            })()
-          ) : (
-            <p className="text-slate-500">No subject sessions data.</p>
-          )}
+            }
+            
+            const chartData = topSubjects.items.map(item => ({
+              name: item.label.length > 20 ? item.label.substring(0, 20) + '...' : item.label,
+              fullName: item.label,
+              value: item.value,
+            }));
+            
+            return (
+              <div className="w-full">
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart
+                    data={chartData}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      stroke="#cbd5e1"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#64748b' }}
+                      stroke="#cbd5e1"
+                      tickFormatter={(value) => formatNumber(value)}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200">
+                              <p className="font-semibold text-slate-900 mb-2">{data.fullName}</p>
+                              <p className="text-sm" style={{ color: payload[0].color }}>
+                                <span className="font-medium">Sessions:</span>{' '}
+                                <span className="font-bold">{data.value?.toLocaleString()}</span>
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar
+                      dataKey="value"
+                      name="Sessions"
+                      fill="#435de9"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={60}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill="#435de9" />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                
+                {/* Summary Stat */}
+                <div className="mt-6 pt-4 border-t border-slate-200">
+                  <div className="bg-gradient-to-br from-primary-100 to-primary-200/50 rounded-lg p-4 border border-primary-300">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs sm:text-sm font-semibold text-primary-800 uppercase tracking-wider mb-1">
+                          Total Sessions
+                        </p>
+                        <p className="text-2xl sm:text-3xl font-extrabold text-primary-900">
+                          {formatNumber(topSubjects.total)}
+                        </p>
+                      </div>
+                      <TrendingUp className="h-8 w-8 sm:h-10 sm:w-10 text-primary-500 opacity-60" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </Card>
       </div>
     </div>

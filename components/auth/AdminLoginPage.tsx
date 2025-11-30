@@ -141,9 +141,54 @@ const LoginPage: React.FC = () => {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  let value = e.target.value.toLowerCase();
+                  
+                  // Extract local part (before @) and domain part
+                  const atIndex = value.indexOf('@');
+                  let localPart = '';
+                  let domainPart = '';
+                  
+                  if (atIndex !== -1) {
+                    localPart = value.slice(0, atIndex);
+                    domainPart = value.slice(atIndex);
+                  } else {
+                    localPart = value;
+                  }
+                  
+                  // Only allow letters, numbers, and one dot in local part
+                  let filteredLocal = localPart.replace(/[^a-zA-Z0-9.]/g, '');
+                  
+                  // Allow only one dot in local part
+                  const periodCount = (filteredLocal.match(/\./g) || []).length;
+                  if (periodCount > 1) {
+                    const firstPeriodIndex = filteredLocal.indexOf('.');
+                    filteredLocal = filteredLocal.slice(0, firstPeriodIndex + 1) + 
+                                   filteredLocal.slice(firstPeriodIndex + 1).replace(/\./g, '');
+                  }
+                  
+                  // If domain part exists, ensure it's @gmail.com format
+                  if (domainPart) {
+                    // Only allow @gmail.com
+                    if (domainPart.startsWith('@gmail.com')) {
+                      value = filteredLocal + '@gmail.com';
+                    } else if (domainPart.startsWith('@')) {
+                      // User is typing domain, only allow @gmail.com
+                      const domainInput = domainPart.replace(/[^a-z.]/g, '');
+                      if (domainInput.startsWith('gmail.com') || domainInput === 'gmail' || domainInput === 'gmail.') {
+                        value = filteredLocal + '@' + domainInput;
+                      } else {
+                        value = filteredLocal + '@';
+                      }
+                    }
+                  } else {
+                    value = filteredLocal;
+                  }
+                  
+                  setEmail(value);
+                }}
                 className={inputStyles}
-                placeholder="admin@tutorlink.com"
+                placeholder="admin@gmail.com"
               />
             </div>
 

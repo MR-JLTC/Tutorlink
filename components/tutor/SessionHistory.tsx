@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import apiClient from '../../services/api';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
-import { CheckCircle, History, Clock, Calendar, User, Upload, FileText, Star, TrendingUp, BookOpen, Info, X } from 'lucide-react';
+import { CheckCircle, History, Clock, Calendar, User, Upload, FileText, Star, TrendingUp, BookOpen, Info, X, DollarSign } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -48,6 +48,7 @@ interface Payment {
 const SessionHistory: React.FC = () => {
   const [sessions, setSessions] = useState<BookingRequest[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const [now, setNow] = useState(new Date());
@@ -56,6 +57,7 @@ const SessionHistory: React.FC = () => {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [tutorId, setTutorId] = useState<number | null>(null);
   const [sessionRate, setSessionRate] = useState<number | null>(null);
+  const [bookingIdsWithPayouts, setBookingIdsWithPayouts] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000); // Rerender every minute
@@ -128,17 +130,84 @@ const SessionHistory: React.FC = () => {
         console.warn('Failed to fetch tutor profile for session rate:', err);
       }
 
-      // Fetch booking requests and all payments (to filter for admin payments)
-      const [res, allPaymentsRes] = await Promise.all([
+      // Fetch booking requests, tutor payments, and payouts
+      const [res, tutorPaymentsRes, payoutsRes] = await Promise.all([
         apiClient.get(`/tutors/${fetchedTutorId}/booking-requests`),
-        apiClient.get('/payments').catch(() => ({ data: [] }))
+        apiClient.get(`/tutors/${fetchedTutorId}/payments`).catch(() => ({ data: [] })),
+        apiClient.get(`/tutors/${fetchedTutorId}/payouts`).catch(() => ({ data: [] }))
       ]);
       
-      // Filter payments for this tutor with sender='admin'
-      const tutorPayments = (allPaymentsRes.data || []).filter((p: any) => 
-        p.tutor_id === fetchedTutorId && p.sender === 'admin'
-      );
-      setPayments(tutorPayments);
+      // Get payment IDs that have payouts (convert to numbers for consistent comparison)
+      // Use the same logic as paymentIdsWithPayoutsForCalc to ensure consistency
+      const payoutPaymentIds = (payoutsRes.data || []).map((p: any) => {
+        // Try multiple possible field names for payment_id (same as EarningsHistory.tsx)
+        const pid = p.payment_id || (p.payment as any)?.payment_id || (p.payment as any)?.id;
+        const numPid = pid ? Number(pid) : null;
+        if (numPid && !isNaN(numPid)) {
+          return numPid;
+        }
+        return null;
+      }).filter((pid: any) => pid !== null && !isNaN(pid));
+      
+      const paymentIdsWithPayouts = new Set(payoutPaymentIds);
+      
+      console.log('[SessionHistory] Payouts data:', payoutsRes.data);
+      console.log('[SessionHistory] Payment IDs with payouts:', Array.from(paymentIdsWithPayouts));
+      
+      // Get all payments for this tutor (for checking which sessions have payments with payouts)
+      // We need to check ALL payments, not just confirmed ones, to see which bookings have payouts
+      const allTutorPayments = (tutorPaymentsRes.data || []);
+      
+      console.log('[SessionHistory] All tutor payments:', allTutorPayments);
+      console.log('[SessionHistory] Payment IDs with payouts:', Array.from(paymentIdsWithPayouts));
+      
+      // Create a map of booking_request_id to payment_id for quick lookup
+      // Map all payments (regardless of status) to their booking IDs
+      const bookingIdToPaymentId = new Map<number, number>();
+      allTutorPayments.forEach((p: any) => {
+        const paymentId = p.payment_id || p.id;
+        const paymentIdNum = paymentId ? Number(paymentId) : null;
+        const bookingId = p.booking_request_id;
+        if (bookingId && paymentIdNum !== null && !isNaN(paymentIdNum)) {
+          const bookingIdNum = Number(bookingId);
+          // If multiple payments exist for same booking, keep the one that has a payout (if any)
+          if (!bookingIdToPaymentId.has(bookingIdNum) || paymentIdsWithPayouts.has(paymentIdNum)) {
+            bookingIdToPaymentId.set(bookingIdNum, paymentIdNum);
+          }
+        }
+      });
+      
+      console.log('[SessionHistory] Booking ID to Payment ID map:', Array.from(bookingIdToPaymentId.entries()));
+      
+      // Store booking IDs that have payments with payouts (to exclude from upcoming sessions)
+      const bookingIdsWithPayouts = new Set<number>();
+      bookingIdToPaymentId.forEach((paymentId, bookingId) => {
+        const paymentIdNum = Number(paymentId);
+        if (paymentIdsWithPayouts.has(paymentIdNum)) {
+          const bookingIdNum = Number(bookingId);
+          bookingIdsWithPayouts.add(bookingIdNum);
+          console.log(`[SessionHistory] Booking ${bookingIdNum} has payment ${paymentIdNum} with payout - will be excluded`);
+        }
+      });
+      
+      console.log('[SessionHistory] Booking IDs with payouts (final):', Array.from(bookingIdsWithPayouts));
+      
+      // Filter payments for this tutor with status "confirmed" that don't have payouts
+      const tutorPayments = allTutorPayments.filter((p: any) => {
+        const paymentId = p.payment_id || p.id;
+        const paymentIdNum = paymentId ? Number(paymentId) : null;
+        
+        // Only include payments with status "confirmed" that don't have payouts
+        return p.status === 'confirmed' && 
+               paymentIdNum !== null &&
+               !isNaN(paymentIdNum) &&
+               !paymentIdsWithPayouts.has(paymentIdNum);
+      });
+      
+      // Store all tutor payments (not just confirmed without payouts) so we can find payments for expected earnings
+      setPayments(allTutorPayments);
+      setPayouts(payoutsRes.data || []);
+      setBookingIdsWithPayouts(bookingIdsWithPayouts);
       
       let allBookings = [];
       if (Array.isArray(res.data)) {
@@ -204,15 +273,15 @@ const SessionHistory: React.FC = () => {
     fetchHistory();
   }, [user, now]);
 
-  // Calculate payment received from payments table (sender='admin', matched by booking_request_id and student_id)
+  // Calculate payment received from payments table (status='confirmed', matched by booking_request_id, not in payouts)
   const calculatePaymentReceived = (session: BookingRequest): number => {
-    // Find payment with sender='admin', matching booking_request_id
+    // Find payment with status='confirmed', matching booking_request_id
     // Match by booking_request_id and student (via user_id from student.user or direct student_id)
     const sessionStudentUserId = session.student?.user_id;
     
     const payment = payments.find(p => {
-      // Must have sender='admin' and matching booking_request_id
-      if (p.sender !== 'admin' || p.booking_request_id !== session.id) {
+      // Must have status='confirmed' and matching booking_request_id
+      if (p.status !== 'confirmed' || p.booking_request_id !== session.id) {
         return false;
       }
       
@@ -223,7 +292,7 @@ const SessionHistory: React.FC = () => {
       }
       
       // If payment doesn't have student relation loaded, we can't match by student_id
-      // So we'll match only by booking_request_id and sender (assuming one payment per booking)
+      // So we'll match only by booking_request_id and status (assuming one payment per booking)
       // This is a fallback - ideally payments should include student relations
       return true;
     });
@@ -249,24 +318,137 @@ const SessionHistory: React.FC = () => {
     ));
   };
 
-  // Get upcoming sessions for the table (only show "upcoming" status sessions)
-  const upcomingSessionsWithData = sessions.filter(s => 
-    s.status === 'upcoming'
-  );
+  // Get payment IDs that have payouts (same logic as EarningsHistory.tsx)
+  // Must be defined before upcomingSessionsWithData
+  const paymentIdsWithPayoutsForCalc = useMemo(() => {
+    const payoutPaymentIds = payouts
+      .map((p: any) => {
+        // Try multiple possible field names for payment_id
+        const pid = p.payment_id || (p.payment as any)?.payment_id || (p.payment as any)?.id;
+        const numPid = pid ? Number(pid) : null;
+        if (numPid && !isNaN(numPid)) {
+          return numPid;
+        }
+        return null;
+      })
+      .filter((pid: any) => pid !== null && !isNaN(pid));
+    
+    return new Set(payoutPaymentIds);
+  }, [payouts]);
+
+  // Filter payments: only show "confirmed" payments that don't have payouts (same as EarningsHistory.tsx)
+  // Must be defined before upcomingSessionsWithData
+  const confirmedPaymentsWithoutPayouts = useMemo(() => {
+    const confirmedPayments = payments.filter((p: any) => p.status === 'confirmed');
+    
+    const filtered = confirmedPayments.filter((p: any) => {
+      const paymentId = p.payment_id || p.id;
+      const paymentIdNum = paymentId ? Number(paymentId) : null;
+      
+      // Exclude if payment ID is invalid
+      if (paymentIdNum === null || isNaN(paymentIdNum)) {
+        return false;
+      }
+      
+      const hasPayout = paymentIdsWithPayoutsForCalc.has(paymentIdNum);
+      return !hasPayout;
+    });
+    
+    return filtered;
+  }, [payments, paymentIdsWithPayoutsForCalc]);
+
+  // Get upcoming sessions for the table (only show "upcoming" status sessions that don't have payments with payouts)
+  const upcomingSessionsWithData = useMemo(() => {
+    const upcomingSessions = sessions.filter(s => s.status === 'upcoming');
+    
+    // Create a set of booking IDs that have confirmed payments without payouts
+    // Sessions should only be shown if they have a payment in confirmedPaymentsWithoutPayouts
+    // OR if they don't have any payment yet (will calculate from rate)
+    const bookingIdsWithConfirmedPaymentsWithoutPayouts = new Set<number>();
+    confirmedPaymentsWithoutPayouts.forEach((p: any) => {
+      const bookingId = p.booking_request_id;
+      if (bookingId) {
+        bookingIdsWithConfirmedPaymentsWithoutPayouts.add(Number(bookingId));
+      }
+    });
+    
+    const filtered = upcomingSessions.filter(s => {
+      const sessionId = Number(s.id);
+      
+      // Check if this session has a payment that already has a payout
+      // If the session ID is in bookingIdsWithPayouts, it means it has a payment with a payout
+      const hasPayout = bookingIdsWithPayouts.has(sessionId);
+      
+      if (hasPayout) {
+        console.log(`[SessionHistory] Excluding upcoming session ${sessionId} - has payment with payout`);
+        return false;
+      }
+      
+      // Also check: if there's a payment for this booking that's NOT in confirmedPaymentsWithoutPayouts,
+      // it means it has a payout, so exclude it
+      // We already check bookingIdsWithPayouts above, but let's also verify by checking payments directly
+      const paymentForThisSession = payments.find((p: any) => {
+        const paymentId = p.payment_id || p.id;
+        const paymentIdNum = paymentId ? Number(paymentId) : null;
+        return p.booking_request_id === sessionId && 
+               paymentIdNum !== null &&
+               !isNaN(paymentIdNum) &&
+               paymentIdsWithPayoutsForCalc.has(paymentIdNum);
+      });
+      
+      if (paymentForThisSession) {
+        console.log(`[SessionHistory] Excluding upcoming session ${sessionId} - payment ${paymentForThisSession.payment_id || paymentForThisSession.id} has payout`);
+        return false;
+      }
+      
+      return true;
+    });
+    
+    console.log(`[SessionHistory] Total sessions: ${sessions.length}`);
+    console.log(`[SessionHistory] Upcoming sessions (before filter): ${upcomingSessions.length}`);
+    console.log(`[SessionHistory] Upcoming sessions (after filter): ${filtered.length}`);
+    console.log(`[SessionHistory] Booking IDs with payouts:`, Array.from(bookingIdsWithPayouts));
+    console.log(`[SessionHistory] Payment IDs with payouts:`, Array.from(paymentIdsWithPayoutsForCalc));
+    console.log(`[SessionHistory] Upcoming session IDs (after filter):`, filtered.map(s => s.id));
+    
+    return filtered;
+  }, [sessions, bookingIdsWithPayouts, confirmedPaymentsWithoutPayouts, payments, paymentIdsWithPayoutsForCalc]);
 
   const totalUpcomingHours = upcomingSessionsWithData.reduce((sum, s) => {
     const duration = Number(s.duration ?? 0);
     return sum + (Number.isNaN(duration) ? 0 : duration);
   }, 0);
 
-  const totalUpcomingEarnings = upcomingSessionsWithData.reduce((sum, s) => {
-    // Calculate expected earnings for upcoming sessions (after 13% service fee deduction)
-    const ratePerHour = s.session_rate_per_hour || sessionRate || 0;
-    const duration = Number(s.duration ?? 0);
-    const grossEarnings = ratePerHour * duration;
-    const expectedEarnings = grossEarnings * 0.87; // Deduct 13% service fee
-    return sum + (Number.isNaN(expectedEarnings) ? 0 : expectedEarnings);
-  }, 0);
+  // Calculate upcoming earnings based on sessions in upcomingSessionsWithData
+  // This ensures the total updates when sessions are marked as done and removed from the list
+  const totalUpcomingEarnings = useMemo(() => {
+    if (!upcomingSessionsWithData || upcomingSessionsWithData.length === 0) {
+      return 0;
+    }
+    
+    return upcomingSessionsWithData.reduce((sum, session) => {
+      // Find payment with booking_request_id matching this session
+      const payment = payments.find((p: any) => {
+        const bookingId = p.booking_request_id || (p.bookingRequest as any)?.id;
+        const sessionId = session.id;
+        return bookingId === sessionId || bookingId === Number(sessionId) || Number(bookingId) === sessionId;
+      });
+      
+      // Use actual payment amount * 0.87 if payment exists
+      // If no payment exists, calculate from session rate as fallback
+      let expectedEarnings = 0;
+      if (payment && payment.amount) {
+        expectedEarnings = Number(payment.amount) * 0.87;
+      } else {
+        // Fallback: calculate from session rate if no payment found
+        const ratePerHour = session.session_rate_per_hour || sessionRate || 0;
+        const duration = Number(session.duration ?? 0);
+        expectedEarnings = ratePerHour * duration * 0.87;
+      }
+      
+      return sum + expectedEarnings;
+    }, 0);
+  }, [upcomingSessionsWithData, payments, sessionRate]);
 
   // Helper: Check if a session is eligible for "Mark as done" button
   const isSessionEligibleForMarkAsDone = (r: BookingRequest) => {
@@ -527,133 +709,197 @@ const SessionHistory: React.FC = () => {
 
       {/* Upcoming Sessions Table */}
       {upcomingSessionsWithData.length > 0 && (
-        <Card className="p-4 sm:p-5 md:p-6 bg-gradient-to-br from-white via-primary-50/20 to-white rounded-xl sm:rounded-2xl shadow-xl border-2 border-primary-200/50 hover:shadow-2xl transition-all duration-300 -mx-2 sm:-mx-3 md:mx-0">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-5 sm:mb-6 pb-4 border-b-2 border-primary-200/50">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="p-3 sm:p-3.5 bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700 rounded-xl shadow-lg ring-2 ring-primary-200/50">
-                <TrendingUp className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
+        <Card className="p-0 bg-gradient-to-br from-white via-primary-50/10 to-white rounded-xl shadow-xl border-2 border-primary-200/60 overflow-hidden -mx-2 sm:-mx-3 md:mx-0">
+          {/* Enhanced Header with Gradient Background */}
+          <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 px-4 sm:px-5 py-3 sm:py-4 relative overflow-hidden">
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full -mr-20 -mt-20 blur-2xl"></div>
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full -ml-16 -mb-16 blur-2xl"></div>
+            </div>
+            <div className="relative flex items-center gap-3">
+              <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg shadow-lg">
+                <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div>
-                <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-white drop-shadow-md">
                   Upcoming Sessions
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                  {upcomingSessionsWithData.length} {upcomingSessionsWithData.length === 1 ? 'session' : 'sessions'} scheduled
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-full border border-white/30">
+                    <p className="text-xs sm:text-sm font-semibold text-white">
+                      {upcomingSessionsWithData.length} {upcomingSessionsWithData.length === 1 ? 'Session' : 'Sessions'}
+                    </p>
+                  </div>
+                  <div className="px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-full border border-white/30">
+                    <p className="text-xs sm:text-sm font-semibold text-white">
+                      {totalUpcomingHours.toFixed(1)} Hours
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Desktop Table View */}
-          <div className="hidden lg:block overflow-x-auto -mx-3 sm:mx-0">
+          <div className="hidden lg:block overflow-x-auto">
             <div className="inline-block min-w-full align-middle">
-              <div className="overflow-hidden rounded-xl border-2 border-slate-200/60 shadow-inner">
-                <table className="min-w-full divide-y divide-slate-200/60">
-                  <thead className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700">
+              <div className="overflow-hidden">
+                <table className="min-w-full divide-y divide-slate-200/40">
+                  <thead className="bg-gradient-to-r from-slate-50 via-primary-50/50 to-slate-50">
                     <tr>
-                      <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
                         Subject
                       </th>
-                      <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
                         Student
                       </th>
-                      <th scope="col" className="px-4 py-3.5 text-center text-xs font-bold text-white uppercase tracking-wider">
+                      <th scope="col" className="px-4 py-2.5 text-center text-xs font-bold text-slate-700 uppercase tracking-wider">
                         Duration
                       </th>
-                      <th scope="col" className="px-4 py-3.5 text-right text-xs font-bold text-white uppercase tracking-wider">
-                        Expected Earnings (After 13% Fee)
+                      <th scope="col" className="px-4 py-2.5 text-right text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Expected Earnings
                       </th>
-                      <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
-                        Student Notes
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Notes
                       </th>
-                      <th scope="col" className="px-4 py-3.5 text-left text-xs font-bold text-white uppercase tracking-wider">
-                        Date
+                      <th scope="col" className="px-4 py-2.5 text-left text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Date & Time
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-slate-200/60">
+                  <tbody className="bg-white divide-y divide-slate-100/50">
                     {upcomingSessionsWithData.map((session, index) => {
-                      // Calculate expected earnings for upcoming session (after 13% service fee deduction)
+                      // Calculate expected earnings from actual payment amount (not from session rate)
+                      // Find payment with booking_request_id matching this session from all payments
+                      const payment = payments.find((p: any) => {
+                        const bookingId = p.booking_request_id || (p.bookingRequest as any)?.id;
+                        const sessionId = session.id;
+                        const matches = bookingId === sessionId || bookingId === Number(sessionId) || Number(bookingId) === sessionId;
+                        
+                        if (index === 0) {
+                          console.log('[SessionHistory] Payment matching:', {
+                            paymentId: p.payment_id || p.id,
+                            bookingId,
+                            sessionId,
+                            matches,
+                            paymentAmount: p.amount,
+                            allPayments: payments.length
+                          });
+                        }
+                        
+                        return matches;
+                      });
+                      
+                      // Use actual payment amount * 0.87 if payment exists
+                      // If no payment exists, calculate from session rate as fallback
+                      let expectedEarnings = 0;
+                      if (payment && payment.amount) {
+                        expectedEarnings = Number(payment.amount) * 0.87;
+                        if (index === 0) {
+                          console.log('[SessionHistory] Using payment amount:', {
+                            paymentAmount: payment.amount,
+                            expectedEarnings
+                          });
+                        }
+                      } else {
+                        // Fallback: calculate from session rate if no payment found
+                        const ratePerHour = session.session_rate_per_hour || sessionRate || 0;
+                        const duration = Number(session.duration ?? 0);
+                        expectedEarnings = ratePerHour * duration * 0.87;
+                        if (index === 0) {
+                          console.log('[SessionHistory] No payment found, using rate calculation:', {
+                            ratePerHour,
+                            duration,
+                            expectedEarnings
+                          });
+                        }
+                      }
+                      
                       const ratePerHour = session.session_rate_per_hour || sessionRate || 0;
                       const duration = Number(session.duration ?? 0);
-                      const grossEarnings = ratePerHour * duration;
-                      const expectedEarnings = grossEarnings * 0.87; // Deduct 13% service fee
                       
                       return (
                         <tr
                           key={session.id}
-                          className={`hover:bg-gradient-to-r hover:from-primary-50/50 hover:to-slate-50/50 transition-all duration-200 ${
-                            index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+                          className={`group hover:bg-gradient-to-r hover:from-primary-50/80 hover:via-primary-50/40 hover:to-transparent transition-all duration-300 cursor-pointer ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-slate-50/20'
                           }`}
                         >
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="p-1.5 bg-primary-100 rounded-lg mr-2">
-                                <BookOpen className="h-3.5 w-3.5 text-primary-700" />
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <div className="p-1.5 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg shadow-sm group-hover:shadow-md transition-shadow">
+                                <BookOpen className="h-3.5 w-3.5 text-white" />
                               </div>
-                              <span className="text-sm font-semibold text-slate-800">
+                              <span className="text-sm font-bold text-slate-800 group-hover:text-primary-700 transition-colors">
                                 {session.subject}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-2">
-                              <div className="p-1 bg-primary-100 rounded-full">
+                              <div className="p-1 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full shadow-sm">
                                 <User className="h-3.5 w-3.5 text-primary-700" />
                               </div>
-                              <span className="text-sm font-medium text-slate-700">
+                              <span className="text-sm font-semibold text-slate-700">
                                 {session.student?.name || 'Student'}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center">
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 rounded-lg">
+                          <td className="px-4 py-3 whitespace-nowrap text-center">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-slate-100 to-slate-50 rounded-lg border border-slate-200 shadow-sm">
                               <Clock className="h-3.5 w-3.5 text-primary-600" />
-                              <span className="text-sm font-semibold text-slate-700">
+                              <span className="text-sm font-bold text-slate-800">
                                 {session.duration} {session.duration === 1 ? 'hr' : 'hrs'}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-right">
-                            <div className="flex flex-col items-end">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-sm font-bold text-blue-700">
-                                  ₱{expectedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
+                          <td className="px-4 py-3 whitespace-nowrap text-right">
+                            <div className="flex flex-col items-end gap-0.5">
+                              <div className="px-2.5 py-1 bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg border border-emerald-200/50 shadow-sm">
+                                <div className="flex items-center gap-1">
+                                  <DollarSign className="h-3.5 w-3.5 text-emerald-700" />
+                                  <span className="text-sm font-bold text-emerald-700">
+                                    ₱{expectedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                </div>
                               </div>
                               {ratePerHour > 0 && (
-                                <div className="flex flex-col items-end mt-0.5">
-                                  <span className="text-[10px] text-slate-500">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-[10px] text-slate-500 font-medium">
                                     (₱{ratePerHour.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/hr)
                                   </span>
-                                  <span className="text-[9px] text-amber-600 font-medium mt-0.5">
-                                    After 13% service fee
+                                  <span className="text-[9px] text-amber-600 font-semibold">
+                                    After 13% fee
                                   </span>
                                 </div>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-3">
                             {session.student_notes ? (
                               <div className="max-w-xs">
-                                <p className="text-xs text-slate-700 line-clamp-2 break-words bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                                <p className="text-xs text-slate-700 line-clamp-2 break-words bg-gradient-to-r from-slate-50 to-primary-50/30 px-2.5 py-1.5 rounded-lg border border-slate-200/50 shadow-sm">
                                   {session.student_notes}
                                 </p>
                               </div>
                             ) : (
-                              <span className="text-xs text-slate-400 italic">No notes</span>
+                              <span className="text-xs text-slate-400 italic font-medium">No notes</span>
                             )}
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <Calendar className="h-3.5 w-3.5 text-primary-600" />
-                              <span className="text-xs text-slate-600">
-                                {new Date(session.date).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })}
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5 text-primary-600" />
+                                <span className="text-sm font-semibold text-slate-700">
+                                  {new Date(session.date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </span>
+                              </div>
+                              <span className="text-xs text-slate-500 font-medium ml-5">
+                                {session.time}
                               </span>
                             </div>
                           </td>
@@ -661,29 +907,38 @@ const SessionHistory: React.FC = () => {
                       );
                     })}
                   </tbody>
-                  <tfoot className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700">
+                  <tfoot className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800">
                     <tr>
-                      <td colSpan={2} className="px-4 py-4 text-sm font-bold text-white">
-                        Total
+                      <td colSpan={2} className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
+                            <TrendingUp className="h-4 w-4 text-white" />
+                          </div>
+                          <span className="text-sm font-bold text-white">Total Summary</span>
+                        </div>
                       </td>
-                      <td className="px-4 py-4 text-center">
-                        <span className="text-sm font-bold text-white bg-white/20 px-3 py-1 rounded-lg">
-                          {totalUpcomingHours.toFixed(1)} hrs
-                        </span>
+                      <td className="px-4 py-3 text-center">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                          <Clock className="h-3.5 w-3.5 text-white" />
+                          <span className="text-sm font-bold text-white">
+                            {totalUpcomingHours.toFixed(1)} hrs
+                          </span>
+                        </div>
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex flex-col items-end gap-1">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                            <DollarSign className="h-4 w-4 text-white" />
                             <span className="text-base font-bold text-white">
                               ₱{totalUpcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </div>
-                          <span className="text-[10px] text-white/80 font-medium">
+                          <span className="text-[10px] text-white/90 font-semibold">
                             After 13% service fee
                           </span>
                         </div>
                       </td>
-                      <td colSpan={1} className="px-4 py-4"></td>
+                      <td colSpan={2} className="px-4 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -694,83 +949,113 @@ const SessionHistory: React.FC = () => {
           {/* Mobile/Tablet Card View */}
           <div className="lg:hidden space-y-3 sm:space-y-4">
             {upcomingSessionsWithData.map((session, index) => {
-              // Calculate expected earnings for upcoming session (after 13% service fee deduction)
+              // Calculate expected earnings from actual payment amount (not from session rate)
+              // Find payment with booking_request_id matching this session from all payments
+              const payment = payments.find((p: any) => {
+                const bookingId = p.booking_request_id || (p.bookingRequest as any)?.id;
+                return bookingId === session.id || bookingId === Number(session.id);
+              });
+              
+              // Use actual payment amount * 0.87 if payment exists
+              // If no payment exists, calculate from session rate as fallback
+              let expectedEarnings = 0;
+              if (payment && payment.amount) {
+                expectedEarnings = Number(payment.amount) * 0.87;
+              } else {
+                // Fallback: calculate from session rate if no payment found
+                const ratePerHour = session.session_rate_per_hour || sessionRate || 0;
+                const duration = Number(session.duration ?? 0);
+                expectedEarnings = ratePerHour * duration * 0.87;
+              }
+              
               const ratePerHour = session.session_rate_per_hour || sessionRate || 0;
               const duration = Number(session.duration ?? 0);
-              const grossEarnings = ratePerHour * duration;
-              const expectedEarnings = grossEarnings * 0.87; // Deduct 13% service fee
               
               return (
                 <div
                   key={session.id}
-                  className="bg-gradient-to-br from-white to-slate-50/50 rounded-xl border-2 border-slate-200/60 shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden"
+                  className="bg-gradient-to-br from-white via-primary-50/10 to-white rounded-xl border-2 border-primary-200/60 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group"
                 >
-                  {/* Card Header */}
-                  <div className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700 px-4 py-3">
-                    <div className="flex items-center justify-between">
+                  {/* Enhanced Card Header */}
+                  <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 px-3 py-2.5 relative overflow-hidden">
+                    <div className="absolute inset-0 opacity-10">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-white rounded-full -mr-12 -mt-12 blur-xl"></div>
+                    </div>
+                    <div className="relative flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-white/20 rounded-lg">
+                        <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg shadow-md">
                           <BookOpen className="h-4 w-4 text-white" />
                         </div>
-                        <h3 className="text-sm font-bold text-white truncate">{session.subject}</h3>
+                        <div>
+                          <h3 className="text-sm font-bold text-white drop-shadow-md">{session.subject}</h3>
+                          <p className="text-[10px] text-white/90 font-medium mt-0.5">{session.student?.name || 'Student'}</p>
+                        </div>
                       </div>
-                      <div className="px-2 py-1 bg-white/20 rounded-lg">
-                        <span className="text-xs font-bold text-white">Upcoming</span>
+                      <div className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                        <span className="text-[10px] font-bold text-white">Upcoming</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Card Body */}
-                  <div className="p-4 space-y-3">
+                  {/* Enhanced Card Body */}
+                  <div className="p-3 space-y-2">
                     {/* Student & Date Row */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
-                        <User className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2 p-2 bg-gradient-to-br from-slate-50 to-primary-50/30 rounded-lg border border-slate-200/50 shadow-sm">
+                        <div className="p-1 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg">
+                          <User className="h-3.5 w-3.5 text-primary-700" />
+                        </div>
                         <div className="min-w-0">
-                          <p className="text-[10px] text-slate-500 font-medium">Student</p>
-                          <p className="text-xs font-semibold text-slate-800 truncate">{session.student?.name || 'Student'}</p>
+                          <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wide">Student</p>
+                          <p className="text-xs font-bold text-slate-800 truncate">{session.student?.name || 'Student'}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
-                        <Calendar className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                      <div className="flex items-center gap-2 p-2 bg-gradient-to-br from-slate-50 to-primary-50/30 rounded-lg border border-slate-200/50 shadow-sm">
+                        <div className="p-1 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg">
+                          <Calendar className="h-3.5 w-3.5 text-primary-700" />
+                        </div>
                         <div className="min-w-0">
-                          <p className="text-[10px] text-slate-500 font-medium">Date</p>
-                          <p className="text-xs font-semibold text-slate-800">
+                          <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wide">Date</p>
+                          <p className="text-xs font-bold text-slate-800">
                             {new Date(session.date).toLocaleDateString('en-US', {
                               month: 'short',
                               day: 'numeric',
                               year: 'numeric'
                             })}
                           </p>
+                          <p className="text-[9px] text-slate-500 font-medium mt-0.5">{session.time}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Duration & Expected Earnings Row */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border border-slate-200">
-                        <Clock className="h-4 w-4 text-primary-600 flex-shrink-0" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex items-center gap-2 p-2 bg-gradient-to-br from-slate-50 to-primary-50/30 rounded-lg border border-slate-200/50 shadow-sm">
+                        <div className="p-1 bg-gradient-to-br from-primary-100 to-primary-200 rounded-lg">
+                          <Clock className="h-3.5 w-3.5 text-primary-700" />
+                        </div>
                         <div>
-                          <p className="text-[10px] text-slate-500 font-medium">Duration</p>
-                          <p className="text-xs font-semibold text-slate-800">
+                          <p className="text-[9px] text-slate-500 font-semibold uppercase tracking-wide">Duration</p>
+                          <p className="text-xs font-bold text-slate-800">
                             {session.duration} {session.duration === 1 ? 'hr' : 'hrs'}
                           </p>
                         </div>
                       </div>
-                      <div className="p-2 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200">
-                        <p className="text-[10px] text-blue-600 font-medium mb-0.5">Expected Earnings</p>
-                        <div className="flex items-center gap-1">
-                          <p className="text-sm font-bold text-blue-700">
-                            ₱{expectedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
+                      <div className="p-2 bg-gradient-to-br from-emerald-50 via-green-50 to-emerald-50 rounded-lg border-2 border-emerald-200/60 shadow-sm">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <DollarSign className="h-3.5 w-3.5 text-emerald-700" />
+                          <p className="text-[9px] text-emerald-700 font-semibold uppercase tracking-wide">Expected Earnings</p>
                         </div>
+                        <p className="text-sm font-bold text-emerald-700 mb-0.5">
+                          ₱{expectedEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
                         {ratePerHour > 0 && (
-                          <div className="mt-0.5">
-                            <p className="text-[9px] text-blue-600">
+                          <div className="space-y-0.5">
+                            <p className="text-[8px] text-emerald-600 font-medium">
                               (₱{ratePerHour.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/hr)
                             </p>
-                            <p className="text-[9px] text-amber-600 font-medium mt-0.5">
-                              After 13% service fee
+                            <p className="text-[8px] text-amber-600 font-semibold">
+                              After 13% fee
                             </p>
                           </div>
                         )}
@@ -794,24 +1079,37 @@ const SessionHistory: React.FC = () => {
               );
             })}
 
-            {/* Mobile Summary Card */}
-            <div className="bg-gradient-to-r from-primary-500 via-primary-600 to-primary-700 rounded-xl p-4 shadow-lg border-2 border-primary-400">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-bold text-white">Total Summary</h3>
+            {/* Enhanced Mobile Summary Card */}
+            <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 rounded-xl p-3.5 shadow-xl border-2 border-primary-400/50 relative overflow-hidden">
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white rounded-full -ml-12 -mb-12 blur-2xl"></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white/20 rounded-lg p-2.5">
-                  <p className="text-[10px] text-white/80 font-medium mb-1">Total Hours</p>
-                  <p className="text-base font-bold text-white">{totalUpcomingHours.toFixed(1)} hrs</p>
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
+                    <TrendingUp className="h-4 w-4 text-white" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white drop-shadow-md">Total Summary</h3>
                 </div>
-                <div className="bg-white/20 rounded-lg p-2.5">
-                  <p className="text-[10px] text-white/80 font-medium mb-1">Expected Earnings</p>
-                  <div className="flex flex-col">
-                    <p className="text-base font-bold text-white">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2.5 border border-white/30 shadow-md">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Clock className="h-3.5 w-3.5 text-white" />
+                      <p className="text-[9px] text-white/90 font-semibold uppercase tracking-wide">Total Hours</p>
+                    </div>
+                    <p className="text-base font-bold text-white">{totalUpcomingHours.toFixed(1)} hrs</p>
+                  </div>
+                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2.5 border border-white/30 shadow-md">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <DollarSign className="h-3.5 w-3.5 text-white" />
+                      <p className="text-[9px] text-white/90 font-semibold uppercase tracking-wide">Expected Earnings</p>
+                    </div>
+                    <p className="text-base font-bold text-white mb-0.5">
                       ₱{totalUpcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
-                    <p className="text-[9px] text-white/90 font-medium mt-0.5">
-                      After 13% service fee
+                    <p className="text-[8px] text-white/90 font-semibold">
+                      After 13% fee
                     </p>
                   </div>
                 </div>
@@ -819,15 +1117,15 @@ const SessionHistory: React.FC = () => {
             </div>
           </div>
 
-          {/* Info Note */}
-          <div className="mt-4 sm:mt-5 p-3 sm:p-4 bg-gradient-to-br from-primary-50 via-amber-50/50 to-primary-50 border-2 border-primary-200/60 rounded-xl shadow-sm">
+          {/* Enhanced Info Note */}
+          <div className="mt-4 p-3 sm:p-4 bg-gradient-to-br from-primary-50 via-amber-50/40 to-primary-50 border-2 border-primary-200/70 rounded-xl shadow-md">
             <div className="flex items-start gap-2.5">
-              <div className="p-1.5 bg-primary-100 rounded-lg flex-shrink-0">
-                <Info className="h-4 w-4 sm:h-5 sm:w-5 text-primary-700" />
+              <div className="p-1.5 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg shadow-sm flex-shrink-0">
+                <Info className="h-4 w-4 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs sm:text-sm text-primary-800 leading-relaxed">
-                  <span className="font-bold">Note:</span> Expected earnings are calculated based on your session rate per hour multiplied by the session duration, with a 13% service fee deduction. Actual payment will be processed after session completion.
+                <p className="text-xs sm:text-sm text-primary-900 leading-relaxed font-medium">
+                  <span className="font-bold text-primary-800">Note:</span> Expected earnings are calculated based on the actual payment amount (if available) or your session rate per hour multiplied by the session duration, with a 13% service fee deduction. Actual payment will be processed after session completion.
                 </p>
               </div>
             </div>
@@ -885,3 +1183,4 @@ const SessionHistory: React.FC = () => {
 };
 
 export default SessionHistory;
+

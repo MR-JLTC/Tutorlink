@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Search } from 'lucide-react';
+import { Search, FileText } from 'lucide-react';
 import apiClient, { getFileUrl } from '../../services/api';
 import Modal from '../ui/Modal';
 import { ToastContainer, toast } from 'react-toastify';
@@ -55,7 +55,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
   }, [searchDraft]);
   const [filterOption, setFilterOption] = useState<'all' | 'has_subjects' | 'top_rated' | 'with_reviews' | 'newest'>('all');
   const [priceFilter, setPriceFilter] = useState<'all' | 'under_300' | '300_500' | '500_700' | '700_plus'>('all');
-  const [ratingFilter, setRatingFilter] = useState<'all' | '4_plus' | '3_plus' | '2_plus' | '1_plus'>('all');
+  const [ratingFilter, setRatingFilter] = useState<'all' | '4_plus' | '3' | '2' | '1' | 'no_rate'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTutorProfile, setSelectedTutorProfile] = useState<any | null>(null);
@@ -71,26 +71,50 @@ const TuteeFindAndBookTutors: React.FC = () => {
         const all: TutorListItem[] = res.data || [];
         // Only show users that are tutors and have been approved
         const tutorsOnly = all.filter(u => u.tutor_profile && (u.tutor_profile.status || '').toLowerCase() === 'approved');
-        // Sort by rating (higher first) and then by creation date if ratings are equal
+        // Sort by creation date first (will be re-sorted after ratings are calculated)
         const sortedTutors = tutorsOnly.sort((a, b) => {
-          const ratingA = a.tutor_profile?.rating || 0;
-          const ratingB = b.tutor_profile?.rating || 0;
-          if (ratingB !== ratingA) {
-            return ratingB - ratingA;
-          }
-          // If ratings are equal, sort by creation date (oldest first)
           const dateA = new Date(a.created_at || 0).getTime();
           const dateB = new Date(b.created_at || 0).getTime();
           return dateA - dateB;
         });
-        // Enrich each tutor with their public profile (which contains subjects)
+        // Enrich each tutor with their public profile (which contains subjects) and fetch ratings
         try {
           const enriched = await Promise.all(sortedTutors.map(async (u) => {
             const tutorId = (u as any).tutor_profile?.tutor_id;
             if (!tutorId) return u;
             try {
-              const profileRes = await apiClient.get(`/tutors/${tutorId}/profile`);
-              return { ...u, profile: profileRes.data };
+              const [profileRes, bookingsRes] = await Promise.all([
+                apiClient.get(`/tutors/${tutorId}/profile`),
+                apiClient.get(`/tutors/${tutorId}/booking-requests`).catch(() => ({ data: [] })),
+              ]);
+              
+              // Calculate rating from booking requests
+              let bookings: any[] = [];
+              if (Array.isArray(bookingsRes.data)) {
+                bookings = bookingsRes.data;
+              } else if (Array.isArray(bookingsRes.data?.data)) {
+                bookings = bookingsRes.data.data;
+              } else if (Array.isArray(bookingsRes.data?.bookings)) {
+                bookings = bookingsRes.data.bookings;
+              }
+              
+              // Calculate average rating from all ratings
+              const ratings: number[] = [];
+              bookings.forEach((booking: any) => {
+                if (booking.tutee_rating && booking.tutee_rating > 0) {
+                  ratings.push(Number(booking.tutee_rating));
+                }
+              });
+              
+              let averageRating = 0;
+              let totalRatings = 0;
+              if (ratings.length > 0) {
+                const sum = ratings.reduce((acc, rating) => acc + rating, 0);
+                averageRating = sum / ratings.length;
+                totalRatings = ratings.length;
+              }
+              
+              return { ...u, profile: profileRes.data, calculatedRating: averageRating, calculatedTotalRatings: totalRatings };
             } catch (err) {
               // If profile fetch fails, return the original item without profile
               console.warn('Failed to fetch tutor profile for', tutorId, err);
@@ -99,16 +123,40 @@ const TuteeFindAndBookTutors: React.FC = () => {
           }));
           setTutors(enriched as TutorListItem[]);
           
-          // Extract online status from tutor profiles
+          // Extract online status from tutor profiles and store ratings
           const onlineStatusMap: Record<number, boolean> = {};
+          const ratingsMap: Record<number, { average: number; totalRatings: number }> = {};
           enriched.forEach(tutor => {
             if (tutor.user_id && tutor.tutor_profile) {
               // Get online status from tutor_profile (from API response)
               const onlineStatus = tutor.tutor_profile.activity_status;
               onlineStatusMap[tutor.user_id] = onlineStatus === 'online';
+              
+              // Store calculated ratings
+              if ((tutor as any).calculatedRating !== undefined) {
+                ratingsMap[tutor.user_id] = {
+                  average: (tutor as any).calculatedRating,
+                  totalRatings: (tutor as any).calculatedTotalRatings || 0
+                };
+              }
             }
           });
           setTutorOnlineStatus(onlineStatusMap);
+          setTutorRatings(ratingsMap);
+          
+          // Re-sort tutors by calculated ratings
+          const sortedByRating = [...enriched].sort((a, b) => {
+            const ratingA = ratingsMap[a.user_id]?.average || 0;
+            const ratingB = ratingsMap[b.user_id]?.average || 0;
+            if (ratingB !== ratingA) {
+              return ratingB - ratingA;
+            }
+            // If ratings are equal, sort by creation date (oldest first)
+            const dateA = new Date(a.created_at || 0).getTime();
+            const dateB = new Date(b.created_at || 0).getTime();
+            return dateA - dateB;
+          });
+          setTutors(sortedByRating as TutorListItem[]);
         } catch (err) {
           // If enrichment fails for any reason, fall back to the basic list
           console.warn('Failed to enrich tutors with profile data', err);
@@ -147,6 +195,9 @@ const TuteeFindAndBookTutors: React.FC = () => {
   const [existingBookings, setExistingBookings] = useState<any[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [tutorOnlineStatus, setTutorOnlineStatus] = useState<Record<number, boolean>>({});
+  const [tutorBookingRequests, setTutorBookingRequests] = useState<any[]>([]);
+  const [tutorDocuments, setTutorDocuments] = useState<any[]>([]);
+  const [tutorRatings, setTutorRatings] = useState<Record<number, { average: number; totalRatings: number }>>({});
 
   // Fetch existing bookings for the tutor on the selected date
   useEffect(() => {
@@ -532,6 +583,56 @@ const TuteeFindAndBookTutors: React.FC = () => {
     return result.toISOString().split('T')[0];
   };
 
+  // Calculate average rating per subject for the selected tutor
+  const subjectRatings = useMemo(() => {
+    if (!tutorBookingRequests || tutorBookingRequests.length === 0) {
+      return {};
+    }
+
+    const ratingsBySubject: Record<string, number[]> = {};
+    
+    tutorBookingRequests.forEach((booking: any) => {
+      if (booking.tutee_rating && booking.tutee_rating > 0 && booking.subject) {
+        const subject = String(booking.subject).trim();
+        if (!ratingsBySubject[subject]) {
+          ratingsBySubject[subject] = [];
+        }
+        ratingsBySubject[subject].push(Number(booking.tutee_rating));
+      }
+    });
+
+    const averages: Record<string, { average: number; count: number }> = {};
+    Object.entries(ratingsBySubject).forEach(([subject, ratings]) => {
+      const sum = ratings.reduce((acc, rating) => acc + rating, 0);
+      const average = sum / ratings.length;
+      averages[subject] = {
+        average: average,
+        count: ratings.length
+      };
+    });
+
+    return averages;
+  }, [tutorBookingRequests]);
+
+  // Calculate overall average rating from subject averages
+  const overallAverageRating = useMemo(() => {
+    const subjectRatingValues = Object.values(subjectRatings);
+    if (subjectRatingValues.length === 0) {
+      return null;
+    }
+    
+    // Calculate weighted average based on number of ratings per subject
+    let totalWeightedSum = 0;
+    let totalRatings = 0;
+    
+    subjectRatingValues.forEach(({ average, count }) => {
+      totalWeightedSum += average * count;
+      totalRatings += count;
+    });
+    
+    return totalRatings > 0 ? totalWeightedSum / totalRatings : null;
+  }, [subjectRatings]);
+
   // Filter and search tutors client-side by name or subject
   const filteredTutors = useMemo(() => {
     const q = (searchQuery || '').trim().toLowerCase();
@@ -576,16 +677,19 @@ const TuteeFindAndBookTutors: React.FC = () => {
     // Apply rating filter
     if (ratingFilter !== 'all') {
       list = list.filter(t => {
-        const rating = t.tutor_profile?.rating || 0;
+        const rating = tutorRatings[t.user_id]?.average || 0;
+        const hasRatings = tutorRatings[t.user_id]?.totalRatings > 0;
         switch (ratingFilter) {
           case '4_plus':
             return rating >= 4;
-          case '3_plus':
-            return rating >= 3;
-          case '2_plus':
-            return rating >= 2;
-          case '1_plus':
-            return rating >= 1;
+          case '3':
+            return rating >= 3 && rating < 4;
+          case '2':
+            return rating >= 2 && rating < 3;
+          case '1':
+            return rating >= 1 && rating < 2;
+          case 'no_rate':
+            return !hasRatings || rating === 0;
           default:
             return true;
         }
@@ -599,15 +703,15 @@ const TuteeFindAndBookTutors: React.FC = () => {
         return Array.isArray(subjects) && subjects.length > 0;
       });
     } else if (filterOption === 'top_rated') {
-      list = list.sort((a, b) => (b.tutor_profile?.rating || 0) - (a.tutor_profile?.rating || 0));
+      list = list.sort((a, b) => (tutorRatings[b.user_id]?.average || 0) - (tutorRatings[a.user_id]?.average || 0));
     } else if (filterOption === 'with_reviews') {
-      list = list.filter(t => (t.tutor_profile?.total_reviews || 0) > 0).sort((a, b) => (b.tutor_profile?.rating || 0) - (a.tutor_profile?.rating || 0));
+      list = list.filter(t => (tutorRatings[t.user_id]?.totalRatings || 0) > 0).sort((a, b) => (tutorRatings[b.user_id]?.average || 0) - (tutorRatings[a.user_id]?.average || 0));
     } else if (filterOption === 'newest') {
       list = list.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
     }
 
     return list;
-  }, [tutors, searchQuery, filterOption, priceFilter, ratingFilter]);
+  }, [tutors, searchQuery, filterOption, priceFilter, ratingFilter, tutorRatings]);
 
   const handleBook = () => {
     const isValid = validateBookingForm();
@@ -684,18 +788,50 @@ const TuteeFindAndBookTutors: React.FC = () => {
     setIsProfileOpen(true);
     try {
       const tutorId = tutorUser.tutor_profile.tutor_id;
-      const [profileRes, availRes] = await Promise.all([
+      const [profileRes, availRes, bookingsRes, documentsRes] = await Promise.all([
         apiClient.get(`/tutors/${tutorId}/profile`),
         apiClient.get(`/tutors/${tutorId}/availability`),
+        apiClient.get(`/tutors/${tutorId}/booking-requests`).catch(() => ({ data: [] })),
+        apiClient.get(`/tutors/${tutorId}/documents`).catch(() => ({ data: [] })),
       ]);
       setSelectedTutorProfile({
         user: tutorUser,
         profile: profileRes.data,
         availability: availRes.data,
       });
+      // Extract booking requests from response
+      let bookings: any[] = [];
+      if (Array.isArray(bookingsRes.data)) {
+        bookings = bookingsRes.data;
+      } else if (Array.isArray(bookingsRes.data?.data)) {
+        bookings = bookingsRes.data.data;
+      } else if (Array.isArray(bookingsRes.data?.bookings)) {
+        bookings = bookingsRes.data.bookings;
+      }
+      setTutorBookingRequests(bookings);
+      
+      // Extract documents from response - ensure we get all documents
+      let documents: any[] = [];
+      if (Array.isArray(documentsRes.data)) {
+        documents = documentsRes.data;
+      } else if (Array.isArray(documentsRes.data?.data)) {
+        documents = documentsRes.data.data;
+      } else if (documentsRes.data && typeof documentsRes.data === 'object') {
+        // Try to extract documents from nested structure
+        const data = documentsRes.data;
+        if (data.documents && Array.isArray(data.documents)) {
+          documents = data.documents;
+        } else if (data.docs && Array.isArray(data.docs)) {
+          documents = data.docs;
+        }
+      }
+      console.log('Fetched tutor documents:', documents);
+      setTutorDocuments(documents);
     } catch (err) {
       console.error('Failed to load tutor profile', err);
       setSelectedTutorProfile({ user: tutorUser, profile: null, availability: [] });
+      setTutorBookingRequests([]);
+      setTutorDocuments([]);
     } finally {
       setProfileLoading(false);
     }
@@ -861,9 +997,10 @@ const TuteeFindAndBookTutors: React.FC = () => {
             >
               <option value="all">All ratings</option>
               <option value="4_plus">4+ ⭐</option>
-              <option value="3_plus">3+ ⭐</option>
-              <option value="2_plus">2+ ⭐</option>
-              <option value="1_plus">1+ ⭐</option>
+              <option value="3">3 ⭐</option>
+              <option value="2">2 ⭐</option>
+              <option value="1">1 ⭐</option>
+              <option value="no_rate">No rate</option>
             </select>
           </div>
         </div>
@@ -943,22 +1080,31 @@ const TuteeFindAndBookTutors: React.FC = () => {
                   
                   {/* Ratings */}
                   <div className="flex items-center justify-center gap-1.5 mb-3">
-                    <div className="flex items-center">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <svg
-                          key={star}
-                          className={`w-4 h-4 ${star <= (t.tutor_profile?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                      ))}
-                    </div>
-                    <span className="text-xs font-semibold text-slate-700">
-                      {t.tutor_profile?.rating?.toFixed(1) || 'No ratings'}
-                      {t.tutor_profile?.total_reviews ? ` (${t.tutor_profile.total_reviews})` : ''}
-                    </span>
+                    {(() => {
+                      const tutorRating = tutorRatings[t.user_id];
+                      const rating = tutorRating?.average || 0;
+                      const totalRatings = tutorRating?.totalRatings || 0;
+                      return (
+                        <>
+                          <div className="flex items-center">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <svg
+                                key={star}
+                                className={`w-4 h-4 ${star <= Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                              </svg>
+                            ))}
+                          </div>
+                          <span className="text-xs font-semibold text-slate-700">
+                            {rating > 0 ? rating.toFixed(1) : 'No ratings'}
+                            {totalRatings > 0 ? ` (${totalRatings})` : ''}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </div>
                   
                   {/* Subjects */}
@@ -1011,22 +1157,31 @@ const TuteeFindAndBookTutors: React.FC = () => {
                     <div className="mt-2 space-y-2">
                       {/* Ratings */}
                       <div className="flex items-center gap-1">
-                        <div className="flex items-center flex-shrink-0">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <svg
-                              key={star}
-                              className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${star <= (t.tutor_profile?.rating || 0) ? 'text-yellow-400' : 'text-gray-300'}`}
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                            </svg>
-                          ))}
-                        </div>
-                        <span className="text-[10px] sm:text-xs md:text-sm text-slate-600 truncate">
-                          {t.tutor_profile?.rating?.toFixed(1) || 'No ratings'} 
-                          {t.tutor_profile?.total_reviews ? ` (${t.tutor_profile.total_reviews})` : ''}
-                        </span>
+                        {(() => {
+                          const tutorRating = tutorRatings[t.user_id];
+                          const rating = tutorRating?.average || 0;
+                          const totalRatings = tutorRating?.totalRatings || 0;
+                          return (
+                            <>
+                              <div className="flex items-center flex-shrink-0">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <svg
+                                    key={star}
+                                    className={`w-3 h-3 sm:w-3.5 sm:h-3.5 md:w-4 md:h-4 ${star <= Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}`}
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                  </svg>
+                                ))}
+                              </div>
+                              <span className="text-[10px] sm:text-xs md:text-sm text-slate-600 truncate">
+                                {rating > 0 ? rating.toFixed(1) : 'No ratings'} 
+                                {totalRatings > 0 ? ` (${totalRatings})` : ''}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
                       {/* Subjects - below ratings */}
                       {profileSubjects.length > 0 && (
@@ -1206,17 +1361,17 @@ const TuteeFindAndBookTutors: React.FC = () => {
                         <span className="text-xs sm:text-sm font-medium">{selectedTutorProfile?.user?.university_name || 'N/A'}</span>
                       </div>
                       <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                        <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm rounded-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 shadow-lg border border-white/20">
-                          <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-yellow-300 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
-                          </svg>
-                          <span className="font-bold text-sm sm:text-base md:text-lg">{selectedTutorProfile?.user?.tutor_profile?.rating?.toFixed(1) || '—'}</span>
-                          <span className="text-[10px] sm:text-xs opacity-90 ml-1.5 sm:ml-2">
-                            {selectedTutorProfile?.user?.tutor_profile?.total_reviews 
-                              ? `(${selectedTutorProfile.user.tutor_profile.total_reviews} ${selectedTutorProfile.user.tutor_profile.total_reviews === 1 ? 'review' : 'reviews'})` 
-                              : 'No reviews'}
-                          </span>
-                        </div>
+                        {overallAverageRating !== null && (
+                          <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm rounded-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 shadow-lg border border-white/20">
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-yellow-300 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                            </svg>
+                            <span className="font-bold text-sm sm:text-base md:text-lg">{overallAverageRating.toFixed(1)}</span>
+                            <span className="text-[10px] sm:text-xs opacity-90 ml-1.5 sm:ml-2">
+                              ({Object.values(subjectRatings).reduce((sum, sr) => sum + sr.count, 0)} {Object.values(subjectRatings).reduce((sum, sr) => sum + sr.count, 0) === 1 ? 'rating' : 'ratings'})
+                            </span>
+                          </div>
+                        )}
                         {selectedTutorProfile?.profile?.session_rate_per_hour && (
                           <div className="inline-flex items-center bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm rounded-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 shadow-lg border border-white/20">
                             <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-emerald-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1275,21 +1430,50 @@ const TuteeFindAndBookTutors: React.FC = () => {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                        {(selectedTutorProfile?.profile?.subjects || []).map((s: string, i: number) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              setSearchDraft(String(s));
-                              setSearchQuery(String(s));
-                              setIsProfileOpen(false);
-                            }}
-                            className="group relative px-3 sm:px-4 md:px-4 py-2 sm:py-2.5 md:py-2.5 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-800 rounded-lg hover:from-sky-200 hover:to-indigo-200 active:from-sky-300 active:to-indigo-300 transition-all duration-200 font-medium text-sm sm:text-sm shadow-md hover:shadow-lg border-2 border-sky-200 hover:border-sky-400 touch-manipulation text-left"
-                            style={{ WebkitTapHighlightColor: 'transparent' }}
-                          >
-                            <span className="relative z-10 block break-words">{s}</span>
-                            <div className="absolute inset-0 bg-gradient-to-r from-sky-600 to-indigo-600 rounded-lg opacity-0 group-hover:opacity-10 transition-opacity"></div>
-                          </button>
-                        ))}
+                        {(selectedTutorProfile?.profile?.subjects || []).map((s: string, i: number) => {
+                          const subjectRating = subjectRatings[s];
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => {
+                                setSearchDraft(String(s));
+                                setSearchQuery(String(s));
+                                setIsProfileOpen(false);
+                              }}
+                              className="group relative px-3 sm:px-4 md:px-4 py-2.5 sm:py-3 md:py-3 bg-gradient-to-r from-sky-100 to-indigo-100 text-sky-800 rounded-lg hover:from-sky-200 hover:to-indigo-200 active:from-sky-300 active:to-indigo-300 transition-all duration-200 font-medium text-sm sm:text-sm shadow-md hover:shadow-lg border-2 border-sky-200 hover:border-sky-400 touch-manipulation text-left w-full overflow-visible"
+                              style={{ WebkitTapHighlightColor: 'transparent' }}
+                            >
+                              <div className="relative z-10 flex flex-col gap-1.5 min-w-0 w-full">
+                                <span className="block break-words font-semibold w-full">{s}</span>
+                                {subjectRating && subjectRating.count > 0 ? (
+                                  <div className="flex items-center gap-1.5 flex-wrap min-w-0 w-full">
+                                    <div className="flex items-center flex-shrink-0">
+                                      {[1, 2, 3, 4, 5].map((star) => (
+                                        <svg
+                                          key={star}
+                                          className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${star <= Math.floor(subjectRating.average) ? 'text-yellow-400 fill-current' : 'text-slate-300'}`}
+                                          fill="currentColor"
+                                          viewBox="0 0 20 20"
+                                        >
+                                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                        </svg>
+                                      ))}
+                                    </div>
+                                    <span className="text-xs font-bold text-slate-700 whitespace-nowrap flex-shrink-0">
+                                      {subjectRating.average.toFixed(1)}
+                                    </span>
+                                    <span className="text-[10px] sm:text-xs text-slate-500 whitespace-nowrap flex-shrink-0">
+                                      ({subjectRating.count} {subjectRating.count === 1 ? 'rating' : 'ratings'})
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] sm:text-xs text-slate-500 italic">No ratings yet</span>
+                                )}
+                              </div>
+                              <div className="absolute inset-0 bg-gradient-to-r from-sky-600 to-indigo-600 rounded-lg opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1403,6 +1587,75 @@ const TuteeFindAndBookTutors: React.FC = () => {
                           );
                         });
                       })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Third Row: Supporting Documents Section (full width) */}
+                <div className="bg-white rounded-lg sm:rounded-xl lg:rounded-xl p-4 sm:p-5 md:p-5 lg:p-6 shadow-lg border border-slate-200 hover:shadow-xl transition-shadow duration-300">
+                  <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-4">
+                    <div className="p-2 sm:p-2.5 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-xl flex-shrink-0 shadow-md">
+                      <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg sm:text-xl md:text-xl lg:text-xl font-bold text-slate-800">Supporting Documents</h3>
+                      <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+                        Verified documents to ensure tutor reliability
+                      </p>
+                    </div>
+                  </div>
+                  {tutorDocuments.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                      {tutorDocuments.map((doc: any, index: number) => (
+                        <div
+                          key={doc.document_id || doc.id || index}
+                          className="flex items-center justify-between bg-gradient-to-r from-slate-50 via-emerald-50/30 to-slate-50 rounded-lg p-3 sm:p-3.5 border-2 border-slate-200/50 hover:border-emerald-300 hover:shadow-md transition-all duration-200"
+                        >
+                          <div className="flex items-center min-w-0 flex-1">
+                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-lg mr-2.5 flex-shrink-0">
+                              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs sm:text-sm font-semibold text-slate-800 truncate" title={doc.file_name || `Document ${index + 1}`}>
+                                {doc.file_name || `Document ${index + 1}`}
+                              </p>
+                              <p className="text-[10px] sm:text-xs text-slate-500 truncate">
+                                {doc.file_type || 'File'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-2">
+                            {doc.file_url && (
+                              <>
+                                <a
+                                  href={getFileUrl(doc.file_url)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 sm:py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all duration-200 whitespace-nowrap"
+                                  title="View document"
+                                >
+                                  View
+                                </a>
+                                <a
+                                  href={getFileUrl(doc.file_url)}
+                                  download
+                                  className="text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 sm:py-1.5 bg-gradient-to-r from-slate-600 to-slate-700 text-white hover:from-slate-700 hover:to-slate-800 rounded-lg font-semibold shadow-sm hover:shadow-md transition-all duration-200 whitespace-nowrap"
+                                  title="Download document"
+                                >
+                                  Download
+                                </a>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 sm:py-8 lg:py-10">
+                      <div className="inline-flex items-center justify-center w-14 h-14 sm:w-18 sm:h-18 lg:w-20 lg:h-20 bg-slate-100 rounded-full mb-3">
+                        <FileText className="w-7 h-7 sm:w-9 sm:h-9 lg:w-10 lg:h-10 text-slate-400" />
+                      </div>
+                      <p className="text-sm sm:text-base text-slate-500 font-medium">No supporting documents uploaded yet.</p>
                     </div>
                   )}
                 </div>
@@ -1891,7 +2144,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
                   <div className="text-sm opacity-90">{selectedTutorProfile?.user?.university_name || ''}</div>
                 </div>
                 <div className="ml-auto text-sm inline-flex items-center bg-white/20 px-2 py-1 rounded text-white">
-                  {selectedTutorProfile?.user?.tutor_profile?.rating ? `${selectedTutorProfile.user.tutor_profile.rating.toFixed(1)} ★` : '—'}
+                  {overallAverageRating !== null ? `${overallAverageRating.toFixed(1)} ★` : '—'}
                 </div>
               </div>
               <div className="p-4 bg-white">

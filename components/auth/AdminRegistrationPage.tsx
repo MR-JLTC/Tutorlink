@@ -539,9 +539,26 @@ const RegistrationPage: React.FC = () => {
                     autoComplete="name"
                     required
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      // Only allow letters and periods (no spaces)
+                      let filteredValue = e.target.value.replace(/[^a-zA-Z.]/g, '');
+                      // Allow only one period
+                      const periodCount = (filteredValue.match(/\./g) || []).length;
+                      if (periodCount > 1) {
+                        // Keep only the first period
+                        const firstPeriodIndex = filteredValue.indexOf('.');
+                        filteredValue = filteredValue.slice(0, firstPeriodIndex + 1) + 
+                                       filteredValue.slice(firstPeriodIndex + 1).replace(/\./g, '');
+                      }
+                      // Limit to 100 characters
+                      if (filteredValue.length > 100) {
+                        filteredValue = filteredValue.slice(0, 100);
+                      }
+                      setName(filteredValue);
+                    }}
                     className={inputStyles}
                     placeholder="John Doe"
+                    maxLength={100}
                   />
                 </div>
 
