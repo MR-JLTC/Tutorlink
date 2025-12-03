@@ -1152,7 +1152,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
               id="filter-university"
               value={universityFilter}
               onChange={e => setUniversityFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-              className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-48 transition duration-150 h-[42px] sm:h-[44px]"
+              className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-80 md:w-96 lg:w-[28rem] transition duration-150 h-[42px] sm:h-[44px]"
             >
               <option value="all">All universities</option>
               {universities.map(uni => (
@@ -1171,7 +1171,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
               value={courseFilter}
               onChange={e => setCourseFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
               disabled={universityFilter === 'all'}
-              className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-48 transition duration-150 h-[42px] sm:h-[44px] disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+              className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-80 md:w-96 lg:w-[28rem] transition duration-150 h-[42px] sm:h-[44px] disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
             >
               <option value="all">
                 {universityFilter === 'all' ? 'Select university first' : 'All courses'}
