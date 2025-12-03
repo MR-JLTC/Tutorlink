@@ -29,7 +29,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   // Upload logic moved to AdminProfile page
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6">
+    <header className="h-16 md:h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-4">
       {/* Mobile Menu Button */}
       <button
         onClick={onMenuClick}
@@ -42,7 +42,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       {/* Desktop Spacer */}
       <div className="hidden md:block"></div>
       
-      <div className="flex items-center space-x-2 sm:space-x-4">
+      <div className="flex items-center space-x-2 sm:space-x-4 md:h-full">
         {/* User Info - Hidden on very small screens */}
         <div className="hidden sm:block text-right">
           <p className="text-sm font-semibold text-slate-800 truncate max-w-[120px] lg:max-w-none">{user?.name}</p>

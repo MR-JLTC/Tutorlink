@@ -571,8 +571,8 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
       <div 
         className={
           isModal
-            ? "w-full max-w-4xl lg:max-w-3xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
-            : "w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-h-[95vh] lg:max-h-[80vh] flex flex-col"
+            ? "w-full max-w-5xl lg:max-w-4xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
+            : "w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-h-[95vh] lg:max-h-[80vh] flex flex-col"
         }
       >
         <div className="flex items-center justify-between px-3 sm:px-4 md:px-5 lg:px-4 py-2.5 sm:py-3 lg:py-2 border-b border-slate-200/70 bg-gradient-to-r from-slate-50 to-white">
@@ -608,7 +608,7 @@ const TuteeRegistrationPage: React.FC<TuteeRegistrationModalProps> = ({ isOpen, 
         </div>
         <div className={`overflow-y-auto px-2 sm:px-3 md:px-4 lg:px-4 py-3 sm:py-4 lg:py-3 bg-gradient-to-br from-indigo-50/40 to-sky-50/40 ${isModal ? 'max-h-[85vh] sm:max-h-[90vh]' : 'flex-1'}`}>
           <div className="w-full bg-white/80 backdrop-blur-lg p-3 sm:p-4 md:p-5 lg:p-4 rounded-xl sm:rounded-2xl shadow-xl border border-white/50">
-            <form onSubmit={handleSubmit} noValidate className="max-w-3xl mx-auto">
+            <form onSubmit={handleSubmit} noValidate className="max-w-4xl mx-auto">
           {/* Email Verification Section */}
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 md:p-4 lg:p-3 rounded-lg sm:rounded-xl border border-blue-200 mb-3 sm:mb-4 lg:mb-3">
             <h3 className="text-base sm:text-lg lg:text-base font-semibold text-slate-800 mb-3 sm:mb-3 lg:mb-2 flex items-center">

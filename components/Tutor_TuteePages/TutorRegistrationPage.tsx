@@ -86,6 +86,17 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
   const [termsScrollProgress, setTermsScrollProgress] = useState(0); // Track scroll progress in terms modal
   const [sessionRate, setSessionRate] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Validate session rate (100-800)
+  const sessionRateError = useMemo(() => {
+    if (!sessionRate) return null; // Empty is allowed (optional field)
+    const rate = Number(sessionRate);
+    if (isNaN(rate)) return null; // Invalid number format will be handled by input
+    if (rate < 100 || rate > 800) {
+      return 'Session rate must be between ₱100 and ₱800 per hour.';
+    }
+    return null;
+  }, [sessionRate]);
   const [isEmailVerified, setIsEmailVerified] = useState(hideEmailVerification); // Auto-verify if email verification is hidden
   const [verificationCode, setVerificationCode] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
@@ -1271,7 +1282,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
   const handleInputCode = () => {
     if (codeSent && !isCodeExpired) {
       setShowVerificationModal(true);
-      setVerificationError('');
+      setVerificationError(''); // Clear previous error when opening modal
     }
   };
 
@@ -1299,13 +1310,14 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
         setVerificationCode('');
         setCodeSent(false);
         setCodeExpiresAt(null);
+        setVerificationError(''); // Clear any previous errors
         notify('Email verified successfully! You can now submit your application.', 'success');
       }
     } catch (err: any) {
       console.log('Frontend: Verification error:', err);
       const errorMessage = err.response?.data?.message || 'Invalid verification code. Please try again.';
       setVerificationError(errorMessage);
-      notify(errorMessage, 'error');
+      // Don't use notify() - error will be shown in the form
     } finally {
       setIsVerifyingCode(false);
     }
@@ -1314,7 +1326,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
   const handleCloseVerificationModal = () => {
     setShowVerificationModal(false);
     setVerificationCode('');
-    setVerificationError('');
+    setVerificationError(''); // Clear error when modal is closed
   };
   
   const handleCloseTermsModal = () => {
@@ -1380,6 +1392,10 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
     }
     if (!gcashNumber || gcashNumber.length !== 11) {
       notify('Please enter a valid GCash number (11 digits).', 'error');
+      return;
+    }
+    if (sessionRateError) {
+      notify(sessionRateError, 'error');
       return;
     }
     if (selectedSubjects.size === 0 || uploadedFiles.length === 0) {
@@ -1638,8 +1654,8 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
         <div 
           className={
             isModal
-              ? "w-full max-w-4xl lg:max-w-3xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
-              : "w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-h-[95vh] lg:max-h-[80vh] flex flex-col"
+              ? "w-full max-w-5xl lg:max-w-4xl bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 overflow-hidden transform transition-all duration-300 ease-out animate-[slideUp_240ms_ease-out]"
+              : "w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-h-[95vh] lg:max-h-[80vh] flex flex-col"
           }
           onClick={(e) => e.stopPropagation()}
         >
@@ -1688,7 +1704,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
         <form 
           onSubmit={handleSubmit} 
           id="tutor-registration-form"
-          className="mx-auto max-w-3xl" 
+          className="mx-auto max-w-4xl" 
           noValidate
           onKeyDown={(e) => {
             // Prevent form submission on Enter key unless it's the submit button
@@ -1877,7 +1893,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
                     const next = e.target.value.replace(/[^A-Za-z\-\s]/g, '').slice(0, 60);
                     setFullName(next);
                   }} 
-                  className="w-full py-2 sm:py-2 lg:py-1.5 pl-3 sm:pl-3 lg:pl-3 pr-3 sm:pr-3 lg:pr-3 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  className="w-full py-2 sm:py-2.5 pl-3 sm:pl-3 lg:pl-3 pr-3 sm:pr-3 lg:pr-3 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                   placeholder="Enter your full name"
                   required 
                 />
@@ -1903,7 +1919,7 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
                       MozAppearance: 'textfield'
                     }}
                     required 
-                    className="w-full py-2 sm:py-2.5 lg:py-1.5 pl-3 sm:pl-4 lg:pl-3 pr-10 sm:pr-12 lg:pr-10 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
+                    className="w-full py-2 sm:py-2.5 pl-3 sm:pl-4 lg:pl-3 pr-10 sm:pr-12 lg:pr-10 text-sm sm:text-base lg:text-sm border border-slate-300 rounded-lg [&::-webkit-credentials-auto-fill-button]:!hidden [&::-ms-reveal]:hidden [&::-webkit-strong-password-auto-fill-button]:!hidden"
                     placeholder="Desired Password"
                   />
                   <button
@@ -2005,11 +2021,24 @@ const TutorRegistrationPage: React.FC<TutorRegistrationModalProps> = ({
                     const cleaned = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
                     setSessionRate(cleaned);
                   }}
-                  className="w-full pl-6 sm:pl-7 pr-2 sm:pr-3 py-2 text-sm sm:text-base border border-slate-300 rounded-lg"
+                  className={`w-full pl-6 sm:pl-7 pr-2 sm:pr-3 py-2 text-sm sm:text-base border rounded-lg ${
+                    sessionRateError 
+                      ? 'border-red-400 bg-red-50 focus:ring-2 focus:ring-red-500 focus:border-red-500' 
+                      : 'border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                  }`}
                   placeholder="e.g., 350"
                 />
               </div>
-              <p className="text-xs text-slate-500 mt-1">Typical range: ₱200 - ₱800</p>
+              {sessionRateError ? (
+                <p className="text-xs text-red-600 mt-1 flex items-start">
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 000 16zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span className="break-words">{sessionRateError}</span>
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500 mt-1">Typical range: ₱100 - ₱800</p>
+              )}
             </div>
           </div>
 

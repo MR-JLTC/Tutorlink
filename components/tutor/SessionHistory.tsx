@@ -909,20 +909,12 @@ const SessionHistory: React.FC = () => {
                   </tbody>
                   <tfoot className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800">
                     <tr>
-                      <td colSpan={2} className="px-4 py-3">
+                      <td colSpan={3} className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
                             <TrendingUp className="h-4 w-4 text-white" />
                           </div>
                           <span className="text-sm font-bold text-white">Total Summary</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
-                          <Clock className="h-3.5 w-3.5 text-white" />
-                          <span className="text-sm font-bold text-white">
-                            {totalUpcomingHours.toFixed(1)} hrs
-                          </span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -1092,26 +1084,17 @@ const SessionHistory: React.FC = () => {
                   </div>
                   <h3 className="text-sm font-bold text-white drop-shadow-md">Total Summary</h3>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2.5 border border-white/30 shadow-md">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Clock className="h-3.5 w-3.5 text-white" />
-                      <p className="text-[9px] text-white/90 font-semibold uppercase tracking-wide">Total Hours</p>
-                    </div>
-                    <p className="text-base font-bold text-white">{totalUpcomingHours.toFixed(1)} hrs</p>
+                <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2.5 border border-white/30 shadow-md">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <DollarSign className="h-3.5 w-3.5 text-white" />
+                    <p className="text-[9px] text-white/90 font-semibold uppercase tracking-wide">Expected Earnings</p>
                   </div>
-                  <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2.5 border border-white/30 shadow-md">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <DollarSign className="h-3.5 w-3.5 text-white" />
-                      <p className="text-[9px] text-white/90 font-semibold uppercase tracking-wide">Expected Earnings</p>
-                    </div>
-                    <p className="text-base font-bold text-white mb-0.5">
-                      ₱{totalUpcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[8px] text-white/90 font-semibold">
-                      After 13% fee
-                    </p>
-                  </div>
+                  <p className="text-base font-bold text-white mb-0.5">
+                    ₱{totalUpcomingEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-[8px] text-white/90 font-semibold">
+                    After 13% fee
+                  </p>
                 </div>
               </div>
             </div>

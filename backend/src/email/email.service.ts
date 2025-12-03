@@ -130,12 +130,7 @@ export class EmailService {
                   <li>Start receiving tutoring requests from students</li>
                 </ul>
               </div>
-              // <div style="text-align: center; margin: 30px 0;">
-              //   <a href="${process.env.FRONTEND_URL || 'http://192.168.113.14:3000/'}/login" 
-              //      style="background-color: #0ea5e9; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-              //     Access Your Dashboard
-              //   </a>
-              // </div>
+              
               <p style="color: #64748b; font-size: 14px; text-align: center; margin-top: 30px;">
                 If you have any questions, feel free to contact our support team.
               </p>
@@ -146,7 +141,7 @@ export class EmailService {
           </div>
         `,
       };
-
+      
       await this.transporter.sendMail(mailOptions);
       return true;
     } catch (error) {
@@ -190,12 +185,6 @@ export class EmailService {
                   <li>This subject will appear in your expertise list</li>
                 </ul>
               </div>
-              // <div style="text-align: center; margin: 30px 0;">
-              //   <a href="${process.env.FRONTEND_URL || 'http://192.168.113.14:3000/'}/login" 
-              //      style="background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-              //     View Your Dashboard
-              //   </a>
-              // </div>
               <p style="color: #64748b; font-size: 14px; text-align: center; margin-top: 30px;">
                 If you have any questions, feel free to contact our support team.
               </p>

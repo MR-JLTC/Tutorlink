@@ -1109,9 +1109,9 @@ const TuteePayment: React.FC = () => {
                             {status.dotColor && <span className={`h-2.5 w-2.5 rounded-full ${status.dotColor}`} />}
                             <span className="whitespace-nowrap">{status.text}</span>
                           </div>
-                          <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-slate-100 to-slate-200 text-slate-700 rounded-lg text-xs sm:text-sm font-semibold shadow-sm border border-slate-300">
+                          {/* <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-gradient-to-r from-slate-100 to-slate-200 text-slate-700 rounded-lg text-xs sm:text-sm font-semibold shadow-sm border border-slate-300">
                             #{payment.payment_id}
-                          </div>
+                          </div> */}
                         </div>
                         
                          {/* Amount Paid - Compact Display for Desktop */}

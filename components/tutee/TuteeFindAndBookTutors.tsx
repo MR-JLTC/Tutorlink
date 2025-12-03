@@ -18,7 +18,24 @@ type TutorListItem = {
   name: string;
   email: string;
   profile_image_url?: string | null;
+  university_id?: number | null;
+  course_id?: number | null;
   university_name?: string | null;
+  university?: {
+    university_id?: number;
+    name?: string;
+    university_name?: string;
+    display_name?: string;
+    acronym?: string;
+    [key: string]: any;
+  } | null;
+  course?: {
+    course_id?: number;
+    course_name?: string;
+    name?: string;
+    acronym?: string;
+    [key: string]: any;
+  } | null;
   role?: string;
   created_at?: string;
   tutor_profile?: { 
@@ -27,10 +44,42 @@ type TutorListItem = {
     rating?: number;
     total_reviews?: number;
     activity_status?: 'online' | 'offline';
+    university_id?: number | null;
+    course_id?: number | null;
+    university?: {
+      university_id?: number;
+      name?: string;
+      university_name?: string;
+      display_name?: string;
+      acronym?: string;
+      [key: string]: any;
+    } | null;
+    course?: {
+      course_id?: number;
+      course_name?: string;
+      name?: string;
+      acronym?: string;
+      [key: string]: any;
+    } | null;
   } | null;
   profile?: {
     session_rate_per_hour?: number | null;
     subjects?: string[];
+    university?: {
+      university_id?: number;
+      name?: string;
+      university_name?: string;
+      display_name?: string;
+      acronym?: string;
+      [key: string]: any;
+    } | null;
+    course?: {
+      course_id?: number;
+      course_name?: string;
+      name?: string;
+      acronym?: string;
+      [key: string]: any;
+    } | null;
     [key: string]: any;
   };
 };
@@ -56,11 +105,46 @@ const TuteeFindAndBookTutors: React.FC = () => {
   const [filterOption, setFilterOption] = useState<'all' | 'has_subjects' | 'top_rated' | 'with_reviews' | 'newest'>('all');
   const [priceFilter, setPriceFilter] = useState<'all' | 'under_300' | '300_500' | '500_700' | '700_plus'>('all');
   const [ratingFilter, setRatingFilter] = useState<'all' | '4_plus' | '3' | '2' | '1' | 'no_rate'>('all');
+  const [universityFilter, setUniversityFilter] = useState<number | 'all'>('all');
+  const [courseFilter, setCourseFilter] = useState<number | 'all'>('all');
+  const [universities, setUniversities] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTutorProfile, setSelectedTutorProfile] = useState<any | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  // Fetch universities and courses
+  useEffect(() => {
+    const fetchUniversitiesAndCourses = async () => {
+      try {
+        const [uniRes, courseRes] = await Promise.all([
+          apiClient.get('/universities').catch(() => ({ data: [] })),
+          apiClient.get('/courses').catch(() => ({ data: [] }))
+        ]);
+        const activeUniversities = (uniRes.data || []).filter((uni: any) => !uni.status || uni.status === 'active');
+        setUniversities(activeUniversities);
+        const normalizedCourses = (Array.isArray(courseRes.data) ? courseRes.data : []).map((c: any) => ({
+          ...c,
+          university_id: c?.university_id ?? c?.university?.university_id ?? c?.universityId ?? null,
+        }));
+        setCourses(normalizedCourses);
+      } catch (err) {
+        console.error('Failed to fetch universities/courses:', err);
+        setUniversities([]);
+        setCourses([]);
+      }
+    };
+    fetchUniversitiesAndCourses();
+  }, []);
+
+  // Reset course filter when university filter changes
+  useEffect(() => {
+    if (universityFilter === 'all') {
+      setCourseFilter('all');
+    }
+  }, [universityFilter]);
 
   useEffect(() => {
     const fetchTutors = async () => {
@@ -633,7 +717,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
     return totalRatings > 0 ? totalWeightedSum / totalRatings : null;
   }, [subjectRatings]);
 
-  // Filter and search tutors client-side by name or subject
+  // Filter and search tutors client-side by name, subject, or university
   const filteredTutors = useMemo(() => {
     const q = (searchQuery || '').trim().toLowerCase();
     let list = tutors.slice();
@@ -642,6 +726,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
       list = list.filter(t => {
         const name = (t.name || '').toLowerCase();
         if (name.includes(q)) return true;
+        
         // check subjects if profile is available on this list item
         const subjects: string[] = (t as any).profile?.subjects || (t as any).tutor_profile?.subjects || [];
         if (Array.isArray(subjects)) {
@@ -649,6 +734,20 @@ const TuteeFindAndBookTutors: React.FC = () => {
             if (String(s).toLowerCase().includes(q)) return true;
           }
         }
+        
+        // check university name (full name)
+        const universityName = (t.university_name || '').toLowerCase();
+        if (universityName.includes(q)) return true;
+        
+        // check university from multiple possible locations (user, profile, tutor_profile)
+        const university = (t as any).university || (t as any).profile?.university || (t as any).tutor_profile?.university;
+        if (university) {
+          const uniName = (university.name || university.university_name || university.display_name || '').toLowerCase();
+          const uniAcronym = (university.acronym || '').toLowerCase();
+          // Check if query matches full name or acronym (exact match or contains)
+          if (uniName.includes(q) || uniAcronym.includes(q)) return true;
+        }
+        
         return false;
       });
     }
@@ -696,6 +795,30 @@ const TuteeFindAndBookTutors: React.FC = () => {
       });
     }
 
+    // Apply university filter
+    if (universityFilter !== 'all') {
+      list = list.filter(t => {
+        const tutorUniversityId = t.university_id || 
+                                  t.university?.university_id ||
+                                  t.profile?.university?.university_id ||
+                                  t.tutor_profile?.university_id ||
+                                  (t as any).tutor_profile?.university?.university_id;
+        return tutorUniversityId === universityFilter;
+      });
+    }
+
+    // Apply course filter
+    if (courseFilter !== 'all') {
+      list = list.filter(t => {
+        const tutorCourseId = t.course_id ||
+                              t.course?.course_id ||
+                              t.profile?.course?.course_id ||
+                              t.tutor_profile?.course_id ||
+                              (t as any).tutor_profile?.course?.course_id;
+        return tutorCourseId === courseFilter;
+      });
+    }
+
     // Apply filter option
     if (filterOption === 'has_subjects') {
       list = list.filter(t => {
@@ -711,7 +834,7 @@ const TuteeFindAndBookTutors: React.FC = () => {
     }
 
     return list;
-  }, [tutors, searchQuery, filterOption, priceFilter, ratingFilter, tutorRatings]);
+  }, [tutors, searchQuery, filterOption, priceFilter, ratingFilter, universityFilter, courseFilter, tutorRatings]);
 
   const handleBook = () => {
     const isValid = validateBookingForm();
@@ -921,86 +1044,145 @@ const TuteeFindAndBookTutors: React.FC = () => {
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-white/80 backdrop-blur-sm border border-slate-100 shadow-sm rounded-2xl p-3 sm:p-4 md:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-        <div className="w-full md:w-2/3">
-          <label htmlFor="tutor-search" className="sr-only">Search tutors</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
+      <div className="bg-white/80 backdrop-blur-sm border border-slate-100 shadow-sm rounded-2xl p-3 sm:p-4 md:p-5 space-y-3 sm:space-y-4">
+        {/* First Row: Search Input and Other Filters */}
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 sm:gap-4">
+          <div className="w-full md:w-2/3">
+            <label htmlFor="tutor-search" className="block text-sm font-semibold text-slate-700 mb-2">
+              Search by name, subject, or university
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 sm:h-5 sm:w-5 text-slate-400" />
+              </div>
+              <input
+                id="tutor-search"
+                placeholder="Search For..."
+                value={searchDraft}
+                onChange={e => setSearchDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setSearchQuery(searchDraft.trim());
+                  }
+                }}
+                className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-12 py-2 sm:py-2.5 text-sm md:text-base shadow-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-300 transition duration-150 placeholder:text-slate-400 h-[42px] sm:h-[44px]"
+              />
+              {searchDraft ? (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => { setSearchDraft(''); setSearchQuery(''); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition touch-manipulation"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              ) : (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs text-slate-400 hidden sm:block">Press Enter</div>
+              )}
             </div>
-            <input
-              id="tutor-search"
-              placeholder="Search subjects or tutor name..."
-              value={searchDraft}
-              onChange={e => setSearchDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  setSearchQuery(searchDraft.trim());
-                }
-              }}
-              className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-12 py-2 sm:py-2.5 text-sm md:text-base shadow-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-300 transition duration-150 placeholder:text-slate-400"
-            />
-            {searchDraft ? (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => { setSearchDraft(''); setSearchQuery(''); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center h-8 w-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition touch-manipulation"
-                style={{ WebkitTapHighlightColor: 'transparent' }}
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 w-full md:w-auto">
+            <div className="w-full sm:w-auto">
+              <label htmlFor="filter-sort" className="block text-sm font-semibold text-slate-700 mb-2">
+                Sort
+              </label>
+              <select
+                id="filter-sort"
+                value={filterOption}
+                onChange={e => setFilterOption(e.target.value as any)}
+                className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-48 transition duration-150 h-[42px] sm:h-[44px]"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5 sm:h-4 sm:w-4">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            ) : (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] sm:text-xs text-slate-400 hidden sm:block">Press Enter</div>
-            )}
+                <option value="all">All</option>
+                <option value="has_subjects">Has subjects</option>
+                <option value="top_rated">Top rated</option>
+                <option value="with_reviews">With reviews</option>
+                <option value="newest">Newest</option>
+              </select>
+            </div>
+            <div className="w-full sm:w-auto">
+              <label htmlFor="filter-price" className="block text-sm font-semibold text-slate-700 mb-2">
+                Price
+              </label>
+              <select
+                id="filter-price"
+                value={priceFilter}
+                onChange={e => setPriceFilter(e.target.value as any)}
+                className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-40 transition duration-150 h-[42px] sm:h-[44px]"
+              >
+                <option value="all">All prices</option>
+                <option value="under_300">Under ₱300/hr</option>
+                <option value="300_500">₱300-₱500/hr</option>
+                <option value="500_700">₱500-₱700/hr</option>
+                <option value="700_plus">₱700+/hr</option>
+              </select>
+            </div>
+            <div className="w-full sm:w-auto">
+              <label htmlFor="filter-rating" className="block text-sm font-semibold text-slate-700 mb-2">
+                Rating
+              </label>
+              <select
+                id="filter-rating"
+                value={ratingFilter}
+                onChange={e => setRatingFilter(e.target.value as any)}
+                className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-36 transition duration-150 h-[42px] sm:h-[44px]"
+              >
+                <option value="all">All ratings</option>
+                <option value="4_plus">4+ ⭐</option>
+                <option value="3">3 ⭐</option>
+                <option value="2">2 ⭐</option>
+                <option value="1">1 ⭐</option>
+                <option value="no_rate">No rate</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <label className="text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap">Sort:</label>
+        {/* Second Row: University and Course Filters */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 w-full">
+          <div className="w-full sm:w-auto">
+            <label htmlFor="filter-university" className="block text-sm font-semibold text-slate-700 mb-2">
+              University
+            </label>
             <select
-              value={filterOption}
-              onChange={e => setFilterOption(e.target.value as any)}
-              className="border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-200 bg-white w-full sm:w-48"
+              id="filter-university"
+              value={universityFilter}
+              onChange={e => setUniversityFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-48 transition duration-150 h-[42px] sm:h-[44px]"
             >
-              <option value="all">All</option>
-              <option value="has_subjects">Has subjects</option>
-              <option value="top_rated">Top rated</option>
-              <option value="with_reviews">With reviews</option>
-              <option value="newest">Newest</option>
+              <option value="all">All universities</option>
+              {universities.map(uni => (
+                <option key={uni.university_id} value={uni.university_id}>
+                  {uni.acronym ? `${uni.acronym} - ${uni.name || uni.university_name || uni.display_name}` : (uni.name || uni.university_name || uni.display_name)}
+                </option>
+              ))}
             </select>
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <label className="text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap">Price:</label>
+          <div className="w-full sm:w-auto">
+            <label htmlFor="filter-course" className="block text-sm font-semibold text-slate-700 mb-2">
+              Course
+            </label>
             <select
-              value={priceFilter}
-              onChange={e => setPriceFilter(e.target.value as any)}
-              className="border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-200 bg-white w-full sm:w-40"
+              id="filter-course"
+              value={courseFilter}
+              onChange={e => setCourseFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              disabled={universityFilter === 'all'}
+              className="border border-slate-200 rounded-2xl px-3 py-2 sm:py-2.5 text-sm md:text-base focus:border-sky-400 focus:ring-2 focus:ring-sky-300 bg-white shadow-sm w-full sm:w-48 transition duration-150 h-[42px] sm:h-[44px] disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
             >
-              <option value="all">All prices</option>
-              <option value="under_300">Under ₱300/hr</option>
-              <option value="300_500">₱300-₱500/hr</option>
-              <option value="500_700">₱500-₱700/hr</option>
-              <option value="700_plus">₱700+/hr</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <label className="text-xs sm:text-sm font-medium text-slate-600 whitespace-nowrap">Rating:</label>
-            <select
-              value={ratingFilter}
-              onChange={e => setRatingFilter(e.target.value as any)}
-              className="border border-slate-200 rounded-xl px-3 py-2 text-xs sm:text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-200 bg-white w-full sm:w-36"
-            >
-              <option value="all">All ratings</option>
-              <option value="4_plus">4+ ⭐</option>
-              <option value="3">3 ⭐</option>
-              <option value="2">2 ⭐</option>
-              <option value="1">1 ⭐</option>
-              <option value="no_rate">No rate</option>
+              <option value="all">
+                {universityFilter === 'all' ? 'Select university first' : 'All courses'}
+              </option>
+              {universityFilter !== 'all' && courses
+                .filter(c => c.university_id === universityFilter)
+                .map(course => (
+                  <option key={course.course_id || course.id} value={course.course_id || course.id}>
+                    {course.acronym ? `${course.acronym} - ${course.course_name || course.name}` : (course.course_name || course.name)}
+                  </option>
+                ))}
             </select>
           </div>
         </div>
